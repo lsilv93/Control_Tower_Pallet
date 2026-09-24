@@ -1,0 +1,144 @@
+import Link from "next/link";
+import { Ban, CircleCheck } from "lucide-react";
+import { cancelarAgenda, validarAgenda } from "@/actions/vales";
+import { FormAcao } from "@/components/FormAcao";
+import { Cabecalho, Painel, StatusBadge, Vazio } from "@/components/ui";
+import { obterSaldos } from "@/lib/conta";
+import { prisma } from "@/lib/prisma";
+import { formatarData, formatarDataHora } from "@/lib/datas";
+import { formatarCnpj, formatarNumero, numeroAgenda, numeroVale, rotuloStatusAgenda } from "@/lib/formatos";
+
+export const metadata = { title: "Baixa de Pagamento" };
+
+export default async function AgendasPage({ searchParams }: { searchParams: Promise<{ ok?: string }> }) {
+  const { ok } = await searchParams;
+  const [abertas, historico, saldos] = await Promise.all([
+    prisma.agendaDevolucao.findMany({
+      where: { status: "ABERTA" },
+      include: { fornecedor: true, vales: { orderBy: { numero: "asc" } }, criadoPor: true },
+      orderBy: { dataPrevista: "asc" },
+    }),
+    prisma.agendaDevolucao.findMany({
+      where: { status: { not: "ABERTA" } },
+      include: { fornecedor: true, vales: { select: { quantidade: true } }, criadoPor: true, validadoPor: true },
+      orderBy: { numero: "desc" },
+      take: 20,
+    }),
+    obterSaldos(),
+  ]);
+
+  return (
+    <>
+      <Cabecalho
+        titulo="Baixa de Pagamento"
+        descricao="Valide as agendas de devolução realizadas. A validação finaliza os vales e dá saída oficial dos pallets da conta corrente."
+      >
+        <Link href="/vales" className="btn-secondary">Gerar nova agenda</Link>
+      </Cabecalho>
+
+      {ok && (
+        <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          {ok}
+        </div>
+      )}
+      <p className="mb-4 text-sm text-slate-600">
+        Saldo atual no pulmão: <strong className="tabular-nums">{formatarNumero(saldos.pulmao)}</strong> pallet(s)
+      </p>
+
+      {abertas.length === 0 ? (
+        <Painel><Vazio>Nenhuma agenda de devolução aberta.</Vazio></Painel>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {abertas.map((a) => {
+            const total = a.vales.reduce((s, v) => s + v.quantidade, 0);
+            return (
+              <Painel
+                key={a.id}
+                titulo={
+                  <span>
+                    <span className="font-mono">{numeroAgenda(a.numero)}</span> · {a.fornecedor.nome}
+                  </span>
+                }
+                acoes={<StatusBadge status={a.status} rotulo={rotuloStatusAgenda[a.status]} />}
+              >
+                <dl className="mb-3 grid grid-cols-2 gap-2 text-sm">
+                  <div><dt className="text-slate-500">CNPJ</dt><dd>{formatarCnpj(a.fornecedor.cnpj)}</dd></div>
+                  <div><dt className="text-slate-500">Data prevista</dt><dd>{formatarData(a.dataPrevista)}</dd></div>
+                  <div><dt className="text-slate-500">Criada por</dt><dd>{a.criadoPor.login} · {formatarDataHora(a.criadoEm)}</dd></div>
+                  <div><dt className="text-slate-500">Total a devolver</dt><dd className="text-lg font-bold">{formatarNumero(total)} pallets</dd></div>
+                </dl>
+                {a.observacao && <p className="mb-3 text-sm text-slate-600">Obs.: {a.observacao}</p>}
+                <table className="tabela mb-4 rounded border border-slate-100">
+                  <thead><tr><th>Vale</th><th>NF</th><th>Emissão</th><th className="text-right">Qtd.</th></tr></thead>
+                  <tbody>
+                    {a.vales.map((v) => (
+                      <tr key={v.id}>
+                        <td className="font-mono">{numeroVale(v.numero)}</td>
+                        <td>{v.notaFiscal}</td>
+                        <td>{formatarData(v.criadoEm)}</td>
+                        <td className="text-right tabular-nums">{v.quantidade}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="flex flex-wrap items-start gap-3">
+                  <FormAcao
+                    acao={validarAgenda}
+                    className="flex flex-1 flex-col gap-2"
+                    confirmar={`Confirmar a baixa da ${numeroAgenda(a.numero)}? ${total} pallet(s) sairão do pulmão.`}
+                    botao={<><CircleCheck className="h-4 w-4" /> Validar e dar baixa</>}
+                    classeBotao="btn-success"
+                  >
+                    <input type="hidden" name="agendaId" value={a.id} />
+                    <input name="observacao" className="input" placeholder="Observação da baixa (opcional)" maxLength={500} />
+                  </FormAcao>
+                  <FormAcao
+                    acao={cancelarAgenda}
+                    className="flex flex-col gap-2"
+                    confirmar={`Cancelar a ${numeroAgenda(a.numero)}? Os vales voltarão para Pendente.`}
+                    botao={<><Ban className="h-4 w-4" /> Cancelar</>}
+                    classeBotao="btn-secondary"
+                  >
+                    <input type="hidden" name="agendaId" value={a.id} />
+                  </FormAcao>
+                </div>
+              </Painel>
+            );
+          })}
+        </div>
+      )}
+
+      <Painel titulo="Histórico de agendas" className="mt-6">
+        {historico.length === 0 ? (
+          <Vazio>Nenhuma agenda finalizada ainda.</Vazio>
+        ) : (
+          <div className="-m-5 overflow-x-auto">
+            <table className="tabela">
+              <thead>
+                <tr><th>Agenda</th><th>Fornecedor</th><th>Status</th><th className="text-right">Pallets</th><th>Criada</th><th>Baixa</th></tr>
+              </thead>
+              <tbody>
+                {historico.map((a) => (
+                  <tr key={a.id}>
+                    <td className="font-mono">{numeroAgenda(a.numero)}</td>
+                    <td>{a.fornecedor.nome}</td>
+                    <td><StatusBadge status={a.status} rotulo={rotuloStatusAgenda[a.status]} /></td>
+                    <td className="text-right tabular-nums">{a.vales.reduce((s, v) => s + v.quantidade, 0) || "—"}</td>
+                    <td>{a.criadoPor.login} · {formatarDataHora(a.criadoEm)}</td>
+                    <td>
+                      {a.validadoPor
+                        ? `${a.validadoPor.login} · ${formatarDataHora(a.validadoEm)}`
+                        : a.canceladoEm
+                          ? `Cancelada ${formatarDataHora(a.canceladoEm)}`
+                          : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Painel>
+    </>
+  );
+}

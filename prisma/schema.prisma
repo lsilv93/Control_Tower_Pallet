@@ -1,0 +1,174 @@
+// Sistema de Gestão de Pallets PBR
+// Banco relacional PostgreSQL (Neon / Vercel Postgres em produção)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum Perfil {
+  ADMIN
+  OPERADOR
+}
+
+/// Tipos de movimentação da conta corrente de pallets.
+enum TipoMovimentacao {
+  ENVIO_CD               // saída do pulmão para um CD
+  RECEBIMENTO_CD         // entrada no pulmão vinda de um CD
+  RECEBIMENTO_FORNECEDOR // entrada no pulmão vinda de fornecedor (gera vale-pallet)
+  DEVOLUCAO_FORNECEDOR   // saída do pulmão na baixa de uma agenda de devolução
+  QUEBRA                 // saída do pulmão para o estoque de avariados
+  RECUPERADO             // retorno do estoque de avariados para o pulmão
+  DESCARTE               // baixa definitiva do estoque de avariados
+  AJUSTE_ENTRADA         // ajuste de inventário (entrada)
+  AJUSTE_SAIDA           // ajuste de inventário (saída)
+}
+
+enum StatusVale {
+  PENDENTE
+  AGENDADO
+  FINALIZADO
+}
+
+enum StatusAgenda {
+  ABERTA
+  VALIDADA
+  CANCELADA
+}
+
+model Usuario {
+  id           String   @id @default(cuid())
+  nome         String
+  login        String   @unique
+  senhaHash    String
+  perfil       Perfil   @default(OPERADOR)
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  movimentacoes    Movimentacao[]
+  valesCriados     ValePallet[]      @relation("ValeCriadoPor")
+  agendasCriadas   AgendaDevolucao[] @relation("AgendaCriadaPor")
+  agendasValidadas AgendaDevolucao[] @relation("AgendaValidadaPor")
+  auditorias       Auditoria[]
+}
+
+model CentroDistribuicao {
+  id       String   @id @default(cuid())
+  codigo   String   @unique
+  nome     String
+  cidade   String?
+  ativo    Boolean  @default(true)
+  criadoEm DateTime @default(now())
+
+  movimentacoes Movimentacao[]
+}
+
+model Fornecedor {
+  id       String   @id @default(cuid())
+  nome     String
+  cnpj     String   @unique // somente dígitos
+  criadoEm DateTime @default(now())
+
+  vales         ValePallet[]
+  movimentacoes Movimentacao[]
+  agendas       AgendaDevolucao[]
+}
+
+/// Vale-pallet: documento gerado no recebimento de fornecedor. Representa
+/// pallets que o pulmão deve devolver ao fornecedor.
+model ValePallet {
+  id             String     @id @default(cuid())
+  numero         Int        @unique @default(autoincrement())
+  fornecedorId   String
+  transportadora String
+  placa          String
+  notaFiscal     String
+  quantidade     Int
+  status         StatusVale @default(PENDENTE)
+  observacao     String?
+  criadoEm       DateTime   @default(now())
+  criadoPorId    String
+  agendaId       String?
+  finalizadoEm   DateTime?
+
+  fornecedor    Fornecedor       @relation(fields: [fornecedorId], references: [id])
+  criadoPor     Usuario          @relation("ValeCriadoPor", fields: [criadoPorId], references: [id])
+  agenda        AgendaDevolucao? @relation(fields: [agendaId], references: [id])
+  movimentacoes Movimentacao[]
+
+  @@index([status])
+  @@index([fornecedorId, status])
+}
+
+/// Agenda de devolução: agrupa vales de um fornecedor para devolução.
+/// Ao ser validada (baixa de pagamento), os vales são finalizados e os
+/// pallets saem oficialmente da conta corrente.
+model AgendaDevolucao {
+  id              String       @id @default(cuid())
+  numero          Int          @unique @default(autoincrement())
+  fornecedorId    String
+  dataPrevista    DateTime
+  status          StatusAgenda @default(ABERTA)
+  observacao      String?
+  criadoEm        DateTime     @default(now())
+  criadoPorId     String
+  validadoEm      DateTime?
+  validadoPorId   String?
+  canceladoEm     DateTime?
+
+  fornecedor    Fornecedor     @relation(fields: [fornecedorId], references: [id])
+  criadoPor     Usuario        @relation("AgendaCriadaPor", fields: [criadoPorId], references: [id])
+  validadoPor   Usuario?       @relation("AgendaValidadaPor", fields: [validadoPorId], references: [id])
+  vales         ValePallet[]
+  movimentacoes Movimentacao[]
+
+  @@index([status])
+}
+
+/// Livro-razão da conta corrente. Cada linha guarda a variação aplicada ao
+/// saldo do pulmão e ao estoque de avariados, com data/hora e usuário.
+model Movimentacao {
+  id           String           @id @default(cuid())
+  tipo         TipoMovimentacao
+  quantidade   Int
+  deltaPulmao  Int
+  deltaAvaria  Int              @default(0)
+  observacao   String?
+  criadoEm     DateTime         @default(now())
+  usuarioId    String
+  cdId         String?
+  fornecedorId String?
+  valeId       String?
+  agendaId     String?
+
+  usuario    Usuario             @relation(fields: [usuarioId], references: [id])
+  cd         CentroDistribuicao? @relation(fields: [cdId], references: [id])
+  fornecedor Fornecedor?         @relation(fields: [fornecedorId], references: [id])
+  vale       ValePallet?         @relation(fields: [valeId], references: [id])
+  agenda     AgendaDevolucao?    @relation(fields: [agendaId], references: [id])
+
+  @@index([criadoEm])
+  @@index([tipo, criadoEm])
+}
+
+/// Trilha de auditoria de todas as ações do sistema (movimentações,
+/// cadastros, agendas, login etc.).
+model Auditoria {
+  id         String   @id @default(cuid())
+  acao       String
+  entidade   String
+  entidadeId String?
+  detalhes   Json?
+  criadoEm   DateTime @default(now())
+  usuarioId  String?
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@index([criadoEm])
+}
