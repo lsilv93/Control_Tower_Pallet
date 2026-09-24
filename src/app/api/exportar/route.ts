@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const [saldos, vales, agendas, fornecedores, abertos, auditoria] = await Promise.all([
+  const [saldos, vales, agendas, fornecedores, abertos, auditoria, compras] = await Promise.all([
     obterSaldos(),
     prisma.valePallet.findMany({
       include: { fornecedor: true, criadoPor: true, agenda: true },
@@ -115,6 +115,7 @@ export async function GET(req: NextRequest) {
     pendenciasPorFornecedor(),
     valesEmAberto(),
     prisma.auditoria.findMany({ where: { criadoEm: periodo }, include: { usuario: true }, orderBy: { criadoEm: "asc" } }),
+    prisma.compra.findMany({ where: { criadoEm: periodo }, include: { fornecedor: true, usuario: true }, orderBy: { criadoEm: "asc" } }),
   ]);
   const farolVale = new Map(abertos.map((v) => [v.id, v]));
 
@@ -200,6 +201,33 @@ export async function GET(req: NextRequest) {
       validada: a.validadoEm ? formatarDataHora(a.validadoEm) : "",
       validadoPor: a.validadoPor?.login ?? "",
       obs: a.observacao ?? "",
+    })),
+  );
+
+  planilha(
+    wb,
+    "Compras",
+    [
+      { header: "Data/Hora", key: "dataHora", width: 20 },
+      { header: "NF", key: "nf" },
+      { header: "Série", key: "serie" },
+      { header: "Fornecedor", key: "fornecedor", width: 30 },
+      { header: "CNPJ", key: "cnpj", width: 20 },
+      { header: "Quantidade", key: "quantidade" },
+      { header: "Chave de acesso", key: "chave", width: 48 },
+      { header: "Login", key: "usuario" },
+      { header: "Observação", key: "obs", width: 40 },
+    ],
+    compras.map((c) => ({
+      dataHora: formatarDataHora(c.criadoEm),
+      nf: c.notaFiscal,
+      serie: c.serie,
+      fornecedor: c.fornecedor.nome,
+      cnpj: formatarCnpj(c.fornecedor.cnpj),
+      quantidade: c.quantidade,
+      chave: c.chaveAcesso,
+      usuario: c.usuario.login,
+      obs: c.observacao ?? "",
     })),
   );
 

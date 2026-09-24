@@ -7,32 +7,91 @@
    Regra de hierarquia: só o nível externo (cards) é saliente;
    tudo dentro de um card é afundado.
    ============================================================ */
-:root {
+:root,
+[data-theme="dark"] {
+  /* cores (RGB) — usadas pelo Tailwind com suporte a opacidade */
+  --c-fundo: 10 27 41;
+  --c-lima: 190 249 27;
+  --c-lima-hover: 212 255 94;
+  --c-ouro: 232 197 71;
+  --c-ouro-rotulo: 200 169 74;
+  --c-erro: 255 107 107;
+  --c-erro-claro: 255 201 201;
+  --c-t1: 255 255 255;
+  --c-t2: 168 186 199;
+  --c-t3: 141 160 179;
+  --c-t4: 111 132 150;
+
   --fundo: #0a1b29;
   --saliente: linear-gradient(150deg, #0e2434 0%, #081620 100%);
   --afundado: linear-gradient(150deg, #06121d 0%, #0c1e2c 100%);
+  --ouro-painel: linear-gradient(150deg, #2a2113 0%, #1a1509 100%);
+  --erro-painel: linear-gradient(150deg, #2a1215 0%, #1a0b0d 100%);
+  --cabecalho-tabela: #07131e;
+  --opcao: #0c1e2c;
   --neu-d: rgba(0, 4, 8, 0.62);
   --neu-l: rgba(52, 90, 120, 0.26);
+  --in-d: rgba(0, 4, 8, 0.66);
+  --in-l: rgba(52, 90, 120, 0.2);
+  --rec-d: rgba(0, 4, 8, 0.55);
+  --rec-l: rgba(52, 90, 120, 0.13);
+  --halo: rgba(190, 249, 27, 0.5);
+  --sulco: rgba(43, 74, 99, 0.35);
+  color-scheme: dark;
+}
+
+/* Tema claro: mesma linguagem soft UI sobre base cinza-azulada; o acento de
+   texto vira oliva escuro para manter contraste 4.5:1 (lima só em preenchimentos). */
+[data-theme="light"] {
+  --c-fundo: 226 232 239;
+  --c-lima: 69 110 0;
+  --c-lima-hover: 88 138 0;
+  --c-ouro: 128 94 0;
+  --c-ouro-rotulo: 128 94 0;
+  --c-erro: 196 40 40;
+  --c-erro-claro: 150 28 28;
+  --c-t1: 10 27 41;
+  --c-t2: 52 73 92;
+  --c-t3: 72 92 110;
+  --c-t4: 84 102 120;
+
+  --fundo: #e2e8ef;
+  --saliente: linear-gradient(150deg, #eef3f8 0%, #dbe2ea 100%);
+  --afundado: linear-gradient(150deg, #d3dbe4 0%, #e6ecf2 100%);
+  --ouro-painel: linear-gradient(150deg, #efe3bf 0%, #f6efd9 100%);
+  --erro-painel: linear-gradient(150deg, #f3d5d5 0%, #f8e6e6 100%);
+  --cabecalho-tabela: #d8e0e8;
+  --opcao: #eef3f8;
+  --neu-d: rgba(136, 156, 178, 0.55);
+  --neu-l: rgba(255, 255, 255, 0.95);
+  --in-d: rgba(136, 156, 178, 0.6);
+  --in-l: rgba(255, 255, 255, 0.9);
+  --rec-d: rgba(136, 156, 178, 0.5);
+  --rec-l: rgba(255, 255, 255, 0.8);
+  --halo: rgba(110, 160, 0, 0.55);
+  --sulco: rgba(120, 142, 165, 0.35);
+  color-scheme: light;
+}
+
+:root {
   --sombra-card: 12px 12px 26px var(--neu-d), -9px -9px 22px var(--neu-l);
   --sombra-sm: 8px 8px 17px var(--neu-d), -6px -6px 15px var(--neu-l);
   --sombra-xs: 5px 5px 11px var(--neu-d), -4px -4px 10px var(--neu-l);
-  --sombra-hover: 14px 14px 30px rgba(0, 4, 8, 0.7), -10px -10px 26px rgba(58, 100, 132, 0.3),
-    0 0 30px -10px rgba(190, 249, 27, 0.35);
-  --sombra-afundado: inset 4px 4px 9px rgba(0, 4, 8, 0.66), inset -3px -3px 8px rgba(52, 90, 120, 0.2);
-  --sombra-recesso: inset 5px 5px 12px rgba(0, 4, 8, 0.55), inset -3px -3px 9px rgba(52, 90, 120, 0.13);
-  --sombra-foco: inset 5px 5px 11px rgba(0, 4, 8, 0.7), inset -4px -4px 10px rgba(52, 90, 120, 0.22),
-    0 0 0 2px rgba(190, 249, 27, 0.5);
+  --sombra-hover: 14px 14px 30px var(--neu-d), -10px -10px 26px var(--neu-l), 0 0 30px -10px rgba(190, 249, 27, 0.35);
+  --sombra-afundado: inset 4px 4px 9px var(--in-d), inset -3px -3px 8px var(--in-l);
+  --sombra-recesso: inset 5px 5px 12px var(--rec-d), inset -3px -3px 9px var(--rec-l);
+  --sombra-foco: inset 5px 5px 11px var(--in-d), inset -4px -4px 10px var(--in-l), 0 0 0 2px var(--halo);
+  --sombra-ativa: 4px 4px 9px var(--neu-d), -3px -3px 8px var(--neu-l);
   --lima: #bef91b;
-  --sulco: rgba(43, 74, 99, 0.35);
   --mono: ui-monospace, Menlo, monospace;
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
-  color-scheme: dark;
 }
 
 @layer base {
   body {
     background: var(--fundo);
-    color: #fff;
+    color: rgb(var(--c-t1));
+    transition: background 250ms ease, color 250ms ease;
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 12px;
     -webkit-font-smoothing: antialiased;
@@ -49,24 +108,23 @@
     cursor: pointer;
     vertical-align: middle;
     background: var(--afundado);
-    box-shadow: inset 2px 2px 5px rgba(0, 4, 8, 0.66), inset -2px -2px 4px rgba(52, 90, 120, 0.2);
+    box-shadow: inset 2px 2px 5px var(--in-d), inset -2px -2px 4px var(--in-l);
     transition: background 180ms ease, box-shadow 180ms ease;
   }
   input[type="checkbox"]:hover {
-    box-shadow: inset 2px 2px 5px rgba(0, 4, 8, 0.66), inset -2px -2px 4px rgba(52, 90, 120, 0.2),
-      0 0 0 1px rgba(190, 249, 27, 0.4);
+    box-shadow: inset 2px 2px 5px var(--in-d), inset -2px -2px 4px var(--in-l), 0 0 0 1px var(--halo);
   }
   input[type="checkbox"]:checked {
     background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><path d='M5.5 10.5l3 3 6-7' fill='none' stroke='%23000E19' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/></svg>") center / 20px 20px no-repeat,
       linear-gradient(145deg, #d0ff45, #a9e113);
-    box-shadow: 2px 2px 5px rgba(0, 4, 8, 0.55), -2px -2px 4px rgba(52, 90, 120, 0.18);
+    box-shadow: 2px 2px 5px var(--neu-d), -2px -2px 4px var(--neu-l);
   }
   /* itens de grid podem encolher (tabelas rolam dentro do próprio painel) */
   .grid > * {
     min-width: 0;
   }
   :focus-visible {
-    outline: 2px solid rgba(190, 249, 27, 0.6);
+    outline: 2px solid var(--halo);
     outline-offset: 2px;
   }
 }
@@ -96,14 +154,20 @@
   }
   /* painel dourado (alerta suave) */
   .poco-ouro {
-    background: linear-gradient(150deg, #2a2113 0%, #1a1509 100%);
+    background: var(--ouro-painel);
     border-radius: 22px;
     box-shadow: var(--sombra-recesso);
   }
   .poco-erro {
-    background: linear-gradient(150deg, #2a1215 0%, #1a0b0d 100%);
+    background: var(--erro-painel);
     border-radius: 22px;
     box-shadow: var(--sombra-recesso);
+  }
+  /* preenchimento lima (igual nos dois temas); tinta sempre escura */
+  .fill-lima {
+    color: #000e19;
+    background: linear-gradient(145deg, #d0ff45, #a9e113);
+    box-shadow: var(--sombra-xs);
   }
   .sulco {
     height: 1px;
@@ -136,7 +200,7 @@
     transition: box-shadow 200ms var(--ease);
   }
   .input::placeholder {
-    color: #6f8496;
+    color: rgb(var(--c-t4));
   }
   .input:focus {
     box-shadow: var(--sombra-foco);
@@ -161,8 +225,8 @@
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1.5l5 5 5-5' fill='none' stroke='%23BEF91B' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>") !important;
   }
   select.input option {
-    background: #0c1e2c;
-    color: #fff;
+    background: var(--opcao);
+    color: rgb(var(--c-t1));
   }
   textarea.input {
     resize: vertical;
@@ -197,23 +261,23 @@
   }
   .btn-secondary {
     @apply btn;
-    color: #a8bac7;
+    color: rgb(var(--c-t2));
     background: var(--saliente);
     box-shadow: var(--sombra-xs);
   }
   .btn-secondary:hover:not(:disabled) {
-    color: #bef91b;
+    color: rgb(var(--c-lima));
     box-shadow: var(--sombra-sm);
   }
   /* ações destrutivas: superfície saliente com tinta de erro */
   .btn-danger {
     @apply btn;
-    color: #ff6b6b;
+    color: rgb(var(--c-erro));
     background: var(--saliente);
     box-shadow: var(--sombra-xs);
   }
   .btn-danger:hover:not(:disabled) {
-    color: #ffc9c9;
+    color: rgb(var(--c-erro-claro));
     box-shadow: var(--sombra-sm), 0 0 24px -10px rgba(255, 107, 107, 0.45);
   }
   .btn-success {
@@ -234,7 +298,7 @@
     transition: color 200ms var(--ease), box-shadow 200ms var(--ease);
   }
   .btn-icone:hover {
-    color: #bef91b;
+    color: rgb(var(--c-lima));
     box-shadow: var(--sombra-sm);
   }
 
@@ -255,13 +319,13 @@
     transition: background 200ms var(--ease), color 200ms var(--ease), box-shadow 200ms var(--ease);
   }
   .aba:not(.aba-ativa):hover {
-    color: #bef91b;
-    background: rgba(190, 249, 27, 0.09);
+    color: rgb(var(--c-lima));
+    background: rgb(var(--c-lima) / 0.09);
   }
   .aba-ativa {
     color: #000e19;
     background: linear-gradient(145deg, #d0ff45, #a9e113);
-    box-shadow: 4px 4px 9px rgba(0, 4, 8, 0.55), -3px -3px 8px rgba(52, 90, 120, 0.18);
+    box-shadow: var(--sombra-ativa);
   }
   .aba-ativa:hover {
     background: linear-gradient(145deg, #dcff72, #bef91b);
@@ -297,10 +361,10 @@
     transition: background 180ms ease;
   }
   .tabela tbody tr:hover {
-    background: rgba(190, 249, 27, 0.035);
+    background: rgb(var(--c-lima) / 0.05);
   }
   .tabela thead.sticky th {
-    background: #07131e;
+    background: var(--cabecalho-tabela);
   }
 
   /* ---------- badges ---------- */
@@ -309,7 +373,7 @@
     letter-spacing: 0.08em;
     padding: 5px 10px;
     border-radius: 999px;
-    box-shadow: inset 2px 2px 5px rgba(0, 4, 8, 0.6), inset -2px -2px 4px rgba(52, 90, 120, 0.16);
+    box-shadow: inset 2px 2px 5px var(--in-d), inset -2px -2px 4px var(--in-l);
   }
   .ponto {
     display: inline-block;
@@ -328,6 +392,13 @@
   .tabular-nums {
     font-family: var(--mono);
   }
+}
+
+/* linha localizada pela leitura óptica do vale */
+.destaque-leitura,
+.destaque-leitura > td {
+  background: rgb(var(--c-lima) / 0.16) !important;
+  transition: background 400ms ease;
 }
 
 /* ---------- movimento ---------- */

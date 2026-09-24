@@ -15,6 +15,7 @@ export const DELTAS: Record<TipoMovimentacao, { pulmao: -1 | 0 | 1; avaria: -1 |
   DESCARTE: { pulmao: 0, avaria: -1 },
   AJUSTE_ENTRADA: { pulmao: 1, avaria: 0 },
   AJUSTE_SAIDA: { pulmao: -1, avaria: 0 },
+  COMPRA: { pulmao: 1, avaria: 0 },
 };
 
 export class ErroNegocio extends Error {}
@@ -53,6 +54,7 @@ export type NovoLancamento = {
   fornecedorId?: string | null;
   valeId?: string | null;
   agendaId?: string | null;
+  compraId?: string | null;
 };
 
 /**
@@ -94,6 +96,7 @@ export async function lancar(tx: Prisma.TransactionClient, l: NovoLancamento) {
       fornecedorId: l.fornecedorId ?? null,
       valeId: l.valeId ?? null,
       agendaId: l.agendaId ?? null,
+      compraId: l.compraId ?? null,
     },
   });
   await auditar(tx, {

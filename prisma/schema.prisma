@@ -27,6 +27,7 @@ enum TipoMovimentacao {
   DESCARTE               // baixa definitiva do estoque de avariados
   AJUSTE_ENTRADA         // ajuste de inventário (entrada)
   AJUSTE_SAIDA           // ajuste de inventário (saída)
+  COMPRA                 // compra de pallets novos (entrada via NF-e)
 }
 
 enum StatusVale {
@@ -47,6 +48,8 @@ model Usuario {
   login        String   @unique
   senhaHash    String
   perfil       Perfil   @default(OPERADOR)
+  /// Permissão para adicionar pallets (compra / ajuste de inventário) sem ser administrador.
+  podeAdicionarPallets Boolean @default(false)
   ativo        Boolean  @default(true)
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
@@ -56,15 +59,17 @@ model Usuario {
   agendasCriadas   AgendaDevolucao[] @relation("AgendaCriadaPor")
   agendasValidadas AgendaDevolucao[] @relation("AgendaValidadaPor")
   auditorias       Auditoria[]
+  compras          Compra[]
 }
 
 model CentroDistribuicao {
   id       String   @id @default(cuid())
   codigo   String   @unique
   nome     String
-  cidade   String?
-  ativo    Boolean  @default(true)
-  criadoEm DateTime @default(now())
+  cidade      String? // localização
+  responsavel String?
+  ativo       Boolean  @default(true)
+  criadoEm    DateTime @default(now())
 
   movimentacoes Movimentacao[]
 }
@@ -72,12 +77,49 @@ model CentroDistribuicao {
 model Fornecedor {
   id       String   @id @default(cuid())
   nome     String
-  cnpj     String   @unique // somente dígitos
+  cnpj     String   @unique // normalizado: 14 caracteres (numérico ou alfanumérico)
+  endereco String?
+  cidade   String?
+  uf       String?
+  contato  String?
+  telefone String?
+  email    String?
+  ativo    Boolean  @default(true)
   criadoEm DateTime @default(now())
 
   vales         ValePallet[]
   movimentacoes Movimentacao[]
   agendas       AgendaDevolucao[]
+  compras       Compra[]
+}
+
+model Transportadora {
+  id       String   @id @default(cuid())
+  nome     String
+  cnpj     String   @unique
+  contato  String?
+  telefone String?
+  email    String?
+  ativo    Boolean  @default(true)
+  criadoEm DateTime @default(now())
+}
+
+/// Compra de pallets novos, identificada pela chave de acesso da NF-e
+/// (código de barras do DANFE).
+model Compra {
+  id           String   @id @default(cuid())
+  chaveAcesso  String   @unique
+  notaFiscal   String
+  serie        String
+  fornecedorId String
+  quantidade   Int
+  observacao   String?
+  criadoEm     DateTime @default(now())
+  usuarioId    String
+
+  fornecedor    Fornecedor     @relation(fields: [fornecedorId], references: [id])
+  usuario       Usuario        @relation(fields: [usuarioId], references: [id])
+  movimentacoes Movimentacao[]
 }
 
 /// Vale-pallet: documento gerado no recebimento de fornecedor. Representa
@@ -146,8 +188,10 @@ model Movimentacao {
   fornecedorId String?
   valeId       String?
   agendaId     String?
+  compraId     String?
 
   usuario    Usuario             @relation(fields: [usuarioId], references: [id])
+  compra     Compra?             @relation(fields: [compraId], references: [id])
   cd         CentroDistribuicao? @relation(fields: [cdId], references: [id])
   fornecedor Fornecedor?         @relation(fields: [fornecedorId], references: [id])
   vale       ValePallet?         @relation(fields: [valeId], references: [id])

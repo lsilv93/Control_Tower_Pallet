@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUsuario } from "@/lib/auth";
 import { auditar, comContaBloqueada, lancar } from "@/lib/conta";
-import { cnpjValido, normalizarPlaca, placaValida, somenteDigitos } from "@/lib/formatos";
+import { cnpjValido, normalizarCnpj, normalizarPlaca, placaValida } from "@/lib/formatos";
 import { tratarErro, type Estado } from "./estado";
 
 const schema = z.object({
@@ -23,7 +23,7 @@ export async function registrarRecebimentoFornecedor(_: Estado, form: FormData):
   try {
     const usuario = await requireUsuario();
     const d = schema.parse(Object.fromEntries(form));
-    const cnpj = somenteDigitos(d.cnpj);
+    const cnpj = normalizarCnpj(d.cnpj);
 
     valeId = await comContaBloqueada(async (tx) => {
       const fornecedor = await tx.fornecedor.upsert({

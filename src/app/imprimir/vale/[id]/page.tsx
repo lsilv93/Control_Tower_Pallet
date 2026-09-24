@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Scissors } from "lucide-react";
 import { ImpressaoAutomatica } from "@/components/ImpressaoAutomatica";
 import { requireUsuario } from "@/lib/auth";
+import { codigo128Svg } from "@/lib/codigoBarras";
 import { prisma } from "@/lib/prisma";
 import { formatarDataHora } from "@/lib/datas";
 import { formatarCnpj, formatarNumero, formatarPlaca, numeroVale, rotuloStatusVale } from "@/lib/formatos";
@@ -19,7 +20,7 @@ function buscar(id: string) {
   });
 }
 
-function Via({ vale, via }: { vale: Vale; via: string }) {
+function Via({ vale, via, barras }: { vale: Vale; via: string; barras: string }) {
   const campo = (rotulo: string, valor: React.ReactNode, cls = "") => (
     <div className={`border border-slate-400 px-3 py-1.5 ${cls}`}>
       <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">{rotulo}</p>
@@ -33,9 +34,11 @@ function Via({ vale, via }: { vale: Vale; via: string }) {
           <h1 className="text-xl font-extrabold tracking-tight">VALE-PALLET PBR</h1>
           <p className="text-xs text-slate-600">Control Tower Pallet · Comprovante de recebimento de pallets</p>
         </div>
-        <div className="text-right">
-          <p className="font-mono text-2xl font-extrabold">{numeroVale(vale.numero)}</p>
-          <p className="text-[10px] uppercase tracking-wide text-slate-600">{via}</p>
+        <div className="flex flex-col items-end text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">{via}</p>
+          {/* Código de barras Code 128 do ID do vale: a leitura óptica identifica o vale na devolução/conferência */}
+          <div className="barras mt-1 h-[12mm] w-[58mm]" dangerouslySetInnerHTML={{ __html: barras }} />
+          <p className="mt-0.5 font-mono text-[15px] font-extrabold tracking-[0.2em]">{numeroVale(vale.numero)}</p>
         </div>
       </header>
 
@@ -48,6 +51,7 @@ function Via({ vale, via }: { vale: Vale; via: string }) {
         {campo("Data/Hora de emissão", formatarDataHora(vale.criadoEm), "col-span-2")}
         {campo("Emitido por", vale.criadoPor.login)}
         {campo("Status", rotuloStatusVale[vale.status])}
+        {campo("ID único do documento", <span className="font-mono text-[11px]">{numeroVale(vale.numero)} · {vale.id}</span>, "col-span-4")}
       </div>
 
       <div className="mt-3 flex items-center justify-between border-2 border-slate-900 px-4 py-2">
@@ -81,6 +85,7 @@ export default async function ImprimirValePage({
   const [{ id }, { auto }] = await Promise.all([params, searchParams]);
   const vale = await buscar(id);
   if (!vale) notFound();
+  const barras = codigo128Svg(numeroVale(vale.numero));
 
   return (
     <div className="min-h-screen bg-fundo px-[14px] py-6 print:bg-white print:p-0">
@@ -88,6 +93,7 @@ export default async function ImprimirValePage({
         @page { size: A4 portrait; margin: 0; }
         .folha { width: 210mm; height: 297mm; }
         .via { height: 148.5mm; box-sizing: border-box; }
+        .barras svg { width: 100%; height: 100%; display: block; }
         @media print { .nao-imprimir { display: none !important; } body { background: #fff; } }
       `}</style>
       <div className="nao-imprimir card mx-auto mb-6 flex w-[210mm] max-w-full flex-wrap items-center justify-between gap-3 p-4">
@@ -100,11 +106,11 @@ export default async function ImprimirValePage({
         <ImpressaoAutomatica auto={auto === "1"} />
       </div>
       <div className="folha relative mx-auto overflow-hidden rounded-[6px] bg-white text-slate-900 shadow-[12px_12px_26px_rgba(0,4,8,.62)] print:rounded-none print:shadow-none">
-        <Via vale={vale} via="1ª via · Empresa" />
+        <Via vale={vale} via="1ª via · Empresa" barras={barras} />
         <div className="absolute inset-x-0 top-[148.5mm] h-0 border-t-2 border-dashed border-slate-400">
           <span className="absolute -top-2.5 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 bg-white px-2 text-[10px] text-slate-500"><Scissors className="h-3 w-3" /> recorte aqui</span>
         </div>
-        <Via vale={vale} via="2ª via · Transportador" />
+        <Via vale={vale} via="2ª via · Transportador" barras={barras} />
       </div>
     </div>
   );

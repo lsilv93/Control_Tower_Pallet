@@ -4,7 +4,7 @@ import { SelecaoVales, type LinhaVale } from "@/components/SelecaoVales";
 import { Cabecalho } from "@/components/ui";
 import { valesEmAberto } from "@/lib/consultas";
 import { diaLocal, formatarData } from "@/lib/datas";
-import { formatarCnpj, formatarPlaca, numeroAgenda, numeroVale, rotuloStatusVale } from "@/lib/formatos";
+import { formatarCnpj, formatarPlaca, normalizarCnpj, numeroAgenda, numeroVale, rotuloStatusVale } from "@/lib/formatos";
 
 export const metadata = { title: "Vales Pendentes" };
 
@@ -16,7 +16,7 @@ export default async function ValesPage({ searchParams }: { searchParams: Promis
       ? {
           OR: [
             { fornecedor: { nome: { contains: q, mode: "insensitive" } } },
-            { fornecedor: { cnpj: { contains: q.replace(/\D/g, "") || q } } },
+            { fornecedor: { cnpj: { contains: normalizarCnpj(q) || q } } },
             { notaFiscal: { contains: q, mode: "insensitive" } },
             ...(/^\d+$/.test(q.replace(/^VP-?/i, "")) ? [{ numero: Number(q.replace(/^VP-?/i, "")) }] : []),
           ],
@@ -26,6 +26,7 @@ export default async function ValesPage({ searchParams }: { searchParams: Promis
 
   const linhas: LinhaVale[] = vales.map((v) => ({
     id: v.id,
+    num: v.numero,
     numero: numeroVale(v.numero),
     fornecedor: v.fornecedor.nome,
     cnpj: formatarCnpj(v.fornecedor.cnpj),

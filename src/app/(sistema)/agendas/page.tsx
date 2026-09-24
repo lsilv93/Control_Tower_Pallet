@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Ban, CircleCheck } from "lucide-react";
 import { cancelarAgenda, validarAgenda } from "@/actions/vales";
 import { FormAcao } from "@/components/FormAcao";
+import { LeitorVale } from "@/components/LeitorVale";
 import { Cabecalho, Painel, StatusBadge, Vazio } from "@/components/ui";
 import { obterSaldos } from "@/lib/conta";
 import { prisma } from "@/lib/prisma";
@@ -45,6 +46,13 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
         Saldo atual no pulmão: <strong className="num text-t1">{formatarNumero(saldos.pulmao)}</strong> pallet(s)
       </p>
 
+      {abertas.length > 0 && (
+        <div className="card mb-6 p-5">
+          <p className="label">Conferência por leitura óptica</p>
+          <LeitorVale dica="Leia o código de barras do vale para localizá-lo na agenda" />
+        </div>
+      )}
+
       {abertas.length === 0 ? (
         <Painel><Vazio>Nenhuma agenda de devolução aberta.</Vazio></Painel>
       ) : (
@@ -73,7 +81,7 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
                   <thead><tr><th>Vale</th><th>NF</th><th>Emissão</th><th className="text-right">Qtd.</th></tr></thead>
                   <tbody>
                     {a.vales.map((v) => (
-                      <tr key={v.id}>
+                      <tr key={v.id} data-vale={v.numero}>
                         <td className="font-mono">{numeroVale(v.numero)}</td>
                         <td>{v.notaFiscal}</td>
                         <td>{formatarData(v.criadoEm)}</td>

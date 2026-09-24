@@ -8,8 +8,10 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   Boxes,
+  Building2,
   CalendarCheck,
   ClipboardList,
+  Factory,
   FileSpreadsheet,
   Hammer,
   KeyRound,
@@ -17,14 +19,20 @@ import {
   LogOut,
   Menu as MenuIcon,
   PackagePlus,
+  Plus,
   Recycle,
-  Settings,
   Trash2,
+  Truck,
+  Users,
   X,
 } from "lucide-react";
 import { sair } from "@/actions/auth";
+import { podeAdicionarPallets } from "@/lib/permissoes";
+import { BotaoTema, type Tema } from "./BotaoTema";
 
-const grupos = [
+type Item = { href: string; rotulo: string; icone: typeof Boxes; admin?: boolean };
+
+const grupos: { titulo: string; itens: Item[] }[] = [
   { titulo: "", itens: [{ href: "/", rotulo: "Dashboard", icone: LayoutDashboard }] },
   {
     titulo: "Centro de Distribuição",
@@ -50,32 +58,50 @@ const grupos = [
     ],
   },
   {
+    titulo: "Cadastros",
+    itens: [
+      { href: "/cadastros/transportadoras", rotulo: "Transportadoras", icone: Truck },
+      { href: "/cadastros/fornecedores", rotulo: "Fornecedores", icone: Factory },
+      { href: "/cadastros/cds", rotulo: "Centros de Distribuição", icone: Building2, admin: true },
+      { href: "/cadastros/usuarios", rotulo: "Usuários", icone: Users, admin: true },
+    ],
+  },
+  {
     titulo: "Gestão",
     itens: [
       { href: "/relatorios", rotulo: "Relatórios", icone: FileSpreadsheet },
-      { href: "/cadastros", rotulo: "Cadastros", icone: Settings, admin: true },
       { href: "/conta", rotulo: "Minha Senha", icone: KeyRound },
     ],
   },
 ];
 
-export function Menu({ usuario }: { usuario: { nome: string; login: string; perfil: string } }) {
+export function Menu({
+  usuario,
+  tema,
+}: {
+  usuario: { nome: string; login: string; perfil: "ADMIN" | "OPERADOR"; podeAdicionarPallets: boolean };
+  tema: Tema;
+}) {
   const pathname = usePathname();
   const [aberto, setAberto] = useState(false);
   const ativo = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const admin = usuario.perfil === "ADMIN";
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex items-center justify-between bg-fundo/95 px-[14px] py-3 backdrop-blur-sm lg:hidden">
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-3 bg-fundo/95 px-[14px] py-3 backdrop-blur-sm lg:hidden">
         <div className="flex items-center gap-2.5 text-[13px] font-semibold text-t1">
-          <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-lima text-tinta shadow-[5px_5px_11px_rgba(0,4,8,.62),-4px_-4px_10px_rgba(52,90,120,.26)]">
+          <span className="fill-lima flex h-9 w-9 items-center justify-center rounded-2xl">
             <Boxes className="h-4 w-4" />
           </span>
           Control Tower Pallet
         </div>
-        <button className="btn-icone" onClick={() => setAberto(!aberto)} aria-label={aberto ? "Fechar menu" : "Abrir menu"}>
-          {aberto ? <X className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <BotaoTema inicial={tema} />
+          <button className="btn-icone" onClick={() => setAberto(!aberto)} aria-label={aberto ? "Fechar menu" : "Abrir menu"}>
+            {aberto ? <X className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
+          </button>
+        </div>
       </header>
 
       <aside
@@ -85,19 +111,36 @@ export function Menu({ usuario }: { usuario: { nome: string; login: string; perf
         )}
       >
         <div className="card flex h-full flex-col overflow-hidden">
-          <div className="flex items-center gap-3 px-5 pb-4 pt-5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-lima text-tinta shadow-[5px_5px_11px_rgba(0,4,8,.62),-4px_-4px_10px_rgba(52,90,120,.26)]">
-              <Boxes className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-[13px] font-semibold leading-tight text-t1">Control Tower</p>
-              <p className="text-[11px] text-t3">Gestão de Pallets PBR</p>
+          <div className="flex items-center justify-between gap-2 px-5 pb-4 pt-5">
+            <div className="flex items-center gap-3">
+              <span className="fill-lima flex h-10 w-10 items-center justify-center rounded-2xl">
+                <Boxes className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-[13px] font-semibold leading-tight text-t1">Control Tower</p>
+                <p className="text-[11px] text-t3">Gestão de Pallets PBR</p>
+              </div>
+            </div>
+            <div className="hidden lg:block">
+              <BotaoTema inicial={tema} />
             </div>
           </div>
 
+          {podeAdicionarPallets(usuario) && (
+            <div className="px-3 pb-3">
+              <Link
+                href="/pallets/adicionar"
+                onClick={() => setAberto(false)}
+                className={clsx("w-full", ativo("/pallets") ? "btn-secondary !text-lima" : "btn-primary")}
+              >
+                <Plus className="h-4 w-4" /> Adicionar Pallets
+              </Link>
+            </div>
+          )}
+
           <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4">
             {grupos.map((g) => {
-              const itens = g.itens.filter((i) => !("admin" in i && i.admin) || usuario.perfil === "ADMIN");
+              const itens = g.itens.filter((i) => !i.admin || admin);
               if (!itens.length) return null;
               return (
                 <div key={g.titulo}>
@@ -111,9 +154,7 @@ export function Menu({ usuario }: { usuario: { nome: string; login: string; perf
                         aria-current={ativo(i.href) ? "page" : undefined}
                         className={clsx(
                           "flex min-h-[44px] items-center gap-3 rounded-full px-4 text-[12px] font-medium transition-[background,color,box-shadow] duration-200",
-                          ativo(i.href)
-                            ? "bg-gradient-to-br from-[#D0FF45] to-[#A9E113] font-semibold text-tinta shadow-[4px_4px_9px_rgba(0,4,8,.55),-3px_-3px_8px_rgba(52,90,120,.18)]"
-                            : "text-t2 hover:bg-lima/[.09] hover:text-lima",
+                          ativo(i.href) ? "fill-lima font-semibold" : "text-t2 hover:bg-lima/[.09] hover:text-lima",
                         )}
                       >
                         <i.icone className="h-4 w-4 flex-none" />
@@ -130,7 +171,7 @@ export function Menu({ usuario }: { usuario: { nome: string; login: string; perf
             <div className="poco p-4">
               <p className="truncate text-[12px] font-semibold text-t1">{usuario.nome}</p>
               <p className="text-[11px] text-t3">
-                {usuario.login} · {usuario.perfil === "ADMIN" ? "Administrador" : "Operador"}
+                {usuario.login} · {admin ? "Administrador" : "Operador"}
               </p>
             </div>
             <form action={sair} className="mt-3">
@@ -142,7 +183,7 @@ export function Menu({ usuario }: { usuario: { nome: string; login: string; perf
         </div>
       </aside>
 
-      {aberto && <div className="fixed inset-0 z-30 bg-[#000814]/70 lg:hidden" onClick={() => setAberto(false)} />}
+      {aberto && <div className="fixed inset-0 z-30 bg-[#000814]/60 lg:hidden" onClick={() => setAberto(false)} />}
     </>
   );
 }

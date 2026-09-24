@@ -8,7 +8,10 @@ import { prisma } from "@/lib/prisma";
 export const metadata = { title: "Entrada de Fornecedor" };
 
 export default async function EntradaFornecedorPage() {
-  const fornecedores = await prisma.fornecedor.findMany({ select: { cnpj: true, nome: true }, orderBy: { nome: "asc" } });
+  const [fornecedores, transportadoras] = await Promise.all([
+    prisma.fornecedor.findMany({ where: { ativo: true }, select: { cnpj: true, nome: true }, orderBy: { nome: "asc" } }),
+    prisma.transportadora.findMany({ where: { ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
+  ]);
 
   return (
     <>
@@ -22,7 +25,12 @@ export default async function EntradaFornecedorPage() {
             <CamposFornecedor fornecedores={fornecedores} />
             <div>
               <label className="label" htmlFor="transportadora">Transportadora *</label>
-              <input id="transportadora" name="transportadora" className="input" required maxLength={200} />
+              <input id="transportadora" name="transportadora" className="input" required maxLength={200} list="lista-transportadoras" autoComplete="off" />
+              <datalist id="lista-transportadoras">
+                {transportadoras.map((t) => (
+                  <option key={t.id} value={t.nome} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label className="label" htmlFor="placa">Placa do veículo *</label>

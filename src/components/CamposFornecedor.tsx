@@ -4,13 +4,14 @@ import { useState } from "react";
 
 type Fornecedor = { cnpj: string; nome: string };
 
+const normalizar = (v: string) => v.toUpperCase().replace(/[^0-9A-Z]/g, "");
 const mascaraCnpj = (v: string) => {
-  const d = v.replace(/\D/g, "").slice(0, 14);
+  const d = normalizar(v).slice(0, 14);
   return d
-    .replace(/^(\d{2})(\d)/, "$1.$2")
-    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-    .replace(/\.(\d{3})(\d)/, ".$1/$2")
-    .replace(/(\d{4})(\d)/, "$1-$2");
+    .replace(/^(\w{2})(\w)/, "$1.$2")
+    .replace(/^(\w{2})\.(\w{3})(\w)/, "$1.$2.$3")
+    .replace(/\.(\w{3})(\w)/, ".$1/$2")
+    .replace(/(\w{4})(\w)/, "$1-$2");
 };
 
 /** CNPJ + nome do fornecedor, com preenchimento automático para fornecedores já cadastrados. */
@@ -21,7 +22,7 @@ export function CamposFornecedor({ fornecedores }: { fornecedores: Fornecedor[] 
   function alterarCnpj(valor: string) {
     const formatado = mascaraCnpj(valor);
     setCnpj(formatado);
-    const conhecido = fornecedores.find((f) => f.cnpj === formatado.replace(/\D/g, ""));
+    const conhecido = fornecedores.find((f) => f.cnpj === normalizar(formatado));
     if (conhecido) setNome(conhecido.nome);
   }
 
@@ -40,7 +41,7 @@ export function CamposFornecedor({ fornecedores }: { fornecedores: Fornecedor[] 
           name="cnpj"
           className="input"
           required
-          inputMode="numeric"
+          
           placeholder="00.000.000/0000-00"
           value={cnpj}
           onChange={(e) => alterarCnpj(e.target.value)}

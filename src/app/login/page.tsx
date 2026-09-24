@@ -1,16 +1,22 @@
 import type { Metadata } from "next";
 import { Boxes } from "lucide-react";
 import { entrar } from "@/actions/auth";
+import { BotaoTema } from "@/components/BotaoTema";
 import { FormAcao } from "@/components/FormAcao";
+import { temaAtual } from "@/lib/tema";
 
 export const metadata: Metadata = { title: "Entrar" };
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const tema = await temaAtual();
   return (
-    <main className="flex min-h-screen items-center justify-center p-[14px]">
+    <main className="relative flex min-h-screen items-center justify-center p-[14px]">
+      <div className="absolute right-[14px] top-[14px]">
+        <BotaoTema inicial={tema} />
+      </div>
       <div className="card entrada w-full max-w-sm p-7 sm:p-8">
         <div className="mb-7 flex flex-col items-center text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-lima text-tinta shadow-[8px_8px_17px_rgba(0,4,8,.62),-6px_-6px_15px_rgba(52,90,120,.26)]">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl fill-lima">
             <Boxes className="h-7 w-7" />
           </div>
           <h1 className="text-[20px] font-semibold text-t1">Control Tower Pallet</h1>

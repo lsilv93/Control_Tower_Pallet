@@ -6,10 +6,12 @@ import { CalendarPlus } from "lucide-react";
 import { gerarAgenda } from "@/actions/vales";
 import type { Farol } from "@/lib/farol";
 import { BotaoEnviar, Mensagem, useAcao } from "./FormAcao";
+import { LeitorVale } from "./LeitorVale";
 import { FarolBadge, StatusBadge } from "./ui";
 
 export type LinhaVale = {
   id: string;
+  num: number;
   numero: string;
   fornecedor: string;
   cnpj: string;
@@ -53,6 +55,20 @@ export function SelecaoVales({ vales, hoje }: { vales: LinhaVale[]; hoje: string
   const todos = pendentes.length > 0 && pendentes.every((v) => selecionados.has(v.id));
 
   return (
+    <>
+    <div className="card mb-5 p-5">
+      <p className="label">Leitura óptica do vale</p>
+      <LeitorVale
+        dica="Leia o código de barras do vale para selecioná-lo"
+        aoLer={(lido) => {
+          const linha = vales.find((v) => v.id === lido.id);
+          if (!linha) return null;
+          if (linha.status !== "PENDENTE") return `${lido.codigo} já está agendado (${linha.agenda}).`;
+          setSelecionados((s) => new Set(s).add(linha.id));
+          return `${lido.codigo} selecionado para a agenda · ${linha.fornecedor} · ${linha.quantidade} pallet(s)`;
+        }}
+      />
+    </div>
     <form onSubmit={aoEnviar}>
       <div className="card p-3 sm:p-4">
       <div className="poco overflow-x-auto">
@@ -85,7 +101,7 @@ export function SelecaoVales({ vales, hoje }: { vales: LinhaVale[]; hoje: string
               </tr>
             )}
             {vales.map((v) => (
-              <tr key={v.id} className={selecionados.has(v.id) ? "bg-lima/[.06]" : undefined}>
+              <tr key={v.id} data-vale={v.num} className={selecionados.has(v.id) ? "bg-lima/[.06]" : undefined}>
                 <td>
                   {v.status === "PENDENTE" && (
                     <input
@@ -156,5 +172,6 @@ export function SelecaoVales({ vales, hoje }: { vales: LinhaVale[]; hoje: string
         )}
       </div>
     </form>
+    </>
   );
 }

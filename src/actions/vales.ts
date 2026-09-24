@@ -6,8 +6,8 @@ import { z } from "zod";
 import { requireUsuario } from "@/lib/auth";
 import { auditar, comContaBloqueada, ErroNegocio, lancar } from "@/lib/conta";
 import { prisma } from "@/lib/prisma";
-import { inicioDoDia } from "@/lib/datas";
-import { numeroAgenda } from "@/lib/formatos";
+import { lerCodigoVale, numeroAgenda, numeroVale } from "@/lib/formatos";
+import { formatarDataHora, inicioDoDia } from "@/lib/datas";
 import { sucesso, tratarErro, type Estado } from "./estado";
 
 const schemaAgenda = z.object({
@@ -153,4 +153,31 @@ export async function cancelarAgenda(_: Estado, form: FormData): Promise<Estado>
     return tratarErro(e);
   }
   redirect(`/agendas?ok=${encodeURIComponent(mensagem)}`);
+}
+
+export type ResultadoLeituraVale =
+  | { ok: true; id: string; numero: number; codigo: string; status: "PENDENTE" | "AGENDADO" | "FINALIZADO"; texto: string }
+  | { ok: false; erro: string };
+
+/** Identifica o vale a partir da leitura óptica do código de barras (conteúdo: "VP-000123"). */
+export async function consultarVale(leitura: string): Promise<ResultadoLeituraVale> {
+  await requireUsuario();
+  const numero = lerCodigoVale(leitura);
+  if (numero === null) return { ok: false, erro: `Código "${leitura}" não é de um vale-pallet.` };
+  const vale = await prisma.valePallet.findUnique({ where: { numero }, include: { fornecedor: true, agenda: true } });
+  if (!vale) return { ok: false, erro: `Vale ${numeroVale(numero)} não encontrado.` };
+  const detalhe =
+    vale.status === "FINALIZADO"
+      ? `finalizado em ${formatarDataHora(vale.finalizadoEm)}`
+      : vale.status === "AGENDADO" && vale.agenda
+        ? `agendado em ${numeroAgenda(vale.agenda.numero)}`
+        : "pendente de devolução";
+  return {
+    ok: true,
+    id: vale.id,
+    numero,
+    codigo: numeroVale(numero),
+    status: vale.status,
+    texto: `${numeroVale(numero)} · ${vale.fornecedor.nome} · ${vale.quantidade} pallet(s) · ${detalhe}`,
+  };
 }

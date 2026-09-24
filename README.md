@@ -13,15 +13,16 @@ Sistema web para controlar a **conta corrente de pallets PBR**: saldo do pulmão
 | Dashboard | `/` | Saldo do pulmão, entradas/saídas do dia, totais por subcategoria (hoje e no mês), **farol por idade do vale** (🔴 ≥ 30 dias · 🟡 20–29 · 🟢 < 20) e **farol por fornecedor** (🔴 > 100 · 🟡 50–100 · 🟢 < 50). Atualiza sozinho a cada 30 s. |
 | Envio para o CD | `/cd/envio` | Saída imediata do pulmão para o CD escolhido (bloqueia se não houver saldo). |
 | Recebimento do CD | `/cd/recebimento` | Entrada no pulmão de pallets vindos de um CD. |
-| Entrada de Fornecedor | `/fornecedor/entrada` | Fornecedor, CNPJ (com validação dos dígitos), transportadora, placa (padrão antigo ou Mercosul), NF e quantidade. Gera o Vale-Pallet (`VP-000001`…) e abre a impressão A4 automaticamente. |
-| Impressão do vale | `/imprimir/vale/[id]` | Folha A4 dividida ao meio: 1ª via Empresa / 2ª via Transportador. |
-| Vales Pendentes | `/vales` | Lista os vales em aberto com farol; selecione os vales e clique em **Gerar Agenda de Devolução** (uma agenda por fornecedor). |
-| Baixa de Pagamento | `/agendas` | Valida a agenda: os vales passam para **Finalizado** e os pallets saem oficialmente do pulmão. Também dá para cancelar a agenda (os vales voltam para Pendente). |
+| Entrada de Fornecedor | `/fornecedor/entrada` | Fornecedor, CNPJ (numérico ou alfanumérico, com validação dos dígitos), transportadora (sugere as cadastradas), placa (padrão antigo ou Mercosul), NF e quantidade. Gera o Vale-Pallet (`VP-000001`…) e abre a impressão A4 automaticamente. |
+| Impressão do vale | `/imprimir/vale/[id]` | Folha A4 dividida ao meio (1ª via Empresa / 2ª via Transportador), com o **ID único** e **código de barras Code 128** do vale. |
+| Vales Pendentes | `/vales` | Lista os vales em aberto com farol; selecione os vales (clicando ou **lendo o código de barras do vale**) e clique em **Gerar Agenda de Devolução** (uma agenda por fornecedor). |
+| Baixa de Pagamento | `/agendas` | Conferência por leitura óptica do vale (localiza o vale na agenda). Valida a agenda: os vales passam para **Finalizado** e os pallets saem oficialmente do pulmão. Também dá para cancelar a agenda (os vales voltam para Pendente). |
 | Quebras | `/avarias/quebras` | Tira do pulmão e manda para o estoque de avariados (observação obrigatória). |
 | Recuperados | `/avarias/recuperados` | Devolve pallets avariados ao pulmão. |
 | Descarte | `/avarias/descarte` | Baixa definitiva de avariados (justificativa obrigatória). |
-| Relatórios | `/relatorios` | Filtros por período e tipo, resumo, trilha de auditoria. Exporta **Excel (.xlsx)** com as abas Resumo, Movimentações, Vales-Pallet, Agendas, Pendências por Fornecedor e Auditoria, ou as movimentações em **.csv**. |
-| Cadastros (admin) | `/cadastros` | CDs, usuários (admin/operador), fornecedores e **ajuste de inventário** (saldo inicial / contagem física). |
+| Relatórios | `/relatorios` | Filtros por período e tipo, resumo, trilha de auditoria. Exporta **Excel (.xlsx)** com as abas Resumo, Movimentações, Vales-Pallet, Agendas, Compras, Pendências por Fornecedor e Auditoria, ou as movimentações em **.csv**. |
+| **Adicionar Pallets** (restrito) | `/pallets/adicionar` | Botão exclusivo para administradores ou usuários com a permissão *Pode adicionar pallets*. **Compra:** lê o código de barras do DANFE (chave de acesso da NF-e, 44 posições) com leitor USB/Bluetooth, câmera do celular ou o botão *Simular leitura*; identifica automaticamente **NF, série e fornecedor** (CNPJ do emitente) e, se o fornecedor não existir, abre o **cadastro rápido**. A mesma NF não pode ser lançada duas vezes. **Ajuste de inventário:** quantidade + motivo. Tudo auditado. |
+| Cadastros | `/cadastros/*` | Abas **Transportadoras**, **Fornecedores** (qualquer usuário), **Centros de Distribuição** e **Usuários** (somente administrador). Criar, editar e ativar/inativar. |
 | Minha Senha | `/conta` | Troca da própria senha. |
 
 ### Regras da conta corrente
@@ -30,7 +31,7 @@ Cada movimentação é uma linha no livro-razão (`Movimentacao`) com a variaç�
 
 | Tipo | Pulmão | Avariados |
 |---|---|---|
-| Recebimento de Fornecedor, Recebimento do CD, Ajuste de entrada | + | |
+| Recebimento de Fornecedor, Recebimento do CD, Compra, Ajuste de entrada | + | |
 | Envio para CD, Devolução ao Fornecedor, Ajuste de saída | − | |
 | Quebra | − | + |
 | Recuperado | + | − |
@@ -54,7 +55,7 @@ Cada movimentação é uma linha no livro-razão (`Movimentacao`) com a variaç�
 4. **Faça o deploy.** O `build` roda automaticamente:
    `prisma generate → prisma migrate deploy → prisma db seed → next build` (script `scripts/build.mjs`).
    Ou seja, cria as tabelas e o usuário administrador (só se o banco ainda não tiver nenhum usuário).
-5. Entre com o administrador, **troque a senha** em *Minha Senha*, cadastre os **CDs** e lance o **saldo inicial** em *Cadastros → Ajuste de inventário*.
+5. Entre com o administrador, **troque a senha** em *Minha Senha*, cadastre os **CDs** em *Cadastros* e lance o **saldo inicial** em *Adicionar Pallets → Ajuste de Inventário*.
 
 > Os deploys de *Preview* usam as mesmas variáveis. Se não quiser que previews rodem migrações no banco de produção, crie um banco separado para o ambiente Preview.
 
@@ -113,9 +114,18 @@ src/
   components/          # componentes de UI
 ```
 
+## Tema claro / escuro
+
+O botão de sol/lua no menu (ou no cabeçalho, no celular, e na tela de login) alterna o tema. A escolha fica salva no navegador (cookie) e é aplicada já na renderização do servidor, sem piscar.
+
+## Leitores de código de barras
+
+Leitores USB/Bluetooth funcionam como teclado (digitam o código e dão Enter): basta deixar o cursor no campo de leitura. No celular (Chrome/Edge no Android), o botão **Ler com a câmera** usa a câmera.
+
 ## Perfis de acesso
 
-- **Administrador:** tudo, mais *Cadastros* (CDs, usuários, ajuste de inventário).
-- **Operador:** todas as operações do dia a dia e os relatórios.
+- **Administrador:** tudo, inclusive cadastros de CDs e usuários e **Adicionar Pallets**.
+- **Operador:** operações do dia a dia, relatórios e cadastros de transportadoras e fornecedores.
+- **Permissão "Pode adicionar pallets":** marcada no cadastro do usuário, libera **Adicionar Pallets** para um operador.
 
 Usuários inativados perdem o acesso na hora, porque a sessão é revalidada no banco a cada requisição.

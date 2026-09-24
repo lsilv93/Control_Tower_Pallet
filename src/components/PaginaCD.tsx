@@ -40,7 +40,7 @@ export async function PaginaCD({ modo }: { modo: "envio" | "recebimento" }) {
           {cds.length === 0 ? (
             <p className="text-[12px] text-t2">
               Nenhum CD ativo cadastrado.{" "}
-              <Link href="/cadastros" className="font-semibold text-lima hover:underline">Cadastre um CD</Link>{" "}
+              <Link href="/cadastros/cds" className="font-semibold text-lima hover:underline">Cadastre um CD</Link>{" "}
               (perfil administrador).
             </p>
           ) : (
