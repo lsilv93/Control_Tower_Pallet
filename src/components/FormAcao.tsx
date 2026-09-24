@@ -45,11 +45,12 @@ export function Mensagem({ estado }: { estado: Estado }) {
     <div
       role="status"
       className={clsx(
-        "rounded-lg border px-3 py-2 text-sm",
-        estado.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800",
+        "flex items-start gap-2.5 px-4 py-3 text-[12px] font-medium",
+        estado.ok ? "poco text-lima" : "poco-erro text-erro-claro",
       )}
     >
-      {estado.mensagem}
+      <span className={clsx("ponto mt-[5px]", estado.ok ? "text-lima" : "text-erro")} />
+      <span>{estado.mensagem}</span>
     </div>
   );
 }

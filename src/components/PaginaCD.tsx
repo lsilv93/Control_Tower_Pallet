@@ -2,7 +2,7 @@ import Link from "next/link";
 import { enviarParaCD, receberDoCD } from "@/actions/cd";
 import { FormAcao } from "./FormAcao";
 import { UltimasMovimentacoes } from "./UltimasMovimentacoes";
-import { Cabecalho, Painel } from "./ui";
+import { Abas, Cabecalho, Painel } from "./ui";
 import { obterSaldos } from "@/lib/conta";
 import { prisma } from "@/lib/prisma";
 import { formatarNumero } from "@/lib/formatos";
@@ -24,15 +24,23 @@ export async function PaginaCD({ modo }: { modo: "envio" | "recebimento" }) {
             : "Registra a entrada no pulmão de pallets vindos de um Centro de Distribuição."
         }
       />
+      <Abas
+        ativo={envio ? "/cd/envio" : "/cd/recebimento"}
+        itens={[
+          { href: "/cd/envio", rotulo: "Envio para o CD" },
+          { href: "/cd/recebimento", rotulo: "Recebimento do CD" },
+        ]}
+      />
       <div className="grid gap-6 lg:grid-cols-3">
         <Painel titulo={envio ? "Nova saída" : "Nova entrada"}>
-          <p className="mb-4 rounded-lg bg-slate-50 px-3 py-2 text-sm">
-            Saldo atual no pulmão: <strong className="tabular-nums">{formatarNumero(saldos.pulmao)}</strong>
+          <p className="mb-4 poco px-4 py-3 text-[12px]">
+            <span className="label !mb-1">Saldo atual no pulmão</span>
+            <strong className="num text-[22px] font-semibold text-t1">{formatarNumero(saldos.pulmao)}</strong>
           </p>
           {cds.length === 0 ? (
-            <p className="text-sm text-slate-600">
+            <p className="text-[12px] text-t2">
               Nenhum CD ativo cadastrado.{" "}
-              <Link href="/cadastros" className="font-semibold text-brand-600 hover:underline">Cadastre um CD</Link>{" "}
+              <Link href="/cadastros" className="font-semibold text-lima hover:underline">Cadastre um CD</Link>{" "}
               (perfil administrador).
             </p>
           ) : (

@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { AtualizacaoAutomatica } from "@/components/AtualizacaoAutomatica";
 import { UltimasMovimentacoes } from "@/components/UltimasMovimentacoes";
-import { Cabecalho, FarolBadge, Indicador, Painel, StatusBadge, Vazio } from "@/components/ui";
+import { Cabecalho, FarolBadge, Indicador, LegendaFarol, Painel, Ponto, StatusBadge, Vazio } from "@/components/ui";
 import { obterSaldos } from "@/lib/conta";
 import { entradasSaidas, pendenciasPorFornecedor, totaisPorTipo, valesEmAberto } from "@/lib/consultas";
 import { fimDoDia, formatarData, inicioDoDia, inicioDoMes } from "@/lib/datas";
@@ -38,7 +38,7 @@ export default async function DashboardPage() {
         <AtualizacaoAutomatica />
       </Cabecalho>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="entrada grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Indicador
           destaque
           titulo="Saldo no pulmão"
@@ -50,32 +50,32 @@ export default async function DashboardPage() {
           titulo="Entradas do dia"
           valor={n(dia.entradas)}
           detalhe="pallets que entraram no pulmão hoje"
-          cor="verde"
+          cor="lima"
           icone={<ArrowDownToLine className="h-6 w-6" />}
         />
         <Indicador
           titulo="Saídas do dia"
           valor={n(dia.saidas)}
           detalhe="pallets que saíram do pulmão hoje"
-          cor="vermelho"
+          cor="erro"
           icone={<ArrowUpFromLine className="h-6 w-6" />}
         />
         <Indicador
           titulo="Pendente com fornecedores"
           valor={n(saldos.pendenteFornecedores)}
           detalhe={`${saldos.valesEmAberto} vale(s) em aberto · ${n(saldos.avaria)} avariado(s) em estoque`}
-          cor="laranja"
+          cor="ouro"
           icone={<ClipboardList className="h-6 w-6" />}
         />
       </div>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="entrada mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {(
           [
-            ["ENVIO_CD", "Enviados para o CD", <Truck key="i" className="h-5 w-5" />, "roxo"],
-            ["RECEBIMENTO_CD", "Recebidos do CD", <Building2 key="i" className="h-5 w-5" />, "azul"],
-            ["DEVOLUCAO_FORNECEDOR", "Devolvidos ao Fornecedor", <PackageX key="i" className="h-5 w-5" />, "laranja"],
-            ["RECEBIMENTO_FORNECEDOR", "Recebidos do Fornecedor", <PackagePlus key="i" className="h-5 w-5" />, "verde"],
+            ["ENVIO_CD", "Enviados para o CD", <Truck key="i" className="h-5 w-5" />, "neutro"],
+            ["RECEBIMENTO_CD", "Recebidos do CD", <Building2 key="i" className="h-5 w-5" />, "neutro"],
+            ["DEVOLUCAO_FORNECEDOR", "Devolvidos ao Fornecedor", <PackageX key="i" className="h-5 w-5" />, "ouro"],
+            ["RECEBIMENTO_FORNECEDOR", "Recebidos do Fornecedor", <PackagePlus key="i" className="h-5 w-5" />, "lima"],
           ] as const
         ).map(([tipo, titulo, icone, cor]) => (
           <Indicador
@@ -89,24 +89,28 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-5">
+      <div className="mt-6 grid gap-6">
         <Painel
-          className="xl:col-span-3"
+          
           titulo={
             <span className="flex items-center gap-2">
-              <TriangleAlert className="h-4 w-4 text-amber-500" /> Farol por idade do vale-pallet
+              <TriangleAlert className="h-4 w-4 text-ouro" /> Farol por idade do vale-pallet
             </span>
           }
           acoes={
-            <span className="text-xs text-slate-500">
-              🔴 {contagem(vales, "VERMELHO")} · 🟡 {contagem(vales, "AMARELO")} · 🟢 {contagem(vales, "VERDE")}
+            <span className="num flex items-center gap-3 text-[11px] text-t2">
+              {(["VERMELHO", "AMARELO", "VERDE"] as const).map((f) => (
+                <span key={f} className="inline-flex items-center gap-1.5">
+                  <Ponto farol={f} /> {contagem(vales, f)}
+                </span>
+              ))}
             </span>
           }
         >
           {vales.length === 0 ? (
-            <Vazio>Nenhum vale-pallet pendente de devolução. 🎉</Vazio>
+            <Vazio>Nenhum vale-pallet pendente de devolução.</Vazio>
           ) : (
-            <div className="-m-5 max-h-[28rem] overflow-auto">
+            <div className="poco max-h-[28rem] overflow-auto">
               <table className="tabela">
                 <thead className="sticky top-0">
                   <tr>
@@ -123,14 +127,14 @@ export default async function DashboardPage() {
                     <tr key={v.id}>
                       <td><FarolBadge farol={v.farol} /></td>
                       <td>
-                        <Link prefetch={false} href={`/imprimir/vale/${v.id}`} className="font-mono font-semibold text-brand-600 hover:underline">
+                        <Link prefetch={false} href={`/imprimir/vale/${v.id}`} className="num font-semibold text-lima hover:text-lima-hover hover:underline">
                           {numeroVale(v.numero)}
                         </Link>
                       </td>
                       <td className="max-w-[11rem] truncate" title={v.fornecedor.nome}>{v.fornecedor.nome}</td>
                       <td className="tabular-nums">
                         <p className="font-semibold">{v.idade} dia(s)</p>
-                        <p className="text-xs text-slate-400">{formatarData(v.criadoEm)}</p>
+                        <p className="text-[11px] text-t4">{formatarData(v.criadoEm)}</p>
                       </td>
                       <td className="text-right font-semibold tabular-nums">{n(v.quantidade)}</td>
                       <td><StatusBadge status={v.status} rotulo={rotuloStatusVale[v.status]} /></td>
@@ -140,21 +144,21 @@ export default async function DashboardPage() {
               </table>
             </div>
           )}
-          <p className="mt-6 text-xs text-slate-500">🔴 30 dias ou mais · 🟡 20 a 29 dias · 🟢 menos de 20 dias</p>
+          <LegendaFarol itens={[["VERMELHO", "30 dias ou mais"], ["AMARELO", "20 a 29 dias"], ["VERDE", "menos de 20 dias"]]} />
         </Painel>
 
         <Painel
-          className="xl:col-span-2"
+          
           titulo={
             <span className="flex items-center gap-2">
-              <PackageCheck className="h-4 w-4 text-brand-600" /> Farol por fornecedor
+              <PackageCheck className="h-4 w-4 text-lima" /> Farol por fornecedor
             </span>
           }
         >
           {fornecedores.length === 0 ? (
             <Vazio>Nenhum fornecedor com pallets pendentes.</Vazio>
           ) : (
-            <div className="-m-5 max-h-[28rem] overflow-auto">
+            <div className="poco max-h-[28rem] overflow-auto">
               <table className="tabela">
                 <thead className="sticky top-0">
                   <tr>
@@ -170,17 +174,17 @@ export default async function DashboardPage() {
                       <td><FarolBadge farol={f.farol} /></td>
                       <td>
                         <p className="max-w-[10rem] truncate font-medium" title={f.fornecedor.nome}>{f.fornecedor.nome}</p>
-                        <p className="text-xs text-slate-400">{formatarCnpj(f.fornecedor.cnpj)}</p>
+                        <p className="text-[11px] text-t4">{formatarCnpj(f.fornecedor.cnpj)}</p>
                       </td>
                       <td className="text-right tabular-nums">{f.vales}</td>
-                      <td className="text-right font-bold tabular-nums">{n(f.total)}</td>
+                      <td className="text-right font-semibold tabular-nums">{n(f.total)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-          <p className="mt-6 text-xs text-slate-500">🔴 acima de 100 · 🟡 50 a 100 · 🟢 abaixo de 50 pallets</p>
+          <LegendaFarol itens={[["VERMELHO", "acima de 100"], ["AMARELO", "50 a 100"], ["VERDE", "abaixo de 50 pallets"]]} />
         </Painel>
       </div>
 

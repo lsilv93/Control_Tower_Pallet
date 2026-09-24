@@ -54,7 +54,8 @@ export function SelecaoVales({ vales, hoje }: { vales: LinhaVale[]; hoje: string
 
   return (
     <form onSubmit={aoEnviar}>
-      <div className="card overflow-x-auto">
+      <div className="card p-3 sm:p-4">
+      <div className="poco overflow-x-auto">
         <table className="tabela">
           <thead>
             <tr>
@@ -80,11 +81,11 @@ export function SelecaoVales({ vales, hoje }: { vales: LinhaVale[]; hoje: string
           <tbody>
             {vales.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-slate-500">Nenhum vale em aberto.</td>
+                <td colSpan={10} className="py-10 text-center text-t3">Nenhum vale em aberto.</td>
               </tr>
             )}
             {vales.map((v) => (
-              <tr key={v.id} className={selecionados.has(v.id) ? "bg-brand-50" : undefined}>
+              <tr key={v.id} className={selecionados.has(v.id) ? "bg-lima/[.06]" : undefined}>
                 <td>
                   {v.status === "PENDENTE" && (
                     <input
@@ -99,41 +100,42 @@ export function SelecaoVales({ vales, hoje }: { vales: LinhaVale[]; hoje: string
                 </td>
                 <td><FarolBadge farol={v.farol} /></td>
                 <td>
-                  <Link prefetch={false} href={`/imprimir/vale/${v.id}`} className="font-mono font-semibold text-brand-600 hover:underline">
+                  <Link prefetch={false} href={`/imprimir/vale/${v.id}`} className="num font-semibold text-lima hover:underline">
                     {v.numero}
                   </Link>
                 </td>
                 <td>
-                  <p className="max-w-[14rem] truncate font-medium" title={v.fornecedor}>{v.fornecedor}</p>
-                  <p className="text-xs text-slate-400">{v.cnpj}</p>
+                  <p className="max-w-[14rem] truncate font-medium text-t1" title={v.fornecedor}>{v.fornecedor}</p>
+                  <p className="text-[11px] text-t4">{v.cnpj}</p>
                 </td>
                 <td>{v.notaFiscal}</td>
                 <td>
                   <p className="max-w-[10rem] truncate">{v.transportadora}</p>
-                  <p className="text-xs text-slate-400">{v.placa}</p>
+                  <p className="text-[11px] text-t4">{v.placa}</p>
                 </td>
                 <td>
                   <p>{v.emissao}</p>
-                  <p className="text-xs text-slate-400">{v.usuario}</p>
+                  <p className="text-[11px] text-t4">{v.usuario}</p>
                 </td>
                 <td className="text-right tabular-nums">{v.idade} d</td>
-                <td className="text-right font-semibold tabular-nums">{v.quantidade}</td>
+                <td className="text-right font-semibold tabular-nums text-t1">{v.quantidade}</td>
                 <td>
                   <StatusBadge status={v.status} rotulo={v.statusRotulo} />
-                  {v.agenda && <p className="mt-0.5 text-xs text-slate-400">{v.agenda}</p>}
+                  {v.agenda && <p className="mt-0.5 text-[11px] text-t4">{v.agenda}</p>}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      </div>
 
-      <div className="card sticky bottom-4 mt-4 flex flex-wrap items-end gap-4 p-4">
-        <div className="min-w-[10rem] text-sm">
-          <p className="text-slate-500">Selecionados</p>
-          <p className="font-semibold">
+      <div className="card sticky bottom-4 z-10 mt-5 flex flex-wrap items-end gap-4 p-5">
+        <div className="min-w-[10rem] text-[12px]">
+          <p className="label !mb-1">Selecionados</p>
+          <p className="num text-[13px] font-semibold text-t1">
             {selecionados.size} vale(s) · {resumo.qtd} pallet(s)
-            {resumo.fornecedores > 1 && <span className="text-slate-500"> · {resumo.fornecedores} agendas</span>}
+            {resumo.fornecedores > 1 && <span className="text-t3"> · {resumo.fornecedores} agendas</span>}
           </p>
         </div>
         <div>

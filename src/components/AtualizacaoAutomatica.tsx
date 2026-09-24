@@ -21,6 +21,10 @@ export function AtualizacaoAutomatica({ segundos = 30 }: { segundos?: number }) 
   }, [router, segundos]);
 
   return (
+    <div className="flex items-center gap-3">
+      <span className="pill bg-lima/10 text-lima">
+        <span className="ponto ponto-pulsante" /> Ao vivo
+      </span>
     <button
       type="button"
       onClick={() => {
@@ -31,7 +35,8 @@ export function AtualizacaoAutomatica({ segundos = 30 }: { segundos?: number }) 
       title={`Atualização automática a cada ${segundos}s`}
     >
       <RefreshCw className="h-4 w-4" />
-      {ultima ? `Atualizado ${ultima.toLocaleTimeString("pt-BR")}` : "Atualizar"}
+      <span className="num">{ultima ? ultima.toLocaleTimeString("pt-BR") : "Atualizar"}</span>
     </button>
+    </div>
   );
 }

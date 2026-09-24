@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Scissors } from "lucide-react";
 import { ImpressaoAutomatica } from "@/components/ImpressaoAutomatica";
 import { requireUsuario } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -83,26 +83,26 @@ export default async function ImprimirValePage({
   if (!vale) notFound();
 
   return (
-    <div className="min-h-screen bg-slate-200 py-6 print:bg-white print:py-0">
+    <div className="min-h-screen bg-fundo px-[14px] py-6 print:bg-white print:p-0">
       <style>{`
         @page { size: A4 portrait; margin: 0; }
         .folha { width: 210mm; height: 297mm; }
         .via { height: 148.5mm; box-sizing: border-box; }
         @media print { .nao-imprimir { display: none !important; } body { background: #fff; } }
       `}</style>
-      <div className="nao-imprimir mx-auto mb-4 flex w-[210mm] max-w-full items-center justify-between gap-2 px-2">
+      <div className="nao-imprimir card mx-auto mb-6 flex w-[210mm] max-w-full flex-wrap items-center justify-between gap-3 p-4">
         <Link href="/fornecedor/entrada" className="btn-secondary">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </Link>
-        <p className="text-sm text-slate-600">
-          Vale <strong>{numeroVale(vale.numero)}</strong> gerado · A4 em 2 vias
+        <p className="text-[12px] text-t3">
+          Vale <strong className="num text-lima">{numeroVale(vale.numero)}</strong> · A4 em 2 vias
         </p>
         <ImpressaoAutomatica auto={auto === "1"} />
       </div>
-      <div className="folha relative mx-auto overflow-hidden bg-white text-slate-900 shadow-xl print:shadow-none">
+      <div className="folha relative mx-auto overflow-hidden rounded-[6px] bg-white text-slate-900 shadow-[12px_12px_26px_rgba(0,4,8,.62)] print:rounded-none print:shadow-none">
         <Via vale={vale} via="1ª via · Empresa" />
         <div className="absolute inset-x-0 top-[148.5mm] h-0 border-t-2 border-dashed border-slate-400">
-          <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-2 text-[10px] text-slate-500">✂ recorte aqui</span>
+          <span className="absolute -top-2.5 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 bg-white px-2 text-[10px] text-slate-500"><Scissors className="h-3 w-3" /> recorte aqui</span>
         </div>
         <Via vale={vale} via="2ª via · Transportador" />
       </div>

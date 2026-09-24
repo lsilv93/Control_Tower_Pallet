@@ -8,8 +8,8 @@ export default async function SistemaLayout({ children }: { children: React.Reac
   return (
     <div className="min-h-screen">
       <Menu usuario={usuario} />
-      <main className="lg:pl-64">
-        <div className="mx-auto max-w-7xl px-4 py-6 lg:px-8 lg:py-8">{children}</div>
+      <main className="lg:pl-[268px]">
+        <div className="entrada mx-auto max-w-7xl px-[14px] py-6 sm:px-6 lg:px-8 lg:py-8">{children}</div>
       </main>
     </div>
   );

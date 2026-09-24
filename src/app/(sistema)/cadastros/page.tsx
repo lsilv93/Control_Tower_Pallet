@@ -32,17 +32,18 @@ export default async function CadastrosPage() {
           {cds.length === 0 ? (
             <Vazio>Nenhum CD cadastrado.</Vazio>
           ) : (
+            <div className="poco overflow-x-auto">
             <table className="tabela">
               <thead><tr><th>Código</th><th>Nome</th><th>Cidade</th><th>Situação</th><th /></tr></thead>
               <tbody>
                 {cds.map((cd) => (
-                  <tr key={cd.id} className={cd.ativo ? undefined : "text-slate-400"}>
-                    <td className="font-mono font-semibold">{cd.codigo}</td>
+                  <tr key={cd.id} className={cd.ativo ? undefined : "opacity-50"}>
+                    <td className="num font-semibold text-t1">{cd.codigo}</td>
                     <td>{cd.nome}</td>
                     <td>{cd.cidade ?? "—"}</td>
                     <td>{cd.ativo ? "Ativo" : "Inativo"}</td>
                     <td className="text-right">
-                      <FormAcao acao={alternarCD} className="inline" botao={cd.ativo ? "Inativar" : "Ativar"} classeBotao="btn-secondary !px-2 !py-1 text-xs">
+                      <FormAcao acao={alternarCD} className="inline" botao={cd.ativo ? "Inativar" : "Ativar"} classeBotao="btn-secondary btn-sm">
                         <input type="hidden" name="id" value={cd.id} />
                       </FormAcao>
                     </td>
@@ -50,13 +51,14 @@ export default async function CadastrosPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </Painel>
 
         <Painel titulo="Ajuste de inventário">
-          <p className="mb-4 text-sm text-slate-600">
+          <p className="mb-4 text-[12px] leading-relaxed text-t3">
             Use para lançar o saldo inicial ou corrigir divergências de contagem física. Saldo atual no pulmão:{" "}
-            <strong>{formatarNumero(saldos.pulmao)}</strong>.
+            <strong className="num text-t1">{formatarNumero(saldos.pulmao)}</strong>.
           </p>
           <FormAcao acao={ajustarInventario} botao="Lançar ajuste" confirmar="Confirmar o ajuste de inventário?">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -89,26 +91,26 @@ export default async function CadastrosPage() {
               <option value="ADMIN">Administrador</option>
             </select>
           </FormAcao>
-          <div className="-mx-5 overflow-x-auto">
+          <div className="poco overflow-x-auto">
             <table className="tabela">
               <thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Situação</th><th>Criado em</th><th>Redefinir senha</th><th /></tr></thead>
               <tbody>
                 {usuarios.map((u) => (
-                  <tr key={u.id} className={u.ativo ? undefined : "text-slate-400"}>
+                  <tr key={u.id} className={u.ativo ? undefined : "opacity-50"}>
                     <td>{u.nome}</td>
                     <td className="font-mono">{u.login}</td>
                     <td>{u.perfil === "ADMIN" ? "Administrador" : "Operador"}</td>
                     <td>{u.ativo ? "Ativo" : "Inativo"}</td>
                     <td>{formatarDataHora(u.criadoEm)}</td>
                     <td>
-                      <FormAcao acao={redefinirSenha} className="flex items-center gap-2" botao="OK" classeBotao="btn-secondary !px-2 !py-1 text-xs">
+                      <FormAcao acao={redefinirSenha} className="flex items-center gap-2" botao="OK" classeBotao="btn-secondary btn-sm">
                         <input type="hidden" name="id" value={u.id} />
-                        <input name="senha" type="password" className="input !py-1 w-32" placeholder="Nova senha" minLength={6} required autoComplete="new-password" />
+                        <input name="senha" type="password" className="input !min-h-[36px] w-36 !py-1" placeholder="Nova senha" minLength={6} required autoComplete="new-password" />
                       </FormAcao>
                     </td>
                     <td className="text-right">
                       {u.id !== admin.id && (
-                        <FormAcao acao={alternarUsuario} className="inline" botao={u.ativo ? "Inativar" : "Ativar"} classeBotao="btn-secondary !px-2 !py-1 text-xs">
+                        <FormAcao acao={alternarUsuario} className="inline" botao={u.ativo ? "Inativar" : "Ativar"} classeBotao="btn-secondary btn-sm">
                           <input type="hidden" name="id" value={u.id} />
                         </FormAcao>
                       )}
@@ -121,11 +123,11 @@ export default async function CadastrosPage() {
         </Painel>
 
         <Painel titulo="Fornecedores" className="xl:col-span-2">
-          <p className="mb-3 text-sm text-slate-500">Fornecedores são cadastrados automaticamente na entrada (pelo CNPJ).</p>
+          <p className="mb-3 text-[12px] text-t3">Fornecedores são cadastrados automaticamente na entrada (pelo CNPJ).</p>
           {fornecedores.length === 0 ? (
             <Vazio>Nenhum fornecedor cadastrado.</Vazio>
           ) : (
-            <div className="-mx-5 overflow-x-auto">
+            <div className="poco overflow-x-auto">
               <table className="tabela">
                 <thead><tr><th>Nome</th><th>CNPJ</th><th className="text-right">Vales emitidos</th><th>Cadastrado em</th></tr></thead>
                 <tbody>

@@ -37,12 +37,12 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
       </Cabecalho>
 
       {ok && (
-        <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-          {ok}
+        <div role="status" className="poco mb-5 flex items-center gap-2.5 px-5 py-4 text-[12px] font-medium text-lima">
+          <span className="ponto" /> {ok}
         </div>
       )}
-      <p className="mb-4 text-sm text-slate-600">
-        Saldo atual no pulmão: <strong className="tabular-nums">{formatarNumero(saldos.pulmao)}</strong> pallet(s)
+      <p className="mb-5 text-[12px] text-t3">
+        Saldo atual no pulmão: <strong className="num text-t1">{formatarNumero(saldos.pulmao)}</strong> pallet(s)
       </p>
 
       {abertas.length === 0 ? (
@@ -56,19 +56,20 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
                 key={a.id}
                 titulo={
                   <span>
-                    <span className="font-mono">{numeroAgenda(a.numero)}</span> · {a.fornecedor.nome}
+                    <span className="num text-lima">{numeroAgenda(a.numero)}</span> <span className="text-t4">·</span> {a.fornecedor.nome}
                   </span>
                 }
                 acoes={<StatusBadge status={a.status} rotulo={rotuloStatusAgenda[a.status]} />}
               >
-                <dl className="mb-3 grid grid-cols-2 gap-2 text-sm">
-                  <div><dt className="text-slate-500">CNPJ</dt><dd>{formatarCnpj(a.fornecedor.cnpj)}</dd></div>
-                  <div><dt className="text-slate-500">Data prevista</dt><dd>{formatarData(a.dataPrevista)}</dd></div>
-                  <div><dt className="text-slate-500">Criada por</dt><dd>{a.criadoPor.login} · {formatarDataHora(a.criadoEm)}</dd></div>
-                  <div><dt className="text-slate-500">Total a devolver</dt><dd className="text-lg font-bold">{formatarNumero(total)} pallets</dd></div>
+                <dl className="poco mb-4 grid grid-cols-2 gap-4 p-4 text-[12px]">
+                  <div><dt className="label !mb-1">CNPJ</dt><dd className="num text-t2">{formatarCnpj(a.fornecedor.cnpj)}</dd></div>
+                  <div><dt className="label !mb-1">Data prevista</dt><dd className="num text-t2">{formatarData(a.dataPrevista)}</dd></div>
+                  <div><dt className="label !mb-1">Criada por</dt><dd className="text-t2">{a.criadoPor.login} · <span className="num">{formatarDataHora(a.criadoEm)}</span></dd></div>
+                  <div><dt className="label !mb-1">Total a devolver</dt><dd className="num text-[22px] font-semibold text-lima">{formatarNumero(total)}</dd></div>
                 </dl>
-                {a.observacao && <p className="mb-3 text-sm text-slate-600">Obs.: {a.observacao}</p>}
-                <table className="tabela mb-4 rounded border border-slate-100">
+                {a.observacao && <p className="mb-4 text-[12px] text-t2">Obs.: {a.observacao}</p>}
+                <div className="poco mb-5 overflow-x-auto">
+                <table className="tabela">
                   <thead><tr><th>Vale</th><th>NF</th><th>Emissão</th><th className="text-right">Qtd.</th></tr></thead>
                   <tbody>
                     {a.vales.map((v) => (
@@ -81,6 +82,7 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
                     ))}
                   </tbody>
                 </table>
+                </div>
                 <div className="flex flex-wrap items-start gap-3">
                   <FormAcao
                     acao={validarAgenda}
@@ -97,7 +99,7 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
                     className="flex flex-col gap-2"
                     confirmar={`Cancelar a ${numeroAgenda(a.numero)}? Os vales voltarão para Pendente.`}
                     botao={<><Ban className="h-4 w-4" /> Cancelar</>}
-                    classeBotao="btn-secondary"
+                    classeBotao="btn-danger"
                   >
                     <input type="hidden" name="agendaId" value={a.id} />
                   </FormAcao>
@@ -112,7 +114,7 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
         {historico.length === 0 ? (
           <Vazio>Nenhuma agenda finalizada ainda.</Vazio>
         ) : (
-          <div className="-m-5 overflow-x-auto">
+          <div className="poco overflow-x-auto">
             <table className="tabela">
               <thead>
                 <tr><th>Agenda</th><th>Fornecedor</th><th>Status</th><th className="text-right">Pallets</th><th>Criada</th><th>Baixa</th></tr>

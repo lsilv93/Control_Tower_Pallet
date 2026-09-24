@@ -27,7 +27,7 @@ export async function UltimasMovimentacoes({
       {movs.length === 0 ? (
         <Vazio>Nenhuma movimentação registrada.</Vazio>
       ) : (
-        <div className="-m-5 overflow-x-auto">
+        <div className="poco overflow-x-auto">
           <table className="tabela">
             <thead>
               <tr>
@@ -47,12 +47,12 @@ export async function UltimasMovimentacoes({
                   <td>{rotuloTipo[m.tipo]}</td>
                   <td>
                     {m.cd ? `${m.cd.codigo} - ${m.cd.nome}` : m.fornecedor?.nome ?? "—"}
-                    {m.vale && <span className="ml-1 text-xs text-slate-400">({numeroVale(m.vale.numero)})</span>}
+                    {m.vale && <span className="ml-1 text-[11px] text-t4">({numeroVale(m.vale.numero)})</span>}
                   </td>
                   <td className="text-right"><Delta valor={m.deltaPulmao} /></td>
                   {mostrarAvaria && <td className="text-right"><Delta valor={m.deltaAvaria} /></td>}
                   <td>{m.usuario.login}</td>
-                  <td className="max-w-xs truncate text-slate-500" title={m.observacao ?? ""}>{m.observacao ?? "—"}</td>
+                  <td className="max-w-xs truncate text-t3" title={m.observacao ?? ""}>{m.observacao ?? "—"}</td>
                 </tr>
               ))}
             </tbody>

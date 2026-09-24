@@ -65,9 +65,9 @@ export default async function RelatoriosPage({
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Indicador titulo="Saldo atual no pulmão" valor={formatarNumero(saldos.pulmao)} />
-        <Indicador titulo="Avariados em estoque" valor={formatarNumero(saldos.avaria)} cor="vermelho" />
-        <Indicador titulo="Pendente com fornecedores" valor={formatarNumero(saldos.pendenteFornecedores)} cor="laranja" />
-        <Indicador titulo="Variação líquida no período" valor={liquido > 0 ? `+${liquido}` : liquido} detalhe={`${total} movimentação(ões)`} cor="cinza" />
+        <Indicador titulo="Avariados em estoque" valor={formatarNumero(saldos.avaria)} cor="erro" />
+        <Indicador titulo="Pendente com fornecedores" valor={formatarNumero(saldos.pendenteFornecedores)} cor="ouro" />
+        <Indicador titulo="Variação líquida no período" valor={liquido > 0 ? `+${liquido}` : liquido} detalhe={`${total} movimentação(ões)`} cor="neutro" />
       </div>
 
       <Painel titulo="Resumo por tipo no período" className="mb-6">
@@ -76,12 +76,12 @@ export default async function RelatoriosPage({
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {porTipo.map((g) => (
-              <div key={g.tipo} className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
+              <div key={g.tipo} className="poco flex items-center justify-between px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium">{rotuloTipo[g.tipo]}</p>
-                  <p className="text-xs text-slate-500">{g._count} lançamento(s)</p>
+                  <p className="text-[12px] font-medium">{rotuloTipo[g.tipo]}</p>
+                  <p className="text-[11px] text-t3">{g._count} lançamento(s)</p>
                 </div>
-                <p className="text-xl font-bold tabular-nums">{formatarNumero(g._sum.quantidade ?? 0)}</p>
+                <p className="text-xl font-semibold tabular-nums">{formatarNumero(g._sum.quantidade ?? 0)}</p>
               </div>
             ))}
           </div>
@@ -90,12 +90,12 @@ export default async function RelatoriosPage({
 
       <Painel
         titulo="Movimentações"
-        acoes={total > LIMITE ? <span className="text-xs text-slate-500">Exibindo {LIMITE} de {total}. Exporte para ver todas.</span> : null}
+        acoes={total > LIMITE ? <span className="text-[11px] text-t3">Exibindo {LIMITE} de {total}. Exporte para ver todas.</span> : null}
       >
         {movs.length === 0 ? (
           <Vazio>Sem movimentações no período.</Vazio>
         ) : (
-          <div className="-m-5 max-h-[36rem] overflow-auto">
+          <div className="poco max-h-[36rem] overflow-auto">
             <table className="tabela">
               <thead className="sticky top-0">
                 <tr>
@@ -112,11 +112,11 @@ export default async function RelatoriosPage({
                     <td className="text-right"><Delta valor={m.deltaPulmao} /></td>
                     <td className="text-right"><Delta valor={m.deltaAvaria} /></td>
                     <td>{m.cd ? `${m.cd.codigo} - ${m.cd.nome}` : m.fornecedor?.nome ?? "—"}</td>
-                    <td className="font-mono text-xs">
+                    <td className="font-mono text-[11px]">
                       {[m.vale && numeroVale(m.vale.numero), m.agenda && numeroAgenda(m.agenda.numero)].filter(Boolean).join(" / ") || "—"}
                     </td>
                     <td>{m.usuario.login}</td>
-                    <td className="max-w-xs truncate text-slate-500" title={m.observacao ?? ""}>{m.observacao ?? "—"}</td>
+                    <td className="max-w-xs truncate text-t3" title={m.observacao ?? ""}>{m.observacao ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -129,7 +129,7 @@ export default async function RelatoriosPage({
         {auditoria.length === 0 ? (
           <Vazio>Sem registros.</Vazio>
         ) : (
-          <div className="-m-5 max-h-[24rem] overflow-auto">
+          <div className="poco max-h-[24rem] overflow-auto">
             <table className="tabela">
               <thead className="sticky top-0"><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Entidade</th><th>Detalhes</th></tr></thead>
               <tbody>
@@ -137,9 +137,9 @@ export default async function RelatoriosPage({
                   <tr key={a.id}>
                     <td className="tabular-nums">{formatarDataHora(a.criadoEm)}</td>
                     <td>{a.usuario?.login ?? "—"}</td>
-                    <td className="font-mono text-xs">{a.acao}</td>
+                    <td className="font-mono text-[11px]">{a.acao}</td>
                     <td>{a.entidade}</td>
-                    <td className="max-w-md truncate font-mono text-xs text-slate-500">{a.detalhes ? JSON.stringify(a.detalhes) : "—"}</td>
+                    <td className="max-w-md truncate font-mono text-[11px] text-t3">{a.detalhes ? JSON.stringify(a.detalhes) : "—"}</td>
                   </tr>
                 ))}
               </tbody>

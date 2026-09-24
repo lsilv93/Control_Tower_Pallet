@@ -4,7 +4,7 @@ import { obterSaldos } from "@/lib/conta";
 import { formatarNumero } from "@/lib/formatos";
 import { FormAcao } from "./FormAcao";
 import { UltimasMovimentacoes } from "./UltimasMovimentacoes";
-import { Cabecalho, Indicador, Painel } from "./ui";
+import { Abas, Cabecalho, Indicador, Painel } from "./ui";
 
 const config = {
   quebras: {
@@ -46,13 +46,21 @@ export async function PaginaAvaria({ modo }: { modo: keyof typeof config }) {
   return (
     <>
       <Cabecalho titulo={c.titulo} descricao={c.descricao} />
+      <Abas
+        ativo={`/avarias/${modo}`}
+        itens={[
+          { href: "/avarias/quebras", rotulo: "Quebras" },
+          { href: "/avarias/recuperados", rotulo: "Recuperados" },
+          { href: "/avarias/descarte", rotulo: "Descarte" },
+        ]}
+      />
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
         <Indicador titulo="Saldo no pulmão" valor={formatarNumero(saldos.pulmao)} icone={<Boxes className="h-6 w-6" />} />
         <Indicador
           titulo="Estoque de avariados"
           valor={formatarNumero(saldos.avaria)}
           detalhe="aguardando recuperação ou descarte"
-          cor="vermelho"
+          cor="erro"
           icone={<Hammer className="h-6 w-6" />}
         />
       </div>
