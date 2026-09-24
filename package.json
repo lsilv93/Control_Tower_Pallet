@@ -5,7 +5,7 @@
   "description": "Sistema de Gestão de Pallets PBR - conta corrente, vales-pallet, CDs, avarias e relatórios",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && prisma db seed && next build",
+    "build": "node scripts/build.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

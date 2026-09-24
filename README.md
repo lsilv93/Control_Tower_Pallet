@@ -45,13 +45,14 @@ Cada movimentação é uma linha no livro-razão (`Movimentacao`) com a variaç�
 ## Deploy na Vercel (passo a passo)
 
 1. **Importe o repositório** em [vercel.com/new](https://vercel.com/new). A Vercel detecta Next.js sozinha.
-2. **Crie o banco:** no projeto, vá em *Storage → Create Database → Neon (Postgres)* e conecte ao projeto. A integração cria as variáveis `DATABASE_URL` e `DATABASE_URL_UNPOOLED`, que são exatamente as que o sistema usa.
-   - Se usar outro Postgres, crie você mesmo as duas variáveis: a URL com pool em `DATABASE_URL` e a direta em `DATABASE_URL_UNPOOLED`. Se não houver pool, use a mesma URL nas duas.
+2. **Crie o banco:** adicione a integração **Prisma Postgres** (ou *Storage → Neon*) e conecte ao projeto. Ela cria a variável `DATABASE_URL` automaticamente.
+   - `DATABASE_URL_UNPOOLED` é opcional: se não existir, as migrações usam a própria `DATABASE_URL`.
+   - **Não** cadastre na Vercel o `DATABASE_URL` de exemplo do `.env.example` (ele aponta para `localhost`).
 3. **Adicione as variáveis de ambiente** em *Settings → Environment Variables*:
    - `AUTH_SECRET`: um valor aleatório longo (gere com `openssl rand -base64 32`). **Obrigatória.**
    - `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD` (opcionais): login e senha do primeiro administrador. O padrão é `admin` / `admin123`.
 4. **Faça o deploy.** O `build` roda automaticamente:
-   `prisma generate → prisma migrate deploy → prisma db seed → next build`.
+   `prisma generate → prisma migrate deploy → prisma db seed → next build` (script `scripts/build.mjs`).
    Ou seja, cria as tabelas e o usuário administrador (só se o banco ainda não tiver nenhum usuário).
 5. Entre com o administrador, **troque a senha** em *Minha Senha*, cadastre os **CDs** e lance o **saldo inicial** em *Cadastros → Ajuste de inventário*.
 
