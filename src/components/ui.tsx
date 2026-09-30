@@ -128,6 +128,7 @@ const estiloStatus: Record<string, string> = {
   PENDENTE: "text-ouro bg-ouro/10",
   AGENDADO: "text-t2 bg-t2/10",
   FINALIZADO: "text-lima bg-lima/10",
+  CANCELADO: "text-erro bg-erro/10",
   ABERTA: "text-lima bg-lima/10",
   VALIDADA: "text-lima bg-lima/10",
   CANCELADA: "text-t4 bg-t4/10",

@@ -4,9 +4,10 @@ import { ArrowLeft, Scissors } from "lucide-react";
 import { ImpressaoAutomatica } from "@/components/ImpressaoAutomatica";
 import { requireUsuario } from "@/lib/auth";
 import { codigo128Svg } from "@/lib/codigoBarras";
+import { EMISSOR } from "@/lib/emissor";
 import { prisma } from "@/lib/prisma";
 import { formatarDataHora } from "@/lib/datas";
-import { formatarCnpj, formatarNumero, formatarPlaca, numeroVale, rotuloStatusVale } from "@/lib/formatos";
+import { formatarCnpj, formatarNumero, formatarPlaca, numeroVale, rotuloMotivoCancelamento, rotuloStatusVale } from "@/lib/formatos";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Vale-Pallet" };
@@ -16,7 +17,11 @@ type Vale = NonNullable<Awaited<ReturnType<typeof buscar>>>;
 function buscar(id: string) {
   return prisma.valePallet.findUnique({
     where: { id },
-    include: { fornecedor: true, criadoPor: { select: { nome: true, login: true } } },
+    include: {
+      fornecedor: true,
+      criadoPor: { select: { nome: true, login: true } },
+      canceladoPor: { select: { login: true } },
+    },
   });
 }
 
@@ -28,14 +33,31 @@ function Via({ vale, via, barras }: { vale: Vale; via: string; barras: string })
     </div>
   );
   return (
-    <section className="via flex flex-col px-[12mm] py-[9mm]">
-      <header className="flex items-start justify-between border-b-2 border-slate-900 pb-2">
-        <div>
-          <h1 className="text-xl font-extrabold tracking-tight">VALE-PALLET PBR</h1>
-          <p className="text-xs text-slate-600">Control Tower Pallet · Comprovante de recebimento de pallets</p>
+    <section className="via relative flex flex-col px-[12mm] py-[7mm]">
+      {vale.status === "CANCELADO" && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
+          <span className="-rotate-[18deg] border-[3px] border-red-700 px-6 py-1 text-[44px] font-black tracking-[0.2em] text-red-700 opacity-40">
+            EXCLUÍDO
+          </span>
         </div>
-        <div className="flex flex-col items-end text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">{via}</p>
+      )}
+      {/* Identificação da via: borda em vez de fundo, para sair mesmo sem "gráficos de fundo" na impressão */}
+      <p className="mb-2 border-2 border-slate-900 py-1 text-center text-[12px] font-extrabold uppercase tracking-[0.3em]">{via}</p>
+      <header className="flex items-start justify-between gap-4 border-b-2 border-slate-900 pb-2">
+        <div className="min-w-0">
+          <h1 className="text-xl font-extrabold tracking-tight">VALE-PALLET PBR</h1>
+          <p className="text-[10px] text-slate-600">Comprovante de recebimento de pallets</p>
+          <div className="mt-1.5 text-[9.5px] leading-snug">
+            <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Remetente (emissor)</p>
+            <p>
+              <strong>{EMISSOR.razaoSocial}</strong> · {EMISSOR.nomeFantasia} · CNPJ {EMISSOR.cnpj}
+            </p>
+            <p>
+              {EMISSOR.endereco}, {EMISSOR.cidade}, CEP {EMISSOR.cep}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-none flex-col items-end text-right">
           {/* Código de barras Code 128 do ID do vale: a leitura óptica identifica o vale na devolução/conferência */}
           <div className="barras mt-1 h-[12mm] w-[58mm]" dangerouslySetInnerHTML={{ __html: barras }} />
           <p className="mt-0.5 font-mono text-[15px] font-extrabold tracking-[0.2em]">{numeroVale(vale.numero)}</p>
@@ -51,6 +73,12 @@ function Via({ vale, via, barras }: { vale: Vale; via: string; barras: string })
         {campo("Data/Hora de emissão", formatarDataHora(vale.criadoEm), "col-span-2")}
         {campo("Emitido por", vale.criadoPor.login)}
         {campo("Status", rotuloStatusVale[vale.status])}
+        {vale.status === "CANCELADO" &&
+          campo(
+            "Exclusão",
+            `${formatarDataHora(vale.canceladoEm)} · ${vale.canceladoPor?.login ?? ""} · ${vale.motivoCancelamento ? rotuloMotivoCancelamento[vale.motivoCancelamento] : ""}`,
+            "col-span-4",
+          )}
         {campo("ID único do documento", <span className="font-mono text-[11px]">{numeroVale(vale.numero)} · {vale.id}</span>, "col-span-4")}
       </div>
 
@@ -66,7 +94,7 @@ function Via({ vale, via, barras }: { vale: Vale; via: string; barras: string })
         e serão devolvidos mediante agenda de devolução. Apresente este vale no momento da retirada.
       </p>
 
-      <div className="mt-auto grid grid-cols-2 gap-10 pt-8 text-center text-[10px]">
+      <div className="mt-auto grid grid-cols-2 gap-10 pt-6 text-center text-[10px]">
         <div className="border-t border-slate-900 pt-1">Conferente / Recebedor</div>
         <div className="border-t border-slate-900 pt-1">Motorista / Transportador</div>
       </div>
@@ -106,11 +134,11 @@ export default async function ImprimirValePage({
         <ImpressaoAutomatica auto={auto === "1"} />
       </div>
       <div className="folha relative mx-auto overflow-hidden rounded-[6px] bg-white text-slate-900 shadow-[12px_12px_26px_rgba(0,4,8,.62)] print:rounded-none print:shadow-none">
-        <Via vale={vale} via="1ª via · Empresa" barras={barras} />
+        <Via vale={vale} via="Via Martin Brower" barras={barras} />
         <div className="absolute inset-x-0 top-[148.5mm] h-0 border-t-2 border-dashed border-slate-400">
           <span className="absolute -top-2.5 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 bg-white px-2 text-[10px] text-slate-500"><Scissors className="h-3 w-3" /> recorte aqui</span>
         </div>
-        <Via vale={vale} via="2ª via · Transportador" barras={barras} />
+        <Via vale={vale} via="Via Fornecedor" barras={barras} />
       </div>
     </div>
   );

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { requireUsuario } from "@/lib/auth";
 import { auditar, comContaBloqueada, ErroNegocio, lancar } from "@/lib/conta";
 import { formatarDataHora } from "@/lib/datas";
-import { cnpjValido, formatarCnpj, formatarNumero, normalizarCnpj } from "@/lib/formatos";
+import { formatarCnpj, formatarNumero } from "@/lib/formatos";
 import { lerChaveNFe } from "@/lib/nfe";
 import { podeAdicionarPallets } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
@@ -54,46 +54,6 @@ export async function identificarCompra(leitura: string): Promise<Identificacao>
     };
   } catch (e) {
     return { ok: false, erro: e instanceof Error ? e.message : "Não foi possível ler o código." };
-  }
-}
-
-const schemaFornecedorRapido = z.object({
-  cnpj: z.string().refine(cnpjValido, "CNPJ inválido."),
-  nome: z.string().trim().min(2, "Informe o nome do fornecedor.").max(200),
-  cidade: z.string().trim().max(120).optional(),
-  uf: z.string().trim().max(2).optional(),
-  contato: z.string().trim().max(120).optional(),
-  telefone: z.string().trim().max(40).optional(),
-});
-
-/** Cadastro rápido de fornecedor aberto automaticamente quando o CNPJ da NF não está cadastrado. */
-export async function cadastrarFornecedorRapido(_: Estado, form: FormData): Promise<Estado> {
-  try {
-    const u = await exigirPermissao();
-    const d = schemaFornecedorRapido.parse(Object.fromEntries(form));
-    const cnpj = normalizarCnpj(d.cnpj);
-    if (await prisma.fornecedor.findUnique({ where: { cnpj } })) throw new ErroNegocio("Fornecedor já cadastrado.");
-    const f = await prisma.fornecedor.create({
-      data: {
-        cnpj,
-        nome: d.nome,
-        cidade: d.cidade || null,
-        uf: d.uf ? d.uf.toUpperCase() : null,
-        contato: d.contato || null,
-        telefone: d.telefone || null,
-      },
-    });
-    await auditar(prisma, {
-      acao: "CRIAR_FORNECEDOR",
-      entidade: "Fornecedor",
-      entidadeId: f.id,
-      usuarioId: u.id,
-      detalhes: { cnpj, nome: d.nome, origem: "cadastro rápido (compra)" },
-    });
-    revalidatePath("/cadastros/fornecedores");
-    return sucesso(`Fornecedor ${f.nome} cadastrado.`);
-  } catch (e) {
-    return tratarErro(e);
   }
 }
 

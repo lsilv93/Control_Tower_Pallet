@@ -10,6 +10,7 @@ import {
   formatarPlaca,
   numeroAgenda,
   numeroVale,
+  rotuloMotivoCancelamento,
   rotuloStatusAgenda,
   rotuloStatusVale,
   rotuloTipo,
@@ -105,7 +106,7 @@ export async function GET(req: NextRequest) {
   const [saldos, vales, agendas, fornecedores, abertos, auditoria, compras] = await Promise.all([
     obterSaldos(),
     prisma.valePallet.findMany({
-      include: { fornecedor: true, criadoPor: true, agenda: true },
+      include: { fornecedor: true, criadoPor: true, agenda: true, canceladoPor: true },
       orderBy: { numero: "asc" },
     }),
     prisma.agendaDevolucao.findMany({
@@ -154,6 +155,10 @@ export async function GET(req: NextRequest) {
       { header: "Emitido por", key: "usuario" },
       { header: "Agenda", key: "agenda" },
       { header: "Finalizado em", key: "finalizado", width: 20 },
+      { header: "Excluído em", key: "excluido", width: 20 },
+      { header: "Excluído por", key: "excluidoPor" },
+      { header: "Motivo da exclusão", key: "motivo", width: 24 },
+      { header: "Observação da exclusão", key: "obsExclusao", width: 40 },
     ],
     vales.map((v) => ({
       numero: numeroVale(v.numero),
@@ -170,6 +175,10 @@ export async function GET(req: NextRequest) {
       usuario: v.criadoPor.login,
       agenda: v.agenda ? numeroAgenda(v.agenda.numero) : "",
       finalizado: v.finalizadoEm ? formatarDataHora(v.finalizadoEm) : "",
+      excluido: v.canceladoEm ? formatarDataHora(v.canceladoEm) : "",
+      excluidoPor: v.canceladoPor?.login ?? "",
+      motivo: v.motivoCancelamento ? rotuloMotivoCancelamento[v.motivoCancelamento] : "",
+      obsExclusao: v.observacaoCancelamento ?? "",
     })),
   );
 

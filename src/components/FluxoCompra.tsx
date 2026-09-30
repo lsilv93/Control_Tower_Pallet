@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
-import { Camera, CircleCheck, RotateCcw, ScanBarcode, Sparkles, X } from "lucide-react";
-import { cadastrarFornecedorRapido, identificarCompra, registrarCompra, type Identificacao } from "@/actions/pallets";
+import { Camera, CircleCheck, RotateCcw, ScanBarcode, Sparkles } from "lucide-react";
+import { identificarCompra, registrarCompra, type Identificacao } from "@/actions/pallets";
 import { gerarChaveNFe } from "@/lib/nfe";
 import { BotaoEnviar, Mensagem, useAcao } from "./FormAcao";
+import { Modal, ModalFornecedor } from "./ModalFornecedor";
 
 type Identificada = Extract<Identificacao, { ok: true }>;
 
@@ -189,6 +189,8 @@ export function FluxoCompra({ cnpjsCadastrados }: { cnpjsCadastrados: string[] }
         <ModalFornecedor
           cnpj={nf.cnpj}
           cnpjFormatado={nf.cnpjFormatado}
+          origem="cadastro rápido (compra)"
+          aviso="O CNPJ emitente desta NF ainda não está cadastrado. Cadastre o fornecedor para continuar a compra."
           aoFechar={() => setModal(false)}
           aoCadastrar={() => {
             setModal(false);
@@ -208,95 +210,6 @@ export function FluxoCompra({ cnpjsCadastrados }: { cnpjsCadastrados: string[] }
         />
       )}
     </div>
-  );
-}
-
-function Modal({ titulo, aoFechar, children }: { titulo: string; aoFechar: () => void; children: React.ReactNode }) {
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && aoFechar();
-    window.addEventListener("keydown", esc);
-    return () => window.removeEventListener("keydown", esc);
-  }, [aoFechar]);
-  // Portal no <body>: ancestrais animados (transform) criariam contexto de empilhamento
-  // e prenderiam o overlay "fixed" dentro do card.
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#000814]/70 p-[14px]" role="dialog" aria-modal="true" aria-label={titulo}>
-      <div className="card entrada max-h-[92vh] w-full max-w-lg overflow-y-auto p-6">
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <h2 className="text-[15px] font-semibold text-t1">{titulo}</h2>
-          <button type="button" className="btn-icone" onClick={aoFechar} aria-label="Fechar">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-function ModalFornecedor({
-  cnpj,
-  cnpjFormatado,
-  aoFechar,
-  aoCadastrar,
-}: {
-  cnpj: string;
-  cnpjFormatado: string;
-  aoFechar: () => void;
-  aoCadastrar: () => void;
-}) {
-  return (
-    <Modal titulo="Cadastro rápido de fornecedor" aoFechar={aoFechar}>
-      <p className="poco-ouro mb-5 px-4 py-3 text-[12px] text-ouro">
-        O CNPJ emitente desta NF ainda não está cadastrado. Cadastre o fornecedor para continuar a compra.
-      </p>
-      <FormFornecedorRapido cnpj={cnpj} cnpjFormatado={cnpjFormatado} aoCadastrar={aoCadastrar} />
-    </Modal>
-  );
-}
-
-function FormFornecedorRapido({ cnpj, cnpjFormatado, aoCadastrar }: { cnpj: string; cnpjFormatado: string; aoCadastrar: () => void }) {
-  const { estado, enviando, aoEnviar } = useAcao(cadastrarFornecedorRapido);
-  useEffect(() => {
-    if (estado?.ok) aoCadastrar();
-  }, [estado, aoCadastrar]);
-  return (
-    <form onSubmit={aoEnviar} className="space-y-4">
-      <input type="hidden" name="cnpj" value={cnpj} />
-      <div>
-        <label className="label">CNPJ</label>
-        <p className="input num flex items-center opacity-80">{cnpjFormatado}</p>
-      </div>
-      <div>
-        <label className="label" htmlFor="rapido-nome">Nome / Razão social *</label>
-        <input id="rapido-nome" name="nome" className="input" required minLength={2} maxLength={200} autoFocus />
-      </div>
-      <div className="grid grid-cols-[1fr_5rem] gap-4">
-        <div>
-          <label className="label" htmlFor="rapido-cidade">Cidade</label>
-          <input id="rapido-cidade" name="cidade" className="input" maxLength={120} />
-        </div>
-        <div>
-          <label className="label" htmlFor="rapido-uf">UF</label>
-          <input id="rapido-uf" name="uf" className="input uppercase" maxLength={2} />
-        </div>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="label" htmlFor="rapido-contato">Contato</label>
-          <input id="rapido-contato" name="contato" className="input" maxLength={120} />
-        </div>
-        <div>
-          <label className="label" htmlFor="rapido-telefone">Telefone</label>
-          <input id="rapido-telefone" name="telefone" type="tel" className="input" maxLength={40} />
-        </div>
-      </div>
-      <Mensagem estado={estado} />
-      <BotaoEnviar enviando={enviando} className="btn-primary w-full">
-        Cadastrar e continuar
-      </BotaoEnviar>
-    </form>
   );
 }
 

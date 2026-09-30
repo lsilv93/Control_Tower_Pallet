@@ -1,5 +1,6 @@
 import "server-only";
 import type { Prisma, TipoMovimentacao } from "@prisma/client";
+import { STATUS_ABERTOS } from "./conta";
 import { prisma } from "./prisma";
 import { idadeEmDias } from "./datas";
 import { compararFarol, farolPorFornecedor, farolPorIdade } from "./farol";
@@ -29,7 +30,7 @@ export async function entradasSaidas(desde: Date, ate?: Date) {
 /** Vales em aberto (pendentes ou agendados) com idade e farol. */
 export async function valesEmAberto(filtro: Prisma.ValePalletWhereInput = {}) {
   const vales = await prisma.valePallet.findMany({
-    where: { status: { not: "FINALIZADO" }, ...filtro },
+    where: { status: { in: [...STATUS_ABERTOS] }, ...filtro },
     include: { fornecedor: true, criadoPor: { select: { nome: true, login: true } }, agenda: true },
     orderBy: { criadoEm: "asc" },
   });
@@ -43,7 +44,7 @@ export async function valesEmAberto(filtro: Prisma.ValePalletWhereInput = {}) {
 export async function pendenciasPorFornecedor() {
   const grupos = await prisma.valePallet.groupBy({
     by: ["fornecedorId"],
-    where: { status: { not: "FINALIZADO" } },
+    where: { status: { in: [...STATUS_ABERTOS] } },
     _sum: { quantidade: true },
     _count: true,
     _min: { criadoEm: true },

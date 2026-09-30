@@ -28,12 +28,22 @@ enum TipoMovimentacao {
   AJUSTE_ENTRADA         // ajuste de inventário (entrada)
   AJUSTE_SAIDA           // ajuste de inventário (saída)
   COMPRA                 // compra de pallets novos (entrada via NF-e)
+  ESTORNO_VALE           // estorno da entrada de um vale cancelado (saída do pulmão)
 }
 
 enum StatusVale {
   PENDENTE
   AGENDADO
   FINALIZADO
+  CANCELADO
+}
+
+/// Motivos aceitos para exclusão (cancelamento) de um vale emitido incorretamente.
+enum MotivoCancelamento {
+  FORNECEDOR_INCORRETO
+  TRANSPORTADORA_INCORRETA
+  QUANTIDADE_INCORRETA
+  DOCUMENTO_ERRADO
 }
 
 enum StatusAgenda {
@@ -56,6 +66,7 @@ model Usuario {
 
   movimentacoes    Movimentacao[]
   valesCriados     ValePallet[]      @relation("ValeCriadoPor")
+  valesCancelados  ValePallet[]      @relation("ValeCanceladoPor")
   agendasCriadas   AgendaDevolucao[] @relation("AgendaCriadaPor")
   agendasValidadas AgendaDevolucao[] @relation("AgendaValidadaPor")
   auditorias       Auditoria[]
@@ -138,9 +149,15 @@ model ValePallet {
   criadoPorId    String
   agendaId       String?
   finalizadoEm   DateTime?
+  // Exclusão lógica: o vale é mantido para auditoria com status CANCELADO.
+  canceladoEm            DateTime?
+  canceladoPorId         String?
+  motivoCancelamento     MotivoCancelamento?
+  observacaoCancelamento String?
 
   fornecedor    Fornecedor       @relation(fields: [fornecedorId], references: [id])
   criadoPor     Usuario          @relation("ValeCriadoPor", fields: [criadoPorId], references: [id])
+  canceladoPor  Usuario?         @relation("ValeCanceladoPor", fields: [canceladoPorId], references: [id])
   agenda        AgendaDevolucao? @relation(fields: [agendaId], references: [id])
   movimentacoes Movimentacao[]
 

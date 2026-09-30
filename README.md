@@ -13,9 +13,10 @@ Sistema web para controlar a **conta corrente de pallets PBR**: saldo do pulmão
 | Dashboard | `/` | Saldo do pulmão, entradas/saídas do dia, totais por subcategoria (hoje e no mês), **farol por idade do vale** (🔴 ≥ 30 dias · 🟡 20–29 · 🟢 < 20) e **farol por fornecedor** (🔴 > 100 · 🟡 50–100 · 🟢 < 50). Atualiza sozinho a cada 30 s. |
 | Envio para o CD | `/cd/envio` | Saída imediata do pulmão para o CD escolhido (bloqueia se não houver saldo). |
 | Recebimento do CD | `/cd/recebimento` | Entrada no pulmão de pallets vindos de um CD. |
-| Entrada de Fornecedor | `/fornecedor/entrada` | Fornecedor, CNPJ (numérico ou alfanumérico, com validação dos dígitos), transportadora (sugere as cadastradas), placa (padrão antigo ou Mercosul), NF e quantidade. Gera o Vale-Pallet (`VP-000001`…) e abre a impressão A4 automaticamente. |
-| Impressão do vale | `/imprimir/vale/[id]` | Folha A4 dividida ao meio (1ª via Empresa / 2ª via Transportador), com o **ID único** e **código de barras Code 128** do vale. |
+| Entrada de Fornecedor | `/fornecedor/entrada` | O **Nome do Fornecedor fica bloqueado** e só é liberado/preenchido automaticamente a partir do cadastro, depois de digitado um **CNPJ válido** (numérico ou alfanumérico). CNPJ não cadastrado abre o **cadastro de fornecedor** e, ao salvar, volta à entrada já preenchida. Depois: transportadora (sugere as cadastradas), placa (padrão antigo ou Mercosul), NF e quantidade. Gera o Vale-Pallet (`VP-000001`…) e abre a impressão A4 automaticamente. |
+| Impressão do vale | `/imprimir/vale/[id]` | Folha A4 dividida ao meio (**Via Martin Brower** / **Via Fornecedor**), com o remetente (Rfg Food Service Ltda. · Martin-Brower Food Service · CNPJ 59.568.428/0011-50, Jacareí-SP — em `src/lib/emissor.ts`), o **ID único** e o **código de barras Code 128** do vale. |
 | Vales Pendentes | `/vales` | Lista os vales em aberto com farol; selecione os vales (clicando ou **lendo o código de barras do vale**) e clique em **Gerar Agenda de Devolução** (uma agenda por fornecedor). |
+| Excluir Vale | `/vales/excluir` | Busca pelo ID (ou leitura do código de barras), motivo obrigatório (Fornecedor Incorreto, Transportadora Incorreta, Quantidade Incorreta, Documento Errado) e observação; confirmação antes de excluir. Exclusão **lógica**: o vale fica com status *Excluído*, a entrada no pulmão é estornada e a auditoria grava ID do vale, usuário, data/hora, motivo e observação. Só vales *Pendentes* podem ser excluídos (agendados: cancele a agenda antes). O Dashboard mostra o total de excluídos e o histórico. |
 | Baixa de Pagamento | `/agendas` | Conferência por leitura óptica do vale (localiza o vale na agenda). Valida a agenda: os vales passam para **Finalizado** e os pallets saem oficialmente do pulmão. Também dá para cancelar a agenda (os vales voltam para Pendente). |
 | Quebras | `/avarias/quebras` | Tira do pulmão e manda para o estoque de avariados (observação obrigatória). |
 | Recuperados | `/avarias/recuperados` | Devolve pallets avariados ao pulmão. |
@@ -32,7 +33,7 @@ Cada movimentação é uma linha no livro-razão (`Movimentacao`) com a variaç�
 | Tipo | Pulmão | Avariados |
 |---|---|---|
 | Recebimento de Fornecedor, Recebimento do CD, Compra, Ajuste de entrada | + | |
-| Envio para CD, Devolução ao Fornecedor, Ajuste de saída | − | |
+| Envio para CD, Devolução ao Fornecedor, Ajuste de saída, Estorno de vale excluído | − | |
 | Quebra | − | + |
 | Recuperado | + | − |
 | Descarte | | − |

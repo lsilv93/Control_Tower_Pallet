@@ -1,4 +1,4 @@
-import type { StatusAgenda, StatusVale, TipoMovimentacao } from "@prisma/client";
+import type { MotivoCancelamento, StatusAgenda, StatusVale, TipoMovimentacao } from "@prisma/client";
 
 export const somenteDigitos = (v: string) => v.replace(/\D/g, "");
 
@@ -69,12 +69,21 @@ export const rotuloTipo: Record<TipoMovimentacao, string> = {
   AJUSTE_ENTRADA: "Ajuste de inventário (entrada)",
   AJUSTE_SAIDA: "Ajuste de inventário (saída)",
   COMPRA: "Compra de pallets",
+  ESTORNO_VALE: "Estorno de vale excluído",
 };
 
 export const rotuloStatusVale: Record<StatusVale, string> = {
   PENDENTE: "Pendente",
   AGENDADO: "Agendado",
   FINALIZADO: "Finalizado",
+  CANCELADO: "Excluído",
+};
+
+export const rotuloMotivoCancelamento: Record<MotivoCancelamento, string> = {
+  FORNECEDOR_INCORRETO: "Fornecedor Incorreto",
+  TRANSPORTADORA_INCORRETA: "Transportadora Incorreta",
+  QUANTIDADE_INCORRETA: "Quantidade Incorreta",
+  DOCUMENTO_ERRADO: "Documento Errado",
 };
 
 export const rotuloStatusAgenda: Record<StatusAgenda, string> = {

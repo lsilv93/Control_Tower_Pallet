@@ -4,12 +4,72 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUsuario } from "@/lib/auth";
-import { auditar, comContaBloqueada, lancar } from "@/lib/conta";
+import { auditar, comContaBloqueada, ErroNegocio, lancar } from "@/lib/conta";
+import { prisma } from "@/lib/prisma";
 import { cnpjValido, normalizarCnpj, normalizarPlaca, placaValida } from "@/lib/formatos";
-import { tratarErro, type Estado } from "./estado";
+import { sucesso, tratarErro, type Estado } from "./estado";
+
+export type BuscaFornecedor =
+  | { status: "ok"; cnpj: string; nome: string }
+  | { status: "inativo"; cnpj: string; nome: string }
+  | { status: "nao_encontrado"; cnpj: string }
+  | { status: "invalido" };
+
+/** Localiza o fornecedor pelo CNPJ (usado para liberar/preencher o nome na entrada). */
+export async function buscarFornecedorPorCnpj(valor: string): Promise<BuscaFornecedor> {
+  await requireUsuario();
+  if (!cnpjValido(valor)) return { status: "invalido" };
+  const cnpj = normalizarCnpj(valor);
+  const f = await prisma.fornecedor.findUnique({ where: { cnpj }, select: { nome: true, ativo: true } });
+  if (!f) return { status: "nao_encontrado", cnpj };
+  return { status: f.ativo ? "ok" : "inativo", cnpj, nome: f.nome };
+}
+
+const opcional = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((v) => v || null);
+
+const schemaCadastro = z.object({
+  cnpj: z.string().refine(cnpjValido, "CNPJ inválido."),
+  nome: z.string().trim().min(2, "Informe o nome do fornecedor.").max(200),
+  endereco: opcional(200),
+  cidade: opcional(120),
+  uf: opcional(2).transform((v) => (v ? v.toUpperCase() : null)),
+  contato: opcional(120),
+  telefone: opcional(40),
+  email: opcional(160).refine((v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), "E-mail inválido."),
+});
+
+/**
+ * Cadastro de fornecedor aberto automaticamente quando o CNPJ digitado (entrada)
+ * ou lido na NF (compra) não existe. Disponível a todos os usuários, como a aba Fornecedores.
+ */
+export async function cadastrarFornecedorRapido(_: Estado, form: FormData): Promise<Estado> {
+  try {
+    const u = await requireUsuario();
+    const d = schemaCadastro.parse(Object.fromEntries(form));
+    const cnpj = normalizarCnpj(d.cnpj);
+    if (await prisma.fornecedor.findUnique({ where: { cnpj } })) throw new ErroNegocio("Fornecedor já cadastrado.");
+    const f = await prisma.fornecedor.create({ data: { ...d, cnpj } });
+    await auditar(prisma, {
+      acao: "CRIAR_FORNECEDOR",
+      entidade: "Fornecedor",
+      entidadeId: f.id,
+      usuarioId: u.id,
+      detalhes: { cnpj, nome: d.nome, origem: String(form.get("origem") ?? "cadastro rápido") },
+    });
+    revalidatePath("/cadastros/fornecedores");
+    return sucesso(`Fornecedor ${f.nome} cadastrado.`);
+  } catch (e) {
+    return tratarErro(e);
+  }
+}
 
 const schema = z.object({
-  fornecedorNome: z.string().trim().min(2, "Informe o nome do fornecedor.").max(200),
   cnpj: z.string().refine(cnpjValido, "CNPJ inválido."),
   transportadora: z.string().trim().min(2, "Informe a transportadora.").max(200),
   placa: z.string().refine(placaValida, "Placa inválida (use ABC1234 ou ABC1D23)."),
@@ -26,11 +86,10 @@ export async function registrarRecebimentoFornecedor(_: Estado, form: FormData):
     const cnpj = normalizarCnpj(d.cnpj);
 
     valeId = await comContaBloqueada(async (tx) => {
-      const fornecedor = await tx.fornecedor.upsert({
-        where: { cnpj },
-        update: { nome: d.fornecedorNome },
-        create: { cnpj, nome: d.fornecedorNome },
-      });
+      // O fornecedor vem sempre do cadastro (o nome não é digitado na entrada).
+      const fornecedor = await tx.fornecedor.findUnique({ where: { cnpj } });
+      if (!fornecedor) throw new ErroNegocio("CNPJ não cadastrado. Cadastre o fornecedor antes de gerar o vale.");
+      if (!fornecedor.ativo) throw new ErroNegocio(`O fornecedor ${fornecedor.nome} está inativo. Reative-o em Cadastros.`);
       const vale = await tx.valePallet.create({
         data: {
           fornecedorId: fornecedor.id,

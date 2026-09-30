@@ -16,7 +16,11 @@ export const DELTAS: Record<TipoMovimentacao, { pulmao: -1 | 0 | 1; avaria: -1 |
   AJUSTE_ENTRADA: { pulmao: 1, avaria: 0 },
   AJUSTE_SAIDA: { pulmao: -1, avaria: 0 },
   COMPRA: { pulmao: 1, avaria: 0 },
+  ESTORNO_VALE: { pulmao: -1, avaria: 0 },
 };
+
+/** Vales em aberto (ainda devidos ao fornecedor). Cancelados e finalizados ficam de fora. */
+export const STATUS_ABERTOS = ["PENDENTE", "AGENDADO"] as const;
 
 export class ErroNegocio extends Error {}
 
@@ -24,7 +28,7 @@ export async function obterSaldos(db: Db = prisma) {
   const [conta, pendentes] = await Promise.all([
     db.movimentacao.aggregate({ _sum: { deltaPulmao: true, deltaAvaria: true } }),
     db.valePallet.aggregate({
-      where: { status: { not: "FINALIZADO" } },
+      where: { status: { in: [...STATUS_ABERTOS] } },
       _sum: { quantidade: true },
       _count: true,
     }),

@@ -12,6 +12,7 @@ import {
   CalendarCheck,
   ClipboardList,
   Factory,
+  FileX,
   FileSpreadsheet,
   Hammer,
   KeyRound,
@@ -47,6 +48,7 @@ const grupos: { titulo: string; itens: Item[] }[] = [
       { href: "/fornecedor/entrada", rotulo: "Entrada de Fornecedor", icone: PackagePlus },
       { href: "/vales", rotulo: "Vales Pendentes", icone: ClipboardList },
       { href: "/agendas", rotulo: "Baixa de Pagamento", icone: CalendarCheck },
+      { href: "/vales/excluir", rotulo: "Excluir Vale", icone: FileX },
     ],
   },
   {
@@ -84,7 +86,8 @@ export function Menu({
 }) {
   const pathname = usePathname();
   const [aberto, setAberto] = useState(false);
-  const ativo = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const ativo = (href: string) =>
+    href === "/" ? pathname === "/" : href === "/vales" ? pathname === "/vales" : pathname.startsWith(href);
   const admin = usuario.perfil === "ADMIN";
 
   return (

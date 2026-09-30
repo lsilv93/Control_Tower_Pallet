@@ -5,6 +5,7 @@ import {
   Boxes,
   Building2,
   ClipboardList,
+  FileX,
   PackageCheck,
   PackagePlus,
   PackageX,
@@ -12,22 +13,26 @@ import {
   Truck,
 } from "lucide-react";
 import { AtualizacaoAutomatica } from "@/components/AtualizacaoAutomatica";
+import { HistoricoExclusoes } from "@/components/HistoricoExclusoes";
 import { UltimasMovimentacoes } from "@/components/UltimasMovimentacoes";
 import { Cabecalho, FarolBadge, Indicador, LegendaFarol, Painel, Ponto, StatusBadge, Vazio } from "@/components/ui";
 import { obterSaldos } from "@/lib/conta";
+import { prisma } from "@/lib/prisma";
 import { entradasSaidas, pendenciasPorFornecedor, totaisPorTipo, valesEmAberto } from "@/lib/consultas";
 import { fimDoDia, formatarData, inicioDoDia, inicioDoMes } from "@/lib/datas";
 import { formatarCnpj, formatarNumero as n, numeroVale, rotuloStatusVale } from "@/lib/formatos";
 
 export default async function DashboardPage() {
   const hoje = inicioDoDia();
-  const [saldos, dia, tipoHoje, tipoMes, vales, fornecedores] = await Promise.all([
+  const [saldos, dia, tipoHoje, tipoMes, vales, fornecedores, excluidos, excluidosMes] = await Promise.all([
     obterSaldos(),
     entradasSaidas(hoje, fimDoDia()),
     totaisPorTipo(hoje),
     totaisPorTipo(inicioDoMes()),
     valesEmAberto(),
     pendenciasPorFornecedor(),
+    prisma.valePallet.count({ where: { status: "CANCELADO" } }),
+    prisma.valePallet.count({ where: { status: "CANCELADO", canceladoEm: { gte: inicioDoMes() } } }),
   ]);
 
   const contagem = (lista: { farol: string }[], f: string) => lista.filter((x) => x.farol === f).length;
@@ -38,7 +43,7 @@ export default async function DashboardPage() {
         <AtualizacaoAutomatica />
       </Cabecalho>
 
-      <div className="entrada grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="entrada grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Indicador
           destaque
           titulo="Saldo no pulmão"
@@ -66,6 +71,13 @@ export default async function DashboardPage() {
           detalhe={`${saldos.valesEmAberto} vale(s) em aberto · ${n(saldos.avaria)} avariado(s) em estoque`}
           cor="ouro"
           icone={<ClipboardList className="h-6 w-6" />}
+        />
+        <Indicador
+          titulo="Vales excluídos"
+          valor={n(excluidos)}
+          detalhe={`${n(excluidosMes)} no mês · histórico abaixo`}
+          cor="erro"
+          icone={<FileX className="h-6 w-6" />}
         />
       </div>
 
@@ -186,6 +198,10 @@ export default async function DashboardPage() {
           )}
           <LegendaFarol itens={[["VERMELHO", "acima de 100"], ["AMARELO", "50 a 100"], ["VERDE", "abaixo de 50 pallets"]]} />
         </Painel>
+      </div>
+
+      <div className="mt-6">
+        <HistoricoExclusoes limite={10} />
       </div>
 
       <div className="mt-6">

@@ -8,10 +8,11 @@ import { prisma } from "@/lib/prisma";
 export const metadata = { title: "Entrada de Fornecedor" };
 
 export default async function EntradaFornecedorPage() {
-  const [fornecedores, transportadoras] = await Promise.all([
-    prisma.fornecedor.findMany({ where: { ativo: true }, select: { cnpj: true, nome: true }, orderBy: { nome: "asc" } }),
-    prisma.transportadora.findMany({ where: { ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
-  ]);
+  const transportadoras = await prisma.transportadora.findMany({
+    where: { ativo: true },
+    select: { id: true, nome: true },
+    orderBy: { nome: "asc" },
+  });
 
   return (
     <>
@@ -22,7 +23,7 @@ export default async function EntradaFornecedorPage() {
       <Painel titulo="Dados do recebimento">
         <FormAcao acao={registrarRecebimentoFornecedor} botao="Salvar e gerar Vale-Pallet" limpar={false}>
           <div className="grid gap-4 md:grid-cols-2">
-            <CamposFornecedor fornecedores={fornecedores} />
+            <CamposFornecedor />
             <div>
               <label className="label" htmlFor="transportadora">Transportadora *</label>
               <input id="transportadora" name="transportadora" className="input" required maxLength={200} list="lista-transportadoras" autoComplete="off" />

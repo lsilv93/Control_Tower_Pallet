@@ -70,7 +70,7 @@ export function LeitorVale({
             ref={campo}
             value={valor}
             onChange={(e) => setValor(e.target.value)}
-            className="input num !pl-12 uppercase tracking-wider"
+            className="input num !pl-12 uppercase tracking-wider placeholder:normal-case placeholder:tracking-normal"
             placeholder={dica}
             aria-label={dica}
             autoComplete="off"
