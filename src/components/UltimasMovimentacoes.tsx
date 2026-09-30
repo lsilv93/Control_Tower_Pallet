@@ -9,13 +9,20 @@ export async function UltimasMovimentacoes({
   tipos,
   titulo = "Últimas movimentações",
   limite = 10,
+  inicio,
+  fim,
 }: {
   tipos?: TipoMovimentacao[];
   titulo?: string;
   limite?: number;
+  inicio?: Date;
+  fim?: Date;
 }) {
   const movs = await prisma.movimentacao.findMany({
-    where: tipos ? { tipo: { in: tipos } } : undefined,
+    where: {
+      ...(tipos ? { tipo: { in: tipos } } : {}),
+      ...(inicio && fim ? { criadoEm: { gte: inicio, lt: fim } } : {}),
+    },
     include: { usuario: true, cd: true, fornecedor: true, vale: true },
     orderBy: { criadoEm: "desc" },
     take: limite,
@@ -25,7 +32,7 @@ export async function UltimasMovimentacoes({
   return (
     <Painel titulo={titulo}>
       {movs.length === 0 ? (
-        <Vazio>Nenhuma movimentação registrada.</Vazio>
+        <Vazio>{inicio ? "Nenhuma movimentação no período." : "Nenhuma movimentação registrada."}</Vazio>
       ) : (
         <div className="poco overflow-x-auto">
           <table className="tabela">

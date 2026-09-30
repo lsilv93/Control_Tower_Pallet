@@ -5,11 +5,15 @@ import { prisma } from "./prisma";
 import { idadeEmDias } from "./datas";
 import { compararFarol, farolPorFornecedor, farolPorIdade } from "./farol";
 
-/** Soma das quantidades por tipo de movimentação no período. */
-export async function totaisPorTipo(desde: Date, ate?: Date) {
+type Intervalo = { inicio?: Date; fim?: Date };
+const periodoWhere = (p: Intervalo): Prisma.MovimentacaoWhereInput =>
+  p.inicio || p.fim ? { criadoEm: { ...(p.inicio ? { gte: p.inicio } : {}), ...(p.fim ? { lt: p.fim } : {}) } } : {};
+
+/** Soma das quantidades por tipo de movimentação no período (sem período = todo o histórico). */
+export async function totaisPorTipo(periodo: Intervalo = {}) {
   const grupos = await prisma.movimentacao.groupBy({
     by: ["tipo"],
-    where: { criadoEm: { gte: desde, ...(ate ? { lt: ate } : {}) } },
+    where: periodoWhere(periodo),
     _sum: { quantidade: true },
   });
   const totais = {} as Record<TipoMovimentacao, number>;
@@ -17,14 +21,15 @@ export async function totaisPorTipo(desde: Date, ate?: Date) {
   return (t: TipoMovimentacao) => totais[t] ?? 0;
 }
 
-/** Entradas e saídas do pulmão no período. */
-export async function entradasSaidas(desde: Date, ate?: Date) {
-  const periodo: Prisma.DateTimeFilter = { gte: desde, ...(ate ? { lt: ate } : {}) };
+/** Entradas e saídas do pulmão no período (sem período = consolidado de todo o histórico). */
+export async function entradasSaidas(periodo: Intervalo = {}) {
+  const w = periodoWhere(periodo);
   const [entradas, saidas] = await Promise.all([
-    prisma.movimentacao.aggregate({ where: { criadoEm: periodo, deltaPulmao: { gt: 0 } }, _sum: { deltaPulmao: true } }),
-    prisma.movimentacao.aggregate({ where: { criadoEm: periodo, deltaPulmao: { lt: 0 } }, _sum: { deltaPulmao: true } }),
+    prisma.movimentacao.aggregate({ where: { ...w, deltaPulmao: { gt: 0 } }, _sum: { deltaPulmao: true } }),
+    prisma.movimentacao.aggregate({ where: { ...w, deltaPulmao: { lt: 0 } }, _sum: { deltaPulmao: true } }),
   ]);
-  return { entradas: entradas._sum.deltaPulmao ?? 0, saidas: -(saidas._sum.deltaPulmao ?? 0) };
+  // Math.abs evita "-0" quando não há saídas no período
+  return { entradas: entradas._sum.deltaPulmao ?? 0, saidas: Math.abs(saidas._sum.deltaPulmao ?? 0) };
 }
 
 /** Vales em aberto (pendentes ou agendados) com idade e farol. */

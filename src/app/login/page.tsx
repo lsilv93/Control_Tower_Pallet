@@ -3,11 +3,14 @@ import { Boxes } from "lucide-react";
 import { entrar } from "@/actions/auth";
 import { BotaoTema } from "@/components/BotaoTema";
 import { FormAcao } from "@/components/FormAcao";
+import { redirect } from "next/navigation";
+import { getUsuarioAtual } from "@/lib/auth";
 import { temaAtual } from "@/lib/tema";
 
 export const metadata: Metadata = { title: "Entrar" };
 
 export default async function LoginPage() {
+  if (await getUsuarioAtual()) redirect("/");
   const tema = await temaAtual();
   return (
     <main className="relative flex min-h-screen items-center justify-center p-[14px]">

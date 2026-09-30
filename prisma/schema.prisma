@@ -233,3 +233,14 @@ model Auditoria {
 
   @@index([criadoEm])
 }
+
+/// Tokens de sessão encerrados pelo botão Sair. Mesmo que alguém tenha uma cópia
+/// do cookie, o token deixa de valer. Registros expirados são limpos no logout.
+model SessaoRevogada {
+  jti       String   @id
+  usuarioId String
+  expiraEm  DateTime
+  criadoEm  DateTime @default(now())
+
+  @@index([expiraEm])
+}

@@ -101,6 +101,7 @@ export function Menu({
         </div>
         <div className="flex items-center gap-2">
           <BotaoTema inicial={tema} />
+          <BotaoSair />
           <button className="btn-icone" onClick={() => setAberto(!aberto)} aria-label={aberto ? "Fechar menu" : "Abrir menu"}>
             {aberto ? <X className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
           </button>
@@ -124,8 +125,9 @@ export function Menu({
                 <p className="text-[11px] text-t3">Gestão de Pallets PBR</p>
               </div>
             </div>
-            <div className="hidden lg:block">
+            <div className="hidden flex-col gap-2 lg:flex">
               <BotaoTema inicial={tema} />
+              <BotaoSair />
             </div>
           </div>
 
@@ -188,5 +190,16 @@ export function Menu({
 
       {aberto && <div className="fixed inset-0 z-30 bg-[#000814]/60 lg:hidden" onClick={() => setAberto(false)} />}
     </>
+  );
+}
+
+/** Botão Sair (ícone), sempre visível no topo do menu e no cabeçalho do celular. */
+function BotaoSair() {
+  return (
+    <form action={sair}>
+      <button type="submit" className="btn-icone hover:!text-erro" aria-label="Sair do sistema" title="Sair do sistema">
+        <LogOut className="h-5 w-5" />
+      </button>
+    </form>
   );
 }

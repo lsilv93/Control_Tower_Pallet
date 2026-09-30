@@ -10,7 +10,7 @@ Sistema web para controlar a **conta corrente de pallets PBR**: saldo do pulmão
 
 | Módulo | Rota | O que faz |
 |---|---|---|
-| Dashboard | `/` | Saldo do pulmão, entradas/saídas do dia, totais por subcategoria (hoje e no mês), **farol por idade do vale** (🔴 ≥ 30 dias · 🟡 20–29 · 🟢 < 20) e **farol por fornecedor** (🔴 > 100 · 🟡 50–100 · 🟢 < 50). Atualiza sozinho a cada 30 s. |
+| Dashboard | `/` | **Filtro de período** no topo: Dia, Semana do Ano (ISO 8601), Mês, Intervalo (De/Até) ou **Geral** (todo o histórico, sem restrição de data). O período afeta entradas, saídas, subcategorias (enviados/recebidos do CD, devolvidos/recebidos do fornecedor), vales excluídos e últimas movimentações; saldo do pulmão, pendências e faróis mostram a posição atual. Faróis: **Farol Vale-pallet** (🔴 ≥ 30 dias · 🟡 20–29 · 🟢 < 20) e farol por fornecedor (🔴 > 100 · 🟡 50–100 · 🟢 < 50). Atualiza sozinho a cada 30 s mantendo o filtro. |
 | Envio para o CD | `/cd/envio` | Saída imediata do pulmão para o CD escolhido (bloqueia se não houver saldo). |
 | Recebimento do CD | `/cd/recebimento` | Entrada no pulmão de pallets vindos de um CD. |
 | Entrada de Fornecedor | `/fornecedor/entrada` | O **Nome do Fornecedor fica bloqueado** e só é liberado/preenchido automaticamente a partir do cadastro, depois de digitado um **CNPJ válido** (numérico ou alfanumérico). CNPJ não cadastrado abre o **cadastro de fornecedor** e, ao salvar, volta à entrada já preenchida. Depois: transportadora (sugere as cadastradas), placa (padrão antigo ou Mercosul), NF e quantidade. Gera o Vale-Pallet (`VP-000001`…) e abre a impressão A4 automaticamente. |
@@ -114,6 +114,10 @@ src/
   app/api/exportar/    # exportação Excel/CSV
   components/          # componentes de UI
 ```
+
+## Sair (logout)
+
+O botão **Sair** fica fixo no topo do menu lateral (ao lado do tema) e no cabeçalho do celular, além do rodapé do menu. Ao sair, o token da sessão é **revogado no servidor** (tabela `SessaoRevogada`), o cookie é apagado, o logout é auditado e o usuário volta para o login. Uma cópia antiga do cookie deixa de funcionar, e as páginas autenticadas não ficam em cache do navegador.
 
 ## Tema claro / escuro
 

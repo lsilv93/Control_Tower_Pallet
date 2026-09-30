@@ -21,16 +21,19 @@ function secret() {
 export async function signSession(payload: SessionPayload) {
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
+    .setJti(crypto.randomUUID()) // identificador único da sessão (permite revogar no logout)
     .setIssuedAt()
     .setExpirationTime(`${SESSION_MAX_AGE}s`)
     .sign(secret());
 }
 
-export async function verifySession(token: string | undefined): Promise<SessionPayload | null> {
+export type SessaoVerificada = SessionPayload & { jti?: string; exp?: number };
+
+export async function verifySession(token: string | undefined): Promise<SessaoVerificada | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
-    return payload as unknown as SessionPayload;
+    return payload as unknown as SessaoVerificada;
   } catch {
     return null;
   }

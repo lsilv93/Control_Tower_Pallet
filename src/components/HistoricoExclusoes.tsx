@@ -5,15 +5,26 @@ import { numeroVale, rotuloMotivoCancelamento } from "@/lib/formatos";
 import { Painel, Tabela, Vazio } from "./ui";
 
 /** Histórico analítico das exclusões de vale: ID, data/hora, usuário, motivo e observação. */
-export async function HistoricoExclusoes({ limite = 20, titulo = "Histórico de vales excluídos" }: { limite?: number; titulo?: string }) {
+export async function HistoricoExclusoes({
+  limite = 20,
+  titulo = "Histórico de vales excluídos",
+  inicio,
+  fim,
+}: {
+  limite?: number;
+  titulo?: string;
+  inicio?: Date;
+  fim?: Date;
+}) {
+  const where = { status: "CANCELADO" as const, ...(inicio && fim ? { canceladoEm: { gte: inicio, lt: fim } } : {}) };
   const [excluidos, total] = await Promise.all([
     prisma.valePallet.findMany({
-      where: { status: "CANCELADO" },
+      where,
       include: { canceladoPor: { select: { login: true, nome: true } }, fornecedor: { select: { nome: true } } },
       orderBy: { canceladoEm: "desc" },
       take: limite,
     }),
-    prisma.valePallet.count({ where: { status: "CANCELADO" } }),
+    prisma.valePallet.count({ where }),
   ]);
 
   return (
@@ -28,7 +39,7 @@ export async function HistoricoExclusoes({ limite = 20, titulo = "Histórico de 
       }
     >
       {excluidos.length === 0 ? (
-        <Vazio>Nenhum vale excluído.</Vazio>
+        <Vazio>{inicio ? "Nenhum vale excluído no período." : "Nenhum vale excluído."}</Vazio>
       ) : (
         <Tabela className="max-h-[26rem] overflow-auto">
           <table className="tabela">

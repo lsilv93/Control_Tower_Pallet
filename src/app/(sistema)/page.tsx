@@ -19,21 +19,28 @@ import { Cabecalho, FarolBadge, Indicador, LegendaFarol, Painel, Ponto, StatusBa
 import { obterSaldos } from "@/lib/conta";
 import { prisma } from "@/lib/prisma";
 import { entradasSaidas, pendenciasPorFornecedor, totaisPorTipo, valesEmAberto } from "@/lib/consultas";
-import { fimDoDia, formatarData, inicioDoDia, inicioDoMes } from "@/lib/datas";
+import { diaLocal, formatarData } from "@/lib/datas";
+import { filtroData, lerPeriodo } from "@/lib/periodo";
+import { FiltroPeriodo } from "@/components/FiltroPeriodo";
 import { formatarCnpj, formatarNumero as n, numeroVale, rotuloStatusVale } from "@/lib/formatos";
 
-export default async function DashboardPage() {
-  const hoje = inicioDoDia();
-  const [saldos, dia, tipoHoje, tipoMes, vales, fornecedores, excluidos, excluidosMes] = await Promise.all([
+type Busca = { periodo?: string; dia?: string; ano?: string; semana?: string; mes?: string; de?: string; ate?: string };
+
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<Busca> }) {
+  const hoje = diaLocal();
+  // Filtro temporal global: afeta entradas, saídas, subcategorias, exclusões e movimentações.
+  // Saldo do pulmão, pendências e faróis são posições atuais (não dependem do período).
+  const periodo = lerPeriodo(await searchParams, hoje);
+  const intervalo = { inicio: periodo.inicio, fim: periodo.fim };
+  const [saldos, fluxo, porTipo, vales, fornecedores, excluidos] = await Promise.all([
     obterSaldos(),
-    entradasSaidas(hoje, fimDoDia()),
-    totaisPorTipo(hoje),
-    totaisPorTipo(inicioDoMes()),
+    entradasSaidas(intervalo),
+    totaisPorTipo(intervalo),
     valesEmAberto(),
     pendenciasPorFornecedor(),
-    prisma.valePallet.count({ where: { status: "CANCELADO" } }),
-    prisma.valePallet.count({ where: { status: "CANCELADO", canceladoEm: { gte: inicioDoMes() } } }),
+    prisma.valePallet.count({ where: { status: "CANCELADO", canceladoEm: filtroData(periodo) } }),
   ]);
+  const geral = periodo.tipo === "todos";
 
   const contagem = (lista: { farol: string }[], f: string) => lista.filter((x) => x.farol === f).length;
 
@@ -43,39 +50,46 @@ export default async function DashboardPage() {
         <AtualizacaoAutomatica />
       </Cabecalho>
 
+      <FiltroPeriodo
+        key={JSON.stringify(periodo)}
+        rotulo={periodo.rotulo}
+        anoAtual={Number(hoje.slice(0, 4))}
+        atual={{ tipo: periodo.tipo, dia: periodo.dia, ano: periodo.ano, semana: periodo.semana, mes: periodo.mes, de: periodo.de, ate: periodo.ate }}
+      />
+
       <div className="entrada grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Indicador
           destaque
           titulo="Saldo no pulmão"
           valor={n(saldos.pulmao)}
-          detalhe="pallets PBR disponíveis"
+          detalhe="saldo atual · pallets PBR disponíveis"
           icone={<Boxes className="h-6 w-6" />}
         />
         <Indicador
-          titulo="Entradas do dia"
-          valor={n(dia.entradas)}
-          detalhe="pallets que entraram no pulmão hoje"
+          titulo={geral ? "Entradas (total geral)" : "Entradas no período"}
+          valor={n(fluxo.entradas)}
+          detalhe={periodo.rotulo}
           cor="lima"
           icone={<ArrowDownToLine className="h-6 w-6" />}
         />
         <Indicador
-          titulo="Saídas do dia"
-          valor={n(dia.saidas)}
-          detalhe="pallets que saíram do pulmão hoje"
+          titulo={geral ? "Saídas (total geral)" : "Saídas no período"}
+          valor={n(fluxo.saidas)}
+          detalhe={periodo.rotulo}
           cor="erro"
           icone={<ArrowUpFromLine className="h-6 w-6" />}
         />
         <Indicador
           titulo="Pendente com fornecedores"
           valor={n(saldos.pendenteFornecedores)}
-          detalhe={`${saldos.valesEmAberto} vale(s) em aberto · ${n(saldos.avaria)} avariado(s) em estoque`}
+          detalhe={`atual · ${saldos.valesEmAberto} vale(s) em aberto · ${n(saldos.avaria)} avariado(s) em estoque`}
           cor="ouro"
           icone={<ClipboardList className="h-6 w-6" />}
         />
         <Indicador
           titulo="Vales excluídos"
           valor={n(excluidos)}
-          detalhe={`${n(excluidosMes)} no mês · histórico abaixo`}
+          detalhe={periodo.rotulo}
           cor="erro"
           icone={<FileX className="h-6 w-6" />}
         />
@@ -92,9 +106,9 @@ export default async function DashboardPage() {
         ).map(([tipo, titulo, icone, cor]) => (
           <Indicador
             key={tipo}
-            titulo={`${titulo} (hoje)`}
-            valor={n(tipoHoje(tipo))}
-            detalhe={`${n(tipoMes(tipo))} no mês`}
+            titulo={titulo}
+            valor={n(porTipo(tipo))}
+            detalhe={periodo.rotulo}
             icone={icone}
             cor={cor}
           />
@@ -106,7 +120,7 @@ export default async function DashboardPage() {
           
           titulo={
             <span className="flex items-center gap-2">
-              <TriangleAlert className="h-4 w-4 text-ouro" /> Farol por idade do vale-pallet
+              <TriangleAlert className="h-4 w-4 text-ouro" /> Farol Vale-pallet
             </span>
           }
           acoes={
@@ -201,11 +215,11 @@ export default async function DashboardPage() {
       </div>
 
       <div className="mt-6">
-        <HistoricoExclusoes limite={10} />
+        <HistoricoExclusoes limite={10} inicio={periodo.inicio} fim={periodo.fim} titulo={`Histórico de vales excluídos · ${periodo.rotulo}`} />
       </div>
 
       <div className="mt-6">
-        <UltimasMovimentacoes />
+        <UltimasMovimentacoes inicio={periodo.inicio} fim={periodo.fim} titulo={`Últimas movimentações · ${periodo.rotulo}`} />
       </div>
     </>
   );

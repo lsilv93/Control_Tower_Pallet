@@ -7,7 +7,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { auditar } from "@/lib/conta";
 import { requireUsuario } from "@/lib/auth";
-import { SESSION_COOKIE, SESSION_MAX_AGE, signSession } from "@/lib/session";
+import { SESSION_COOKIE, SESSION_MAX_AGE, signSession, verifySession } from "@/lib/session";
 import { falha, sucesso, tratarErro, type Estado } from "./estado";
 
 export async function entrar(_: Estado, form: FormData): Promise<Estado> {
@@ -38,9 +38,31 @@ export async function entrar(_: Estado, form: FormData): Promise<Estado> {
   redirect("/");
 }
 
+/**
+ * Logout seguro: revoga o token no servidor (lista de sessões encerradas), apaga o
+ * cookie de sessão, registra a auditoria e redireciona para o login.
+ */
 export async function sair() {
-  const token = await cookies();
-  token.delete(SESSION_COOKIE);
+  const jar = await cookies();
+  const sessao = await verifySession(jar.get(SESSION_COOKIE)?.value);
+  if (sessao?.jti) {
+    const expiraEm = new Date((sessao.exp ?? Math.floor(Date.now() / 1000) + SESSION_MAX_AGE) * 1000);
+    await prisma.sessaoRevogada.upsert({
+      where: { jti: sessao.jti },
+      update: {},
+      create: { jti: sessao.jti, usuarioId: sessao.sub, expiraEm },
+    });
+    // Tokens já expirados não precisam mais ficar na lista.
+    await prisma.sessaoRevogada.deleteMany({ where: { expiraEm: { lt: new Date() } } });
+    await auditar(prisma, { acao: "LOGOUT", entidade: "Usuario", entidadeId: sessao.sub, usuarioId: sessao.sub });
+  }
+  jar.set(SESSION_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  });
   redirect("/login");
 }
 

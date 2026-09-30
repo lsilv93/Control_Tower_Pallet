@@ -18,6 +18,10 @@ export async function getUsuarioAtual(): Promise<UsuarioAtual | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const sessao = await verifySession(token);
   if (!sessao) return null;
+  // Sessão encerrada pelo botão Sair: o token não vale mais, mesmo se alguém tiver uma cópia.
+  if (sessao.jti && (await prisma.sessaoRevogada.findUnique({ where: { jti: sessao.jti }, select: { jti: true } }))) {
+    return null;
+  }
   const usuario = await prisma.usuario.findUnique({
     where: { id: sessao.sub },
     select: { id: true, nome: true, login: true, perfil: true, ativo: true, podeAdicionarPallets: true },
