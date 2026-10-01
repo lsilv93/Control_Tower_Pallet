@@ -3,7 +3,7 @@ import PDFDocument from "pdfkit";
 import bwipjs from "bwip-js/node";
 import { EMISSOR } from "./emissor";
 import { formatarDataHora } from "./datas";
-import { formatarCnpj, formatarNumero, formatarPlaca, numeroAgenda, numeroVale, rotuloMotivoCancelamento, rotuloStatusVale } from "./formatos";
+import { formatarCnpj, formatarNumero, formatarPlaca, numeroAgenda, numeroVale, rotuloMotivoCancelamento, rotuloNf, rotuloStatusVale } from "./formatos";
 import { prisma } from "./prisma";
 
 // A4 em pontos (1 pt = 1/72 pol). Fontes padrão do PDF (WinAnsi): acentos OK; evitar "→".
@@ -100,7 +100,7 @@ function via(doc: PDFKit.PDFDocument, vale: ValePdf, topo: number, nomeVia: stri
   y += 26;
   campo("Transportadora", vale.transportadora, x0, c * 2, y);
   campo("Placa do veículo", formatarPlaca(vale.placa), x0 + c * 2, c, y);
-  campo("Nota fiscal", vale.notaFiscal, x0 + c * 3, c, y);
+  campo("Nota fiscal", rotuloNf(vale), x0 + c * 3, c, y);
   y += 26;
   campo("Data/hora de emissão", formatarDataHora(vale.criadoEm), x0, c * 2, y);
   campo("Emitido por", vale.criadoPor.login, x0 + c * 2, c, y);
@@ -125,6 +125,24 @@ function via(doc: PDFKit.PDFDocument, vale: ValePdf, topo: number, nomeVia: stri
   doc.font("Helvetica-Bold").fontSize(20).fillColor(COR.tinta).text(formatarNumero(vale.quantidade), x0, y + 6, { width: largura - 12, align: "right" });
   y += 38;
 
+  // Destaque obrigatório quando o recebimento foi feito sem nota fiscal
+  if (vale.semNotaFiscal) {
+    doc.lineWidth(2).strokeColor(COR.tinta).rect(x0, y, largura, 24).stroke();
+    doc.font("Helvetica-Bold").fontSize(8.5).fillColor(COR.tinta).text(
+      'ATENÇÃO: OPERAÇÃO REALIZADA NA OPÇÃO "SEM NOTA FISCAL"',
+      x0 + 8, y + 4.5, { width: largura - 16, lineBreak: false },
+    );
+    doc.font("Helvetica").fontSize(7).fillColor(COR.tinta).text(
+      "Recebimento registrado sem documento fiscal vinculado. Conferir a origem dos pallets antes da devolução.",
+      x0 + 8, y + 14, { width: largura - 16, lineBreak: false },
+    );
+    y += 30;
+  }
+  if (vale.observacao) {
+    doc.fillColor(COR.tinta);
+    textoAjustado(doc, `Observações: ${vale.observacao}`, x0, y, largura, 7.5, "Helvetica");
+    y += 12;
+  }
   doc.font("Helvetica").fontSize(6.8).fillColor(COR.cinza).text(
     "Declaramos o recebimento da quantidade de pallets PBR acima, registrada como crédito do fornecedor, a ser devolvida mediante agenda de retirada. Apresente este vale no momento da retirada.",
     x0, y, { width: largura },
@@ -136,6 +154,12 @@ function via(doc: PDFKit.PDFDocument, vale: ValePdf, topo: number, nomeVia: stri
   doc.lineWidth(0.8).strokeColor(COR.tinta);
   doc.moveTo(x0, ya).lineTo(x0 + wa, ya).stroke();
   doc.moveTo(x0 + wa + 40, ya).lineTo(x0 + largura, ya).stroke();
+  if (vale.conferente) {
+    doc.fillColor(COR.tinta);
+    const nome = vale.conferente;
+    doc.font("Helvetica-Bold").fontSize(8);
+    doc.text(nome, x0, ya - 12, { width: wa, align: "center", lineBreak: false });
+  }
   doc.font("Helvetica").fontSize(7.5).fillColor(COR.tinta);
   doc.text("Conferente / Recebedor", x0, ya + 4, { width: wa, align: "center" });
   doc.text("Motorista / Transportador", x0 + wa + 40, ya + 4, { width: wa, align: "center" });

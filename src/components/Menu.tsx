@@ -48,7 +48,7 @@ const grupos: { titulo: string; itens: Item[] }[] = [
   {
     titulo: "Fornecedor & Vales",
     itens: [
-      { href: "/fornecedor/entrada", rotulo: "Entrada de Fornecedor", icone: PackagePlus, permissao: "entrada" },
+      { href: "/fornecedor/entrada", rotulo: "Recebimento de Pallets", icone: PackagePlus, permissao: "entrada" },
       { href: "/vales/consulta", rotulo: "Consulta de Vales", icone: FileSearch, permissao: "vales" },
       { href: "/vales", rotulo: "Agendar Retirada", icone: ClipboardList, permissao: "agendas" },
       { href: "/agendas", rotulo: "Baixa de Pagamento", icone: CalendarCheck, permissao: "agendas" },

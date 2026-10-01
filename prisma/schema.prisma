@@ -157,7 +157,13 @@ model ValePallet {
   fornecedorId   String
   transportadora String
   placa          String
-  notaFiscal     String
+  /// Número da NF (sem zeros à esquerda). Nulo quando o recebimento é "Sem Nota Fiscal".
+  notaFiscal     String?
+  serieNf        String?
+  /// Chave de acesso da NF-e lida no código de barras (impede lançar a mesma NF duas vezes).
+  chaveNfe       String?    @unique
+  semNotaFiscal  Boolean    @default(false)
+  conferente     String?
   quantidade     Int
   status         StatusVale @default(PENDENTE)
   observacao     String?

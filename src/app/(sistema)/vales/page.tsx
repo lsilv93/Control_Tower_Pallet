@@ -5,6 +5,7 @@ import { SelecaoVales, type LinhaVale } from "@/components/SelecaoVales";
 import { Cabecalho } from "@/components/ui";
 import { valesEmAberto } from "@/lib/consultas";
 import { diaLocal, formatarData } from "@/lib/datas";
+import { rotuloNf } from "@/lib/formatos";
 import { formatarCnpj, formatarPlaca, normalizarCnpj, numeroAgenda, numeroVale, rotuloStatusVale } from "@/lib/formatos";
 
 export const metadata = { title: "Vales Pendentes" };
@@ -32,7 +33,7 @@ export default async function ValesPage({ searchParams }: { searchParams: Promis
     numero: numeroVale(v.numero),
     fornecedor: v.fornecedor.nome,
     cnpj: formatarCnpj(v.fornecedor.cnpj),
-    notaFiscal: v.notaFiscal,
+    notaFiscal: rotuloNf(v),
     transportadora: v.transportadora,
     placa: formatarPlaca(v.placa),
     emissao: formatarData(v.criadoEm),

@@ -5,6 +5,7 @@ import { BotoesVale } from "@/components/BotoesVale";
 import { Cabecalho, Painel, StatusBadge, Tabela, Vazio } from "@/components/ui";
 import { requirePermissao } from "@/lib/auth";
 import { fimDoDia, formatarDataHora, inicioDoDia } from "@/lib/datas";
+import { rotuloNf } from "@/lib/formatos";
 import { formatarCnpj, formatarNumero, lerCodigoVale, numeroVale, rotuloStatusVale } from "@/lib/formatos";
 import { prisma } from "@/lib/prisma";
 
@@ -99,7 +100,7 @@ export default async function ConsultaValesPage({ searchParams }: { searchParams
                   <tr key={v.id}>
                     <td>
                       <Link href={`/vales/${v.id}`} className="num font-semibold text-lima hover:underline">{numeroVale(v.numero)}</Link>
-                      <p className="text-[11px] text-t4">NF {v.notaFiscal}</p>
+                      <p className={v.semNotaFiscal ? "text-[11px] font-semibold text-ouro" : "text-[11px] text-t4"}>{v.semNotaFiscal ? rotuloNf(v) : `NF ${rotuloNf(v)}`}</p>
                     </td>
                     <td className="num">{formatarDataHora(v.criadoEm)}</td>
                     <td>

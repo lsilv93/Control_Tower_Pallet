@@ -7,7 +7,7 @@ import { codigo128Svg } from "@/lib/codigoBarras";
 import { EMISSOR } from "@/lib/emissor";
 import { prisma } from "@/lib/prisma";
 import { formatarDataHora } from "@/lib/datas";
-import { formatarCnpj, formatarNumero, formatarPlaca, numeroVale, rotuloMotivoCancelamento, rotuloStatusVale } from "@/lib/formatos";
+import { formatarCnpj, formatarNumero, formatarPlaca, numeroVale, rotuloMotivoCancelamento, rotuloNf, rotuloStatusVale } from "@/lib/formatos";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Vale-Pallet" };
@@ -69,7 +69,7 @@ function Via({ vale, via, barras }: { vale: Vale; via: string; barras: string })
         {campo("CNPJ", formatarCnpj(vale.fornecedor.cnpj))}
         {campo("Transportadora", vale.transportadora, "col-span-2")}
         {campo("Placa do veículo", formatarPlaca(vale.placa))}
-        {campo("Nota Fiscal", vale.notaFiscal)}
+        {campo("Nota Fiscal", rotuloNf(vale))}
         {campo("Data/Hora de emissão", formatarDataHora(vale.criadoEm), "col-span-2")}
         {campo("Emitido por", vale.criadoPor.login)}
         {campo("Status", rotuloStatusVale[vale.status])}
@@ -87,6 +87,12 @@ function Via({ vale, via, barras }: { vale: Vale; via: string; barras: string })
         <p className="text-3xl font-extrabold tabular-nums">{formatarNumero(vale.quantidade)}</p>
       </div>
 
+      {vale.semNotaFiscal && (
+        <div className="mt-2 border-2 border-slate-900 px-3 py-1.5">
+          <p className="text-[11px] font-extrabold uppercase">Atenção: operação realizada na opção &quot;Sem Nota Fiscal&quot;</p>
+          <p className="text-[10px]">Recebimento registrado sem documento fiscal vinculado. Conferir a origem dos pallets antes da devolução.</p>
+        </div>
+      )}
       {vale.observacao && <p className="mt-2 text-xs"><strong>Obs.:</strong> {vale.observacao}</p>}
 
       <p className="mt-2 text-[10px] leading-snug text-slate-600">
@@ -95,8 +101,11 @@ function Via({ vale, via, barras }: { vale: Vale; via: string; barras: string })
       </p>
 
       <div className="mt-auto grid grid-cols-2 gap-10 pt-6 text-center text-[10px]">
-        <div className="border-t border-slate-900 pt-1">Conferente / Recebedor</div>
-        <div className="border-t border-slate-900 pt-1">Motorista / Transportador</div>
+        <div>
+          {vale.conferente && <p className="mb-0.5 text-[11px] font-bold">{vale.conferente}</p>}
+          <div className="border-t border-slate-900 pt-1">Conferente / Recebedor</div>
+        </div>
+        <div className="self-end border-t border-slate-900 pt-1">Motorista / Transportador</div>
       </div>
     </section>
   );

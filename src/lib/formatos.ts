@@ -91,3 +91,11 @@ export const rotuloStatusAgenda: Record<StatusAgenda, string> = {
   VALIDADA: "Validada",
   CANCELADA: "Cancelada",
 };
+
+export const SEM_NOTA_FISCAL = "SEM NOTA FISCAL";
+
+/** Texto da NF de um vale: "1234 (série 1)", "1234" ou "SEM NOTA FISCAL". */
+export function rotuloNf(v: { semNotaFiscal: boolean; notaFiscal: string | null; serieNf?: string | null }): string {
+  if (v.semNotaFiscal || !v.notaFiscal) return SEM_NOTA_FISCAL;
+  return v.serieNf ? `${v.notaFiscal} (série ${v.serieNf})` : v.notaFiscal;
+}

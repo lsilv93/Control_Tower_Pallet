@@ -8,6 +8,7 @@ import { requirePermissao } from "@/lib/auth";
 import { formatarDataHora } from "@/lib/datas";
 import {
   formatarCnpj,
+  rotuloNf,
   formatarNumero,
   formatarPlaca,
   numeroAgenda,
@@ -53,7 +54,9 @@ export default async function DetalheValePage({ params }: { params: Promise<{ id
           <dl className="poco grid gap-5 p-5 sm:grid-cols-3">
             {dado("Fornecedor", vale.fornecedor.nome)}
             {dado("CNPJ", <span className="num">{formatarCnpj(vale.fornecedor.cnpj)}</span>)}
-            {dado("Nota fiscal", <span className="num">{vale.notaFiscal}</span>)}
+            {dado("Nota fiscal", <span className={vale.semNotaFiscal ? "font-semibold text-ouro" : "num"}>{rotuloNf(vale)}</span>)}
+            {dado("Conferente", vale.conferente ?? "—")}
+            {vale.chaveNfe && dado("Chave de acesso NF-e", <span className="num break-all text-[11px]">{vale.chaveNfe}</span>)}
             {dado("Transportadora", vale.transportadora)}
             {dado("Placa", <span className="num">{formatarPlaca(vale.placa)}</span>)}
             {dado("Quantidade / tipo", <span><span className="num text-[20px] font-semibold">{formatarNumero(vale.quantidade)}</span> pallets PBR</span>)}

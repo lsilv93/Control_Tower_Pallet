@@ -12,7 +12,7 @@ Sistema web para controlar a **conta corrente de pallets PBR**: saldo do pulmão
 |---|---|---|
 | Centro de Comando (Dashboard) | `/` | KPIs: saldo do **Estoque de Vazios**, **Estoque do CD**, **Estoque de Quebrados**, **Total geral** (com barra de composição) e **SSTK enviados/recebidos** (transferências Vazios ↔ CD). Gráfico de **extrato da conta corrente** (entradas x saídas por dia/semana/mês + saldo total ao fim de cada período) e gráfico de **pendências por fornecedor** (cor = farol). Filtros: Dia, Semana do Ano, Mês, Intervalo (De/Até), Geral e **Fornecedor**. Farol Vale-pallet, vales cancelados e últimas movimentações. |
 | Transferência para o CD / Retorno do CD | `/cd/envio`, `/cd/recebimento` | Vazios → CD e CD → Vazios. |
-| Entrada de Fornecedor | `/fornecedor/entrada` | Nome do fornecedor bloqueado, preenchido pelo CNPJ (cadastro automático se não existir). Gera o Vale-Pallet: **Fornecedor → Estoque do CD**. |
+| Recebimento de Pallets | `/fornecedor/entrada` | **Foco automático no código de barras da NF-e** (chave de acesso, 44 dígitos; Enter valida e o leitor sem Enter é reconhecido ao completar 44). A chave é validada (tamanho, UF, mês, dígito verificador, modelo 55, CNPJ) e dela são extraídos **CNPJ do emitente** (índices 6–19) e **número/série da NF** (índices 25–33). Fornecedor cadastrado: campos preenchidos e foco na quantidade; não cadastrado: cadastro com o CNPJ pré-preenchido. NF já recebida é bloqueada. Opção **"Sem Nota Fiscal"**: oculta o código de barras e busca o fornecedor pelo CNPJ. Campos: quantidade, conferente, transportadora, placa e observações. Gera o Vale-Pallet: **Fornecedor → Estoque do CD**. |
 | Consulta de Vales | `/vales/consulta`, `/vales/[id]` | Busca por número, fornecedor, status (Pendente / Agendado / Baixado / Cancelado) e período. Botões **Baixar PDF** e **Imprimir** em cada vale e no detalhe (que mostra os lançamentos do vale na conta corrente). |
 | Agendar Retirada | `/vales` | Seleciona os vales (clique ou leitura do código de barras) e abre o **pop-up de data e hora** da retirada; grava a agenda e muda o status para Agendado. |
 | Baixa de Pagamento | `/agendas` | Valida a agenda: vales Baixados e saída **Vazios → Fornecedor**. |
@@ -23,7 +23,7 @@ Sistema web para controlar a **conta corrente de pallets PBR**: saldo do pulmão
 | Auditoria | `/auditoria` | Log imutável: data/hora, usuário, tipo de ação, estoque origem, estoque destino, quantidade e justificativa. Filtros por período, usuário e tipo; exportação **Excel** e **PDF**. |
 | Relatórios | `/relatorios` | Movimentações por período/tipo e exportação Excel/CSV completa. |
 | Cadastros | `/cadastros/*` | Transportadoras, fornecedores, CDs e **usuários com permissões por tela**. |
-| PDF do vale | `/api/vales/[id]/pdf` | PDF A4 com 2 vias (Martin Brower / Fornecedor), logotipo, remetente, número, data/hora, fornecedor, transportadora, quantidade e tipo, status atual, código de barras e assinaturas (Conferente / Motorista). |
+| PDF do vale | `/api/vales/[id]/pdf` | PDF A4 com 2 vias (Martin Brower / Fornecedor), logotipo, remetente, número, data/hora, fornecedor, transportadora, **número da NF** (ou **"SEM NOTA FISCAL"** com observação de destaque), quantidade e tipo, status atual, código de barras e assinaturas (Conferente, com o nome / Motorista). |
 
 ### Conta corrente em partida dobrada
 
@@ -45,6 +45,8 @@ Toda movimentação registra uma **conta de origem** e uma **conta de destino** 
 - **ACID:** cada operação roda numa transação do PostgreSQL com bloqueio consultivo; um estoque nunca fica negativo, mesmo com usuários simultâneos.
 - **Imutável:** triggers no banco impedem `UPDATE`/`DELETE` em `Movimentacao` e `Auditoria`; correções são feitas por novos lançamentos (estorno/ajuste).
 - **Migração do histórico:** a migração `partida_dobrada_dados` converte os lançamentos antigos (pulmão/avariados) para origem/destino e **aborta** se qualquer linha divergir dos saldos antigos.
+
+> **Banco zerado em 01/10/2026:** a migração `20261001160000_zerar_dados` apagou (uma única vez, no deploy seguinte) todos os dados e cadastros e reiniciou a numeração de vales e agendas, mantendo apenas as contas de usuário.
 
 ## Deploy na Vercel (passo a passo)
 

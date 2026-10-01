@@ -1,15 +1,13 @@
 import { requirePermissao } from "@/lib/auth";
-import { registrarRecebimentoFornecedor } from "@/actions/fornecedor";
-import { CamposFornecedor } from "@/components/CamposFornecedor";
-import { FormAcao } from "@/components/FormAcao";
+import { FormRecebimento } from "@/components/FormRecebimento";
 import { UltimasMovimentacoes } from "@/components/UltimasMovimentacoes";
 import { Cabecalho, Painel } from "@/components/ui";
 import { prisma } from "@/lib/prisma";
 
-export const metadata = { title: "Entrada de Fornecedor" };
+export const metadata = { title: "Recebimento de Pallets" };
 
 export default async function EntradaFornecedorPage() {
-  await requirePermissao("entrada");
+  const usuario = await requirePermissao("entrada");
   const transportadoras = await prisma.transportadora.findMany({
     where: { ativo: true },
     select: { id: true, nome: true },
@@ -19,49 +17,11 @@ export default async function EntradaFornecedorPage() {
   return (
     <>
       <Cabecalho
-        titulo="Recebimento de Fornecedor"
-        descricao="Recebimento de fornecedor: Fornecedor → Estoque do CD (soma). Gera automaticamente o Vale-Pallet (impressão A4 em 2 vias)."
+        titulo="Recebimento de Pallets"
+        descricao="Bipe o código de barras da NF-e (ou use a opção Sem Nota Fiscal). Fornecedor → Estoque do CD (soma) e o Vale-Pallet é gerado automaticamente."
       />
-      <Painel titulo="Dados do recebimento">
-        <FormAcao acao={registrarRecebimentoFornecedor} botao="Salvar e gerar Vale-Pallet" limpar={false}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <CamposFornecedor />
-            <div>
-              <label className="label" htmlFor="transportadora">Transportadora *</label>
-              <input id="transportadora" name="transportadora" className="input" required maxLength={200} list="lista-transportadoras" autoComplete="off" />
-              <datalist id="lista-transportadoras">
-                {transportadoras.map((t) => (
-                  <option key={t.id} value={t.nome} />
-                ))}
-              </datalist>
-            </div>
-            <div>
-              <label className="label" htmlFor="placa">Placa do veículo *</label>
-              <input
-                id="placa"
-                name="placa"
-                className="input uppercase"
-                required
-                placeholder="ABC1D23"
-                maxLength={8}
-                pattern="[A-Za-z]{3}-?[0-9][A-Za-z0-9][0-9]{2}"
-                title="Placa no formato ABC1234 ou ABC1D23"
-              />
-            </div>
-            <div>
-              <label className="label" htmlFor="notaFiscal">Número da Nota Fiscal *</label>
-              <input id="notaFiscal" name="notaFiscal" className="input" required maxLength={50} />
-            </div>
-            <div>
-              <label className="label" htmlFor="quantidade">Quantidade de pallets *</label>
-              <input id="quantidade" name="quantidade" type="number" min={1} step={1} className="input" required />
-            </div>
-            <div className="md:col-span-2">
-              <label className="label" htmlFor="observacao">Observação</label>
-              <textarea id="observacao" name="observacao" rows={2} className="input" maxLength={500} />
-            </div>
-          </div>
-        </FormAcao>
+      <Painel titulo="Recebimento de pallets">
+        <FormRecebimento transportadoras={transportadoras.map((t) => t.nome)} conferentePadrao={usuario.nome} />
       </Painel>
       <div className="mt-6">
         <UltimasMovimentacoes tipos={["RECEBIMENTO_FORNECEDOR"]} titulo="Últimos recebimentos de fornecedor" />

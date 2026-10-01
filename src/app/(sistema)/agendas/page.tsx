@@ -9,6 +9,7 @@ import { Cabecalho, Painel, StatusBadge, Vazio } from "@/components/ui";
 import { obterSaldos } from "@/lib/conta";
 import { prisma } from "@/lib/prisma";
 import { formatarData, formatarDataHora } from "@/lib/datas";
+import { rotuloNf } from "@/lib/formatos";
 import { formatarCnpj, formatarNumero, numeroAgenda, numeroVale, rotuloStatusAgenda } from "@/lib/formatos";
 
 export const metadata = { title: "Baixa de Pagamento" };
@@ -87,7 +88,7 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
                     {a.vales.map((v) => (
                       <tr key={v.id} data-vale={v.numero}>
                         <td className="font-mono">{numeroVale(v.numero)}</td>
-                        <td>{v.notaFiscal}</td>
+                        <td>{rotuloNf(v)}</td>
                         <td>{formatarData(v.criadoEm)}</td>
                         <td className="text-right tabular-nums">{v.quantidade}</td>
                       </tr>
