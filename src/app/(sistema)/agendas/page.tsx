@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Ban, CircleCheck } from "lucide-react";
 import { cancelarAgenda, validarAgenda } from "@/actions/vales";
+import { Fluxo } from "@/components/Contas";
 import { FormAcao } from "@/components/FormAcao";
+import { requirePermissao } from "@/lib/auth";
 import { LeitorVale } from "@/components/LeitorVale";
 import { Cabecalho, Painel, StatusBadge, Vazio } from "@/components/ui";
 import { obterSaldos } from "@/lib/conta";
@@ -12,6 +14,7 @@ import { formatarCnpj, formatarNumero, numeroAgenda, numeroVale, rotuloStatusAge
 export const metadata = { title: "Baixa de Pagamento" };
 
 export default async function AgendasPage({ searchParams }: { searchParams: Promise<{ ok?: string }> }) {
+  await requirePermissao("agendas");
   const { ok } = await searchParams;
   const [abertas, historico, saldos] = await Promise.all([
     prisma.agendaDevolucao.findMany({
@@ -42,8 +45,9 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
           <span className="ponto" /> {ok}
         </div>
       )}
-      <p className="mb-5 text-[12px] text-t3">
-        Saldo atual no pulmão: <strong className="num text-t1">{formatarNumero(saldos.pulmao)}</strong> pallet(s)
+      <p className="mb-5 flex flex-wrap items-center gap-2 text-[12px] text-t3">
+        A baixa dá saída oficial: <Fluxo origem="VAZIOS" destino="FORNECEDOR" /> · Saldo do Estoque de Vazios:{" "}
+        <strong className="num text-t1">{formatarNumero(saldos.vazios)}</strong>
       </p>
 
       {abertas.length > 0 && (
@@ -71,7 +75,7 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
               >
                 <dl className="poco mb-4 grid grid-cols-2 gap-4 p-4 text-[12px]">
                   <div><dt className="label !mb-1">CNPJ</dt><dd className="num text-t2">{formatarCnpj(a.fornecedor.cnpj)}</dd></div>
-                  <div><dt className="label !mb-1">Data prevista</dt><dd className="num text-t2">{formatarData(a.dataPrevista)}</dd></div>
+                  <div><dt className="label !mb-1">Retirada agendada</dt><dd className="num font-semibold text-t1">{formatarDataHora(a.dataPrevista)}</dd></div>
                   <div><dt className="label !mb-1">Criada por</dt><dd className="text-t2">{a.criadoPor.login} · <span className="num">{formatarDataHora(a.criadoEm)}</span></dd></div>
                   <div><dt className="label !mb-1">Total a devolver</dt><dd className="num text-[22px] font-semibold text-lima">{formatarNumero(total)}</dd></div>
                 </dl>
@@ -95,7 +99,7 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
                   <FormAcao
                     acao={validarAgenda}
                     className="flex flex-1 flex-col gap-2"
-                    confirmar={`Confirmar a baixa da ${numeroAgenda(a.numero)}? ${total} pallet(s) sairão do pulmão.`}
+                    confirmar={`Confirmar a baixa da ${numeroAgenda(a.numero)}? ${total} pallet(s) sairão do Estoque de Vazios.`}
                     botao={<><CircleCheck className="h-4 w-4" /> Validar e dar baixa</>}
                     classeBotao="btn-success"
                   >

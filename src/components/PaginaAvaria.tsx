@@ -1,45 +1,32 @@
-import { Boxes, Hammer } from "lucide-react";
-import { registrarDescarte, registrarQuebra, registrarRecuperado } from "@/actions/avarias";
+import { registrarQuebra, registrarRecuperado } from "@/actions/avarias";
+import { requirePermissao } from "@/lib/auth";
 import { obterSaldos } from "@/lib/conta";
-import { formatarNumero } from "@/lib/formatos";
+import { Fluxo, SaldosEstoques } from "./Contas";
 import { FormAcao } from "./FormAcao";
+import { FormDescarte } from "./FormDescarte";
 import { UltimasMovimentacoes } from "./UltimasMovimentacoes";
-import { Abas, Cabecalho, Indicador, Painel } from "./ui";
+import { Abas, Cabecalho, Painel } from "./ui";
 
 const config = {
   quebras: {
-    titulo: "Apontamento de Quebras",
-    descricao: "Retira pallets danificados da conta corrente principal (pulmão) e os envia ao estoque de avariados.",
-    acao: registrarQuebra,
-    botao: "Registrar quebra",
-    classe: "btn-danger w-full",
+    titulo: "Lançamento de Pallets Quebrados",
+    descricao: "Origem: Estoque de Vazios (subtrai) → Destino: Estoque de Quebrados (soma).",
     tipo: "QUEBRA",
-    obsObrigatoria: true,
-    rotuloObs: "Observação (motivo da quebra) *",
   },
   recuperados: {
-    titulo: "Apontamento de Recuperados",
-    descricao: "Retorna pallets avariados que foram recuperados para a conta corrente principal (pulmão).",
-    acao: registrarRecuperado,
-    botao: "Registrar recuperação",
-    classe: "btn-success w-full",
+    titulo: "Conserto / Reparo de Pallets",
+    descricao: "Origem: Estoque de Quebrados (subtrai) → Destino: Estoque de Vazios (soma).",
     tipo: "RECUPERADO",
-    obsObrigatoria: false,
-    rotuloObs: "Observação",
   },
   descarte: {
-    titulo: "Descarte de Pallets",
-    descricao: "Baixa definitiva de pallets avariados irrecuperáveis. Esta operação não pode ser desfeita.",
-    acao: registrarDescarte,
-    botao: "Confirmar descarte",
-    classe: "btn-danger w-full",
+    titulo: "Descarte / Destruição de Pallets",
+    descricao: "Baixa definitiva. Ao confirmar, escolha de qual pulmão os pallets saem: Vazios ou Quebrados.",
     tipo: "DESCARTE",
-    obsObrigatoria: true,
-    rotuloObs: "Justificativa do descarte *",
   },
 } as const;
 
 export async function PaginaAvaria({ modo }: { modo: keyof typeof config }) {
+  await requirePermissao("avarias");
   const c = config[modo];
   const saldos = await obterSaldos();
 
@@ -50,48 +37,49 @@ export async function PaginaAvaria({ modo }: { modo: keyof typeof config }) {
         ativo={`/avarias/${modo}`}
         itens={[
           { href: "/avarias/quebras", rotulo: "Quebras" },
-          { href: "/avarias/recuperados", rotulo: "Recuperados" },
+          { href: "/avarias/recuperados", rotulo: "Conserto / Reparo" },
           { href: "/avarias/descarte", rotulo: "Descarte" },
         ]}
       />
-      <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <Indicador titulo="Saldo no pulmão" valor={formatarNumero(saldos.pulmao)} icone={<Boxes className="h-6 w-6" />} />
-        <Indicador
-          titulo="Estoque de avariados"
-          valor={formatarNumero(saldos.avaria)}
-          detalhe="aguardando recuperação ou descarte"
-          cor="erro"
-          icone={<Hammer className="h-6 w-6" />}
-        />
-      </div>
+      <SaldosEstoques destaque={["VAZIOS", "QUEBRADOS"]} />
       <div className="grid gap-6 lg:grid-cols-3">
-        <Painel titulo="Novo apontamento">
-          <FormAcao
-            acao={c.acao}
-            botao={c.botao}
-            classeBotao={c.classe}
-            confirmar={modo === "descarte" ? "Confirmar o descarte definitivo destes pallets?" : undefined}
-          >
-            <div>
-              <label className="label" htmlFor="quantidade">Quantidade de pallets *</label>
-              <input id="quantidade" name="quantidade" type="number" min={1} step={1} className="input" required />
-            </div>
-            <div>
-              <label className="label" htmlFor="observacao">{c.rotuloObs}</label>
-              <textarea
-                id="observacao"
-                name="observacao"
-                rows={3}
-                className="input"
-                required={c.obsObrigatoria}
-                minLength={c.obsObrigatoria ? 5 : undefined}
-                maxLength={500}
-              />
-            </div>
-          </FormAcao>
+        <Painel titulo="Novo lançamento">
+          <p className="mb-4">
+            {modo === "quebras" && <Fluxo origem="VAZIOS" destino="QUEBRADOS" />}
+            {modo === "recuperados" && <Fluxo origem="QUEBRADOS" destino="VAZIOS" />}
+            {modo === "descarte" && <span className="text-[12px] text-t3">Vazios ou Quebrados → Descarte</span>}
+          </p>
+          {modo === "descarte" ? (
+            <FormDescarte saldoVazios={saldos.vazios} saldoQuebrados={saldos.quebrados} />
+          ) : (
+            <FormAcao
+              acao={modo === "quebras" ? registrarQuebra : registrarRecuperado}
+              botao={modo === "quebras" ? "Registrar quebra" : "Registrar conserto"}
+              classeBotao={modo === "quebras" ? "btn-danger w-full" : "btn-primary w-full"}
+            >
+              <div>
+                <label className="label" htmlFor="quantidade">Quantidade de pallets *</label>
+                <input id="quantidade" name="quantidade" type="number" min={1} step={1} className="input" required />
+              </div>
+              <div>
+                <label className="label" htmlFor="observacao">
+                  {modo === "quebras" ? "Observação (motivo da quebra) *" : "Observação"}
+                </label>
+                <textarea
+                  id="observacao"
+                  name="observacao"
+                  rows={3}
+                  className="input"
+                  required={modo === "quebras"}
+                  minLength={modo === "quebras" ? 5 : undefined}
+                  maxLength={500}
+                />
+              </div>
+            </FormAcao>
+          )}
         </Painel>
         <div className="lg:col-span-2">
-          <UltimasMovimentacoes tipos={[c.tipo]} titulo="Últimos apontamentos" />
+          <UltimasMovimentacoes tipos={[c.tipo]} titulo="Últimos lançamentos" />
         </div>
       </div>
     </>

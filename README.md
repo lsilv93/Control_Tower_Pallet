@@ -10,39 +10,41 @@ Sistema web para controlar a **conta corrente de pallets PBR**: saldo do pulmão
 
 | Módulo | Rota | O que faz |
 |---|---|---|
-| Dashboard | `/` | **Filtro de período** no topo: Dia, Semana do Ano (ISO 8601), Mês, Intervalo (De/Até) ou **Geral** (todo o histórico, sem restrição de data). O período afeta entradas, saídas, subcategorias (enviados/recebidos do CD, devolvidos/recebidos do fornecedor), vales excluídos e últimas movimentações; saldo do pulmão, pendências e faróis mostram a posição atual. Faróis: **Farol Vale-pallet** (🔴 ≥ 30 dias · 🟡 20–29 · 🟢 < 20) e farol por fornecedor (🔴 > 100 · 🟡 50–100 · 🟢 < 50). Atualiza sozinho a cada 30 s mantendo o filtro. |
-| Envio para o CD | `/cd/envio` | Saída imediata do pulmão para o CD escolhido (bloqueia se não houver saldo). |
-| Recebimento do CD | `/cd/recebimento` | Entrada no pulmão de pallets vindos de um CD. |
-| Entrada de Fornecedor | `/fornecedor/entrada` | O **Nome do Fornecedor fica bloqueado** e só é liberado/preenchido automaticamente a partir do cadastro, depois de digitado um **CNPJ válido** (numérico ou alfanumérico). CNPJ não cadastrado abre o **cadastro de fornecedor** e, ao salvar, volta à entrada já preenchida. Depois: transportadora (sugere as cadastradas), placa (padrão antigo ou Mercosul), NF e quantidade. Gera o Vale-Pallet (`VP-000001`…) e abre a impressão A4 automaticamente. |
-| Impressão do vale | `/imprimir/vale/[id]` | Folha A4 dividida ao meio (**Via Martin Brower** / **Via Fornecedor**), com o remetente (Rfg Food Service Ltda. · Martin-Brower Food Service · CNPJ 59.568.428/0011-50, Jacareí-SP — em `src/lib/emissor.ts`), o **ID único** e o **código de barras Code 128** do vale. |
-| Vales Pendentes | `/vales` | Lista os vales em aberto com farol; selecione os vales (clicando ou **lendo o código de barras do vale**) e clique em **Gerar Agenda de Devolução** (uma agenda por fornecedor). |
-| Excluir Vale | `/vales/excluir` | Busca pelo ID (ou leitura do código de barras), motivo obrigatório (Fornecedor Incorreto, Transportadora Incorreta, Quantidade Incorreta, Documento Errado) e observação; confirmação antes de excluir. Exclusão **lógica**: o vale fica com status *Excluído*, a entrada no pulmão é estornada e a auditoria grava ID do vale, usuário, data/hora, motivo e observação. Só vales *Pendentes* podem ser excluídos (agendados: cancele a agenda antes). O Dashboard mostra o total de excluídos e o histórico. |
-| Baixa de Pagamento | `/agendas` | Conferência por leitura óptica do vale (localiza o vale na agenda). Valida a agenda: os vales passam para **Finalizado** e os pallets saem oficialmente do pulmão. Também dá para cancelar a agenda (os vales voltam para Pendente). |
-| Quebras | `/avarias/quebras` | Tira do pulmão e manda para o estoque de avariados (observação obrigatória). |
-| Recuperados | `/avarias/recuperados` | Devolve pallets avariados ao pulmão. |
-| Descarte | `/avarias/descarte` | Baixa definitiva de avariados (justificativa obrigatória). |
-| Relatórios | `/relatorios` | Filtros por período e tipo, resumo, trilha de auditoria. Exporta **Excel (.xlsx)** com as abas Resumo, Movimentações, Vales-Pallet, Agendas, Compras, Pendências por Fornecedor e Auditoria, ou as movimentações em **.csv**. |
-| **Adicionar Pallets** (restrito) | `/pallets/adicionar` | Botão exclusivo para administradores ou usuários com a permissão *Pode adicionar pallets*. **Compra:** lê o código de barras do DANFE (chave de acesso da NF-e, 44 posições) com leitor USB/Bluetooth, câmera do celular ou o botão *Simular leitura*; identifica automaticamente **NF, série e fornecedor** (CNPJ do emitente) e, se o fornecedor não existir, abre o **cadastro rápido**. A mesma NF não pode ser lançada duas vezes. **Ajuste de inventário:** quantidade + motivo. Tudo auditado. |
-| Cadastros | `/cadastros/*` | Abas **Transportadoras**, **Fornecedores** (qualquer usuário), **Centros de Distribuição** e **Usuários** (somente administrador). Criar, editar e ativar/inativar. |
-| Minha Senha | `/conta` | Troca da própria senha. |
+| Centro de Comando (Dashboard) | `/` | KPIs: saldo do **Estoque de Vazios**, **Estoque do CD**, **Estoque de Quebrados**, **Total geral** (com barra de composição) e **SSTK enviados/recebidos** (transferências Vazios ↔ CD). Gráfico de **extrato da conta corrente** (entradas x saídas por dia/semana/mês + saldo total ao fim de cada período) e gráfico de **pendências por fornecedor** (cor = farol). Filtros: Dia, Semana do Ano, Mês, Intervalo (De/Até), Geral e **Fornecedor**. Farol Vale-pallet, vales cancelados e últimas movimentações. |
+| Transferência para o CD / Retorno do CD | `/cd/envio`, `/cd/recebimento` | Vazios → CD e CD → Vazios. |
+| Entrada de Fornecedor | `/fornecedor/entrada` | Nome do fornecedor bloqueado, preenchido pelo CNPJ (cadastro automático se não existir). Gera o Vale-Pallet: **Fornecedor → Estoque do CD**. |
+| Consulta de Vales | `/vales/consulta`, `/vales/[id]` | Busca por número, fornecedor, status (Pendente / Agendado / Baixado / Cancelado) e período. Botões **Baixar PDF** e **Imprimir** em cada vale e no detalhe (que mostra os lançamentos do vale na conta corrente). |
+| Agendar Retirada | `/vales` | Seleciona os vales (clique ou leitura do código de barras) e abre o **pop-up de data e hora** da retirada; grava a agenda e muda o status para Agendado. |
+| Baixa de Pagamento | `/agendas` | Valida a agenda: vales Baixados e saída **Vazios → Fornecedor**. |
+| Excluir Vale | `/vales/excluir` | Motivo obrigatório + observação + confirmação; vale fica Cancelado e a entrada é estornada **CD → Fornecedor**. |
+| Quebras / Conserto / Descarte | `/avarias/*` | Vazios → Quebrados; Quebrados → Vazios; descarte com **pop-up "De qual pulmão este pallet será descartado/destruído?"** (Vazios ou Quebrados). |
+| Compra de Pallets | `/pallets/adicionar` | Leitura da chave da NF-e; **Compra → Vazios**. |
+| Ajuste Manual (Master) | `/estoque/ajuste` | **Somente MASTER**: inclui/remove saldo em qualquer estoque com justificativa obrigatória (contrapartida: conta Ajuste). |
+| Auditoria | `/auditoria` | Log imutável: data/hora, usuário, tipo de ação, estoque origem, estoque destino, quantidade e justificativa. Filtros por período, usuário e tipo; exportação **Excel** e **PDF**. |
+| Relatórios | `/relatorios` | Movimentações por período/tipo e exportação Excel/CSV completa. |
+| Cadastros | `/cadastros/*` | Transportadoras, fornecedores, CDs e **usuários com permissões por tela**. |
+| PDF do vale | `/api/vales/[id]/pdf` | PDF A4 com 2 vias (Martin Brower / Fornecedor), logotipo, remetente, número, data/hora, fornecedor, transportadora, quantidade e tipo, status atual, código de barras e assinaturas (Conferente / Motorista). |
 
-### Regras da conta corrente
+### Conta corrente em partida dobrada
 
-Cada movimentação é uma linha no livro-razão (`Movimentacao`) com a variação do **pulmão** e do **estoque de avariados**:
+Toda movimentação registra uma **conta de origem** e uma **conta de destino** com a mesma quantidade: nenhum pallet surge ou desaparece. Os três **estoques físicos** são VAZIOS, CD e QUEBRADOS; FORNECEDOR, COMPRA, DESCARTE e AJUSTE são as **contrapartidas externas**. A soma de todas as contas é sempre zero.
 
-| Tipo | Pulmão | Avariados |
+| Operação | Origem (subtrai) | Destino (soma) |
 |---|---|---|
-| Recebimento de Fornecedor, Recebimento do CD, Compra, Ajuste de entrada | + | |
-| Envio para CD, Devolução ao Fornecedor, Ajuste de saída, Estorno de vale excluído | − | |
-| Quebra | − | + |
-| Recuperado | + | − |
-| Descarte | | − |
+| Transferência para o CD | Vazios | CD |
+| Retorno do CD | CD | Vazios |
+| Recebimento de fornecedor (gera vale) | Fornecedor | CD |
+| Baixa de pagamento (devolução) | Vazios | Fornecedor |
+| Exclusão de vale (estorno) | CD | Fornecedor |
+| Quebra | Vazios | Quebrados |
+| Conserto / reparo | Quebrados | Vazios |
+| Descarte / destruição | Vazios **ou** Quebrados (pop-up) | Descarte |
+| Compra | Compra | Vazios |
+| Ajuste manual (somente MASTER) | Ajuste ↔ qualquer estoque | |
 
-- **Saldo do pulmão** = soma das variações. Nenhuma saída pode deixar o saldo negativo. As movimentações são serializadas com um *advisory lock* do PostgreSQL, então duas saídas ao mesmo tempo não conseguem furar o saldo.
-- **Pendente com fornecedores** = soma dos vales ainda não finalizados.
-- **Auditoria:** toda movimentação guarda `usuarioId` e `criadoEm`. Além disso, a tabela `Auditoria` registra login, geração de vale, agendas, cadastros, ajustes e exportações.
-
----
+- **ACID:** cada operação roda numa transação do PostgreSQL com bloqueio consultivo; um estoque nunca fica negativo, mesmo com usuários simultâneos.
+- **Imutável:** triggers no banco impedem `UPDATE`/`DELETE` em `Movimentacao` e `Auditoria`; correções são feitas por novos lançamentos (estorno/ajuste).
+- **Migração do histórico:** a migração `partida_dobrada_dados` converte os lançamentos antigos (pulmão/avariados) para origem/destino e **aborta** se qualquer linha divergir dos saldos antigos.
 
 ## Deploy na Vercel (passo a passo)
 
@@ -127,10 +129,10 @@ O botão de sol/lua no menu (ou no cabeçalho, no celular, e na tela de login) a
 
 Leitores USB/Bluetooth funcionam como teclado (digitam o código e dão Enter): basta deixar o cursor no campo de leitura. No celular (Chrome/Edge no Android), o botão **Ler com a câmera** usa a câmera.
 
-## Perfis de acesso
+## Perfis de acesso (RBAC)
 
-- **Administrador:** tudo, inclusive cadastros de CDs e usuários e **Adicionar Pallets**.
-- **Operador:** operações do dia a dia, relatórios e cadastros de transportadoras e fornecedores.
-- **Permissão "Pode adicionar pallets":** marcada no cadastro do usuário, libera **Adicionar Pallets** para um operador.
+- **MASTER:** todas as telas e o **ajuste manual de saldos** (exclusivo). Só um MASTER cria/edita outro MASTER.
+- **ADMIN:** todas as telas e a gestão de usuários, **sem** ajuste manual.
+- **OPERADOR:** apenas as telas marcadas no cadastro (Dashboard, Transferências do CD, Entrada de fornecedor, Vales/consulta, Agendamento e baixa, Excluir vale, Avarias, Compras, Relatórios, Auditoria, Cadastros, CDs). Sem acesso ao Dashboard, o operador entra na primeira tela liberada.
 
-Usuários inativados perdem o acesso na hora, porque a sessão é revalidada no banco a cada requisição.
+As permissões valem nas telas, nas ações do servidor e nas APIs (exportações e PDF retornam 403 sem permissão). Na migração, administradores existentes viraram MASTER e operadores mantiveram o acesso que tinham.

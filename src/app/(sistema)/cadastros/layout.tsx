@@ -1,19 +1,19 @@
 import { AbasRota } from "@/components/AbasRota";
 import { Cabecalho } from "@/components/ui";
 import { requireUsuario } from "@/lib/auth";
-import { ehAdmin } from "@/lib/permissoes";
+import { ehAdmin, tem } from "@/lib/permissoes";
 
 export default async function CadastrosLayout({ children }: { children: React.ReactNode }) {
   const usuario = await requireUsuario();
   const itens = [
-    { href: "/cadastros/transportadoras", rotulo: "Transportadoras" },
-    { href: "/cadastros/fornecedores", rotulo: "Fornecedores" },
-    ...(ehAdmin(usuario)
+    ...(tem(usuario, "cadastros")
       ? [
-          { href: "/cadastros/cds", rotulo: "Centros de Distribuição" },
-          { href: "/cadastros/usuarios", rotulo: "Usuários" },
+          { href: "/cadastros/transportadoras", rotulo: "Transportadoras" },
+          { href: "/cadastros/fornecedores", rotulo: "Fornecedores" },
         ]
       : []),
+    ...(tem(usuario, "cds") ? [{ href: "/cadastros/cds", rotulo: "Centros de Distribuição" }] : []),
+    ...(ehAdmin(usuario) ? [{ href: "/cadastros/usuarios", rotulo: "Usuários e Permissões" }] : []),
   ];
   return (
     <>

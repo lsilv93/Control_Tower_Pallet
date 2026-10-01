@@ -3,39 +3,37 @@ import { enviarParaCD, receberDoCD } from "@/actions/cd";
 import { FormAcao } from "./FormAcao";
 import { UltimasMovimentacoes } from "./UltimasMovimentacoes";
 import { Abas, Cabecalho, Painel } from "./ui";
-import { obterSaldos } from "@/lib/conta";
+import { requirePermissao } from "@/lib/auth";
+import { Fluxo, SaldosEstoques } from "./Contas";
 import { prisma } from "@/lib/prisma";
-import { formatarNumero } from "@/lib/formatos";
 
 export async function PaginaCD({ modo }: { modo: "envio" | "recebimento" }) {
-  const [cds, saldos] = await Promise.all([
-    prisma.centroDistribuicao.findMany({ where: { ativo: true }, orderBy: { codigo: "asc" } }),
-    obterSaldos(),
-  ]);
+  await requirePermissao("cd");
+  const cds = await prisma.centroDistribuicao.findMany({ where: { ativo: true }, orderBy: { codigo: "asc" } });
   const envio = modo === "envio";
 
   return (
     <>
       <Cabecalho
-        titulo={envio ? "Envio para o CD" : "Recebimento do CD"}
+        titulo={envio ? "Transferência para o CD" : "Retorno do CD"}
         descricao={
           envio
-            ? "Registra a saída imediata de pallets do pulmão para um Centro de Distribuição."
-            : "Registra a entrada no pulmão de pallets vindos de um Centro de Distribuição."
+            ? "Origem: Estoque de Vazios (subtrai) → Destino: Estoque do CD (soma)."
+            : "Origem: Estoque do CD (subtrai) → Destino: Estoque de Vazios (soma)."
         }
       />
       <Abas
         ativo={envio ? "/cd/envio" : "/cd/recebimento"}
         itens={[
-          { href: "/cd/envio", rotulo: "Envio para o CD" },
-          { href: "/cd/recebimento", rotulo: "Recebimento do CD" },
+          { href: "/cd/envio", rotulo: "Transferência para o CD" },
+          { href: "/cd/recebimento", rotulo: "Retorno do CD" },
         ]}
       />
+      <SaldosEstoques destaque={["VAZIOS", "CD"]} />
       <div className="grid gap-6 lg:grid-cols-3">
-        <Painel titulo={envio ? "Nova saída" : "Nova entrada"}>
-          <p className="mb-4 poco px-4 py-3 text-[12px]">
-            <span className="label !mb-1">Saldo atual no pulmão</span>
-            <strong className="num text-[22px] font-semibold text-t1">{formatarNumero(saldos.pulmao)}</strong>
+        <Painel titulo={envio ? "Nova transferência" : "Novo retorno"}>
+          <p className="mb-4 flex items-center gap-2 text-[12px] text-t3">
+            {envio ? <Fluxo origem="VAZIOS" destino="CD" /> : <Fluxo origem="CD" destino="VAZIOS" />}
           </p>
           {cds.length === 0 ? (
             <p className="text-[12px] text-t2">
@@ -46,7 +44,7 @@ export async function PaginaCD({ modo }: { modo: "envio" | "recebimento" }) {
           ) : (
             <FormAcao
               acao={envio ? enviarParaCD : receberDoCD}
-              botao={envio ? "Registrar envio" : "Registrar recebimento"}
+              botao={envio ? "Transferir para o CD" : "Registrar retorno"}
               classeBotao={envio ? "btn-primary w-full" : "btn-success w-full"}
             >
               <div>
@@ -74,7 +72,7 @@ export async function PaginaCD({ modo }: { modo: "envio" | "recebimento" }) {
         <div className="lg:col-span-2">
           <UltimasMovimentacoes
             tipos={[envio ? "ENVIO_CD" : "RECEBIMENTO_CD"]}
-            titulo={envio ? "Últimos envios para CD" : "Últimos recebimentos de CD"}
+            titulo={envio ? "Últimas transferências para o CD" : "Últimos retornos do CD"}
           />
         </div>
       </div>

@@ -1,5 +1,8 @@
 import { Download, FileText } from "lucide-react";
-import { Cabecalho, Delta, Indicador, Painel, Vazio } from "@/components/ui";
+import { Fluxo } from "@/components/Contas";
+import { Cabecalho, Indicador, Painel, Vazio } from "@/components/ui";
+import { requirePermissao } from "@/lib/auth";
+import { fluxo } from "@/lib/consultas";
 import { prisma } from "@/lib/prisma";
 import { obterSaldos } from "@/lib/conta";
 import { formatarDataHora } from "@/lib/datas";
@@ -15,8 +18,9 @@ export default async function RelatoriosPage({
 }: {
   searchParams: Promise<{ de?: string; ate?: string; tipo?: string }>;
 }) {
+  await requirePermissao("relatorios");
   const { de, ate, tipo, periodo, where } = lerFiltros(await searchParams);
-  const [movs, total, porTipo, saldos, auditoria] = await Promise.all([
+  const [movs, total, porTipo, saldos, fluxoPeriodo] = await Promise.all([
     prisma.movimentacao.findMany({
       where,
       include: { usuario: true, cd: true, fornecedor: true, vale: true, agenda: true },
@@ -24,12 +28,12 @@ export default async function RelatoriosPage({
       take: LIMITE,
     }),
     prisma.movimentacao.count({ where }),
-    prisma.movimentacao.groupBy({ by: ["tipo"], where, _sum: { quantidade: true, deltaPulmao: true }, _count: true }),
+    prisma.movimentacao.groupBy({ by: ["tipo"], where, _sum: { quantidade: true }, _count: { _all: true } }),
     obterSaldos(),
-    prisma.auditoria.findMany({ where: { criadoEm: periodo }, include: { usuario: true }, orderBy: { criadoEm: "desc" }, take: 50 }),
+    fluxo({ inicio: periodo.gte, fim: periodo.lt }),
   ]);
   const qs = new URLSearchParams({ de, ate, ...(tipo ? { tipo } : {}) }).toString();
-  const liquido = porTipo.reduce((s, g) => s + (g._sum.deltaPulmao ?? 0), 0);
+  const liquido = fluxoPeriodo.entradas - fluxoPeriodo.saidas;
 
   return (
     <>
@@ -64,10 +68,15 @@ export default async function RelatoriosPage({
       </form>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Indicador titulo="Saldo atual no pulmão" valor={formatarNumero(saldos.pulmao)} />
-        <Indicador titulo="Avariados em estoque" valor={formatarNumero(saldos.avaria)} cor="erro" />
-        <Indicador titulo="Pendente com fornecedores" valor={formatarNumero(saldos.pendenteFornecedores)} cor="ouro" />
-        <Indicador titulo="Variação líquida no período" valor={liquido > 0 ? `+${liquido}` : liquido} detalhe={`${total} movimentação(ões)`} cor="neutro" />
+        <Indicador titulo="Estoque de Vazios (atual)" valor={formatarNumero(saldos.vazios)} />
+        <Indicador titulo="Estoque do CD (atual)" valor={formatarNumero(saldos.cd)} cor="neutro" />
+        <Indicador titulo="Estoque de Quebrados (atual)" valor={formatarNumero(saldos.quebrados)} cor="ouro" />
+        <Indicador
+          titulo="Variação líquida no período"
+          valor={liquido > 0 ? `+${liquido}` : liquido}
+          detalhe={`entradas ${fluxoPeriodo.entradas} · saídas ${fluxoPeriodo.saidas} · ${total} lançamento(s)`}
+          cor="neutro"
+        />
       </div>
 
       <Painel titulo="Resumo por tipo no período" className="mb-6">
@@ -79,9 +88,9 @@ export default async function RelatoriosPage({
               <div key={g.tipo} className="poco flex items-center justify-between px-4 py-3">
                 <div>
                   <p className="text-[12px] font-medium">{rotuloTipo[g.tipo]}</p>
-                  <p className="text-[11px] text-t3">{g._count} lançamento(s)</p>
+                  <p className="text-[11px] text-t3">{g._count._all} lançamento(s)</p>
                 </div>
-                <p className="text-xl font-semibold tabular-nums">{formatarNumero(g._sum.quantidade ?? 0)}</p>
+                <p className="text-xl font-semibold tabular-nums">{formatarNumero(g._sum?.quantidade ?? 0)}</p>
               </div>
             ))}
           </div>
@@ -99,8 +108,8 @@ export default async function RelatoriosPage({
             <table className="tabela">
               <thead className="sticky top-0">
                 <tr>
-                  <th>Data/Hora</th><th>Tipo</th><th className="text-right">Qtd.</th><th className="text-right">Pulmão</th>
-                  <th className="text-right">Avariados</th><th>CD / Fornecedor</th><th>Documento</th><th>Usuário</th><th>Observação</th>
+                  <th>Data/Hora</th><th>Tipo</th><th>Origem → Destino</th><th className="text-right">Qtd.</th>
+                  <th>CD / Fornecedor</th><th>Documento</th><th>Usuário</th><th>Observação</th>
                 </tr>
               </thead>
               <tbody>
@@ -108,9 +117,8 @@ export default async function RelatoriosPage({
                   <tr key={m.id}>
                     <td className="tabular-nums">{formatarDataHora(m.criadoEm)}</td>
                     <td>{rotuloTipo[m.tipo]}</td>
-                    <td className="text-right tabular-nums">{m.quantidade}</td>
-                    <td className="text-right"><Delta valor={m.deltaPulmao} /></td>
-                    <td className="text-right"><Delta valor={m.deltaAvaria} /></td>
+                    <td><Fluxo origem={m.origem} destino={m.destino} /></td>
+                    <td className="text-right font-semibold tabular-nums text-t1">{m.quantidade}</td>
                     <td>{m.cd ? `${m.cd.codigo} - ${m.cd.nome}` : m.fornecedor?.nome ?? "—"}</td>
                     <td className="font-mono text-[11px]">
                       {[m.vale && numeroVale(m.vale.numero), m.agenda && numeroAgenda(m.agenda.numero)].filter(Boolean).join(" / ") || "—"}
@@ -125,28 +133,10 @@ export default async function RelatoriosPage({
         )}
       </Painel>
 
-      <Painel titulo="Trilha de auditoria (últimos 50 registros do período)" className="mt-6">
-        {auditoria.length === 0 ? (
-          <Vazio>Sem registros.</Vazio>
-        ) : (
-          <div className="poco max-h-[24rem] overflow-auto">
-            <table className="tabela">
-              <thead className="sticky top-0"><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Entidade</th><th>Detalhes</th></tr></thead>
-              <tbody>
-                {auditoria.map((a) => (
-                  <tr key={a.id}>
-                    <td className="tabular-nums">{formatarDataHora(a.criadoEm)}</td>
-                    <td>{a.usuario?.login ?? "—"}</td>
-                    <td className="font-mono text-[11px]">{a.acao}</td>
-                    <td>{a.entidade}</td>
-                    <td className="max-w-md truncate font-mono text-[11px] text-t3">{a.detalhes ? JSON.stringify(a.detalhes) : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Painel>
+      <p className="mt-6 text-[12px] text-t3">
+        A trilha completa de auditoria (com origem, destino, quantidade e justificativa) está na tela{" "}
+        <a href="/auditoria" className="font-semibold text-lima hover:underline">Auditoria</a>.
+      </p>
     </>
   );
 }

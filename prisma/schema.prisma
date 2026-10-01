@@ -11,9 +11,25 @@ datasource db {
   directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
+/// MASTER: tudo, inclusive ajuste manual de saldos. ADMIN: tudo, exceto ajuste manual.
+/// OPERADOR: somente as telas/funcionalidades marcadas em `permissoes`.
 enum Perfil {
+  MASTER
   ADMIN
   OPERADOR
+}
+
+/// Contas da conta corrente de pallets (partida dobrada). Toda movimentação tem
+/// uma conta de origem e uma de destino; nenhum pallet surge ou some sem contrapartida.
+/// Estoques físicos: VAZIOS, CD e QUEBRADOS. As demais são contrapartidas externas.
+enum Conta {
+  VAZIOS     // estoque de pallets vazios (pulmão)
+  CD         // estoque do Centro de Distribuição
+  QUEBRADOS  // estoque de pallets quebrados
+  FORNECEDOR // pallets recebidos de / devolvidos a fornecedores (vales-pallet)
+  COMPRA     // aquisição de pallets novos
+  DESCARTE   // baixa definitiva (destruição)
+  AJUSTE     // lançamento manual do usuário MASTER
 }
 
 /// Tipos de movimentação da conta corrente de pallets.
@@ -58,8 +74,8 @@ model Usuario {
   login        String   @unique
   senhaHash    String
   perfil       Perfil   @default(OPERADOR)
-  /// Permissão para adicionar pallets (compra / ajuste de inventário) sem ser administrador.
-  podeAdicionarPallets Boolean @default(false)
+  /// Permissões granulares por tela/funcionalidade (usadas pelo perfil OPERADOR).
+  permissoes   String[] @default([])
   ativo        Boolean  @default(true)
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
@@ -196,8 +212,8 @@ model Movimentacao {
   id           String           @id @default(cuid())
   tipo         TipoMovimentacao
   quantidade   Int
-  deltaPulmao  Int
-  deltaAvaria  Int              @default(0)
+  origem       Conta
+  destino      Conta
   observacao   String?
   criadoEm     DateTime         @default(now())
   usuarioId    String
@@ -216,15 +232,22 @@ model Movimentacao {
 
   @@index([criadoEm])
   @@index([tipo, criadoEm])
+  @@index([origem])
+  @@index([destino])
 }
 
 /// Trilha de auditoria de todas as ações do sistema (movimentações,
 /// cadastros, agendas, login etc.).
+/// Log imutável (triggers no banco bloqueiam UPDATE/DELETE).
 model Auditoria {
   id         String   @id @default(cuid())
   acao       String
   entidade   String
   entidadeId String?
+  origem     Conta?
+  destino    Conta?
+  quantidade Int?
+  observacao String?
   detalhes   Json?
   criadoEm   DateTime @default(now())
   usuarioId  String?
@@ -232,6 +255,8 @@ model Auditoria {
   usuario Usuario? @relation(fields: [usuarioId], references: [id])
 
   @@index([criadoEm])
+  @@index([acao])
+  @@index([usuarioId])
 }
 
 /// Tokens de sessão encerrados pelo botão Sair. Mesmo que alguém tenha uma cópia

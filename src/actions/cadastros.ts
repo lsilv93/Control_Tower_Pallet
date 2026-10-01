@@ -4,7 +4,8 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireAdmin, requireUsuario } from "@/lib/auth";
+import { CHAVES_PERMISSAO, ehMaster } from "@/lib/permissoes";
+import { exigir, exigirAdmin } from "./guarda";
 import { auditar, ErroNegocio } from "@/lib/conta";
 import { cnpjValido, normalizarCnpj } from "@/lib/formatos";
 import { prisma } from "@/lib/prisma";
@@ -53,7 +54,7 @@ const schemaTransportadora = z.object({
 export async function salvarTransportadora(_: Estado, form: FormData): Promise<Estado> {
   let msg: string;
   try {
-    const u = await requireUsuario();
+    const u = await exigir("cadastros");
     const id = lerId(form);
     const d = schemaTransportadora.parse(Object.fromEntries(form));
     const duplicada = await prisma.transportadora.findUnique({ where: { cnpj: d.cnpj } });
@@ -84,7 +85,7 @@ const schemaFornecedor = z.object({
 export async function salvarFornecedor(_: Estado, form: FormData): Promise<Estado> {
   let msg: string;
   try {
-    const u = await requireUsuario();
+    const u = await exigir("cadastros");
     const id = lerId(form);
     const d = schemaFornecedor.parse(Object.fromEntries(form));
     const duplicado = await prisma.fornecedor.findUnique({ where: { cnpj: d.cnpj } });
@@ -109,7 +110,7 @@ const schemaCD = z.object({
 export async function salvarCD(_: Estado, form: FormData): Promise<Estado> {
   let msg: string;
   try {
-    const admin = await requireAdmin();
+    const admin = await exigir("cds");
     const id = lerId(form);
     const d = schemaCD.parse(Object.fromEntries(form));
     const duplicado = await prisma.centroDistribuicao.findUnique({ where: { codigo: d.codigo } });
@@ -133,20 +134,29 @@ const schemaUsuario = z.object({
     .trim()
     .toLowerCase()
     .regex(/^[a-z0-9._-]{3,40}$/, "Login deve ter 3 a 40 caracteres (letras, números, ponto, hífen)."),
-  perfil: z.enum(["ADMIN", "OPERADOR"]),
+  perfil: z.enum(["MASTER", "ADMIN", "OPERADOR"]),
   senha: z.string().optional(),
 });
 
 export async function salvarUsuario(_: Estado, form: FormData): Promise<Estado> {
   let msg: string;
   try {
-    const admin = await requireAdmin();
+    const admin = await exigirAdmin();
     const id = lerId(form);
     const d = schemaUsuario.parse(Object.fromEntries(form));
-    const podeAdicionarPallets = form.get("podeAdicionarPallets") === "on";
+    // Permissões granulares marcadas (somente chaves conhecidas; usadas pelo perfil OPERADOR).
+    const permissoes = form
+      .getAll("permissoes")
+      .map(String)
+      .filter((p): p is (typeof CHAVES_PERMISSAO)[number] => (CHAVES_PERMISSAO as string[]).includes(p));
+    // Evita escalonamento: só um MASTER cria/edita outro MASTER.
+    const alvo = id ? await prisma.usuario.findUnique({ where: { id }, select: { perfil: true } }) : null;
+    if (!ehMaster(admin) && (d.perfil === "MASTER" || alvo?.perfil === "MASTER")) {
+      return falha("Somente um usuário MASTER pode criar ou alterar usuários MASTER.");
+    }
     const senha = d.senha ?? "";
     if ((!id || senha) && senha.length < 6) return falha("A senha deve ter ao menos 6 caracteres.");
-    if (id === admin.id && d.perfil !== "ADMIN") return falha("Você não pode remover o próprio perfil de administrador.");
+    if (id === admin.id && d.perfil !== admin.perfil) return falha("Você não pode alterar o próprio perfil.");
     const existente = await prisma.usuario.findUnique({ where: { login: d.login } });
     if (existente && existente.id !== id) throw new ErroNegocio(`O login "${d.login}" já está em uso.`);
 
@@ -154,7 +164,7 @@ export async function salvarUsuario(_: Estado, form: FormData): Promise<Estado> 
       nome: d.nome,
       login: d.login,
       perfil: d.perfil,
-      podeAdicionarPallets,
+      permissoes: d.perfil === "OPERADOR" ? permissoes : [],
       ...(senha ? { senhaHash: await bcrypt.hash(senha, 10) } : {}),
     };
     const u = id
@@ -165,7 +175,7 @@ export async function salvarUsuario(_: Estado, form: FormData): Promise<Estado> 
       entidade: "Usuario",
       entidadeId: u.id,
       usuarioId: admin.id,
-      detalhes: { login: d.login, perfil: d.perfil, podeAdicionarPallets, senhaAlterada: !!senha },
+      detalhes: { login: d.login, perfil: d.perfil, permissoes, senhaAlterada: !!senha },
     });
     msg = `Usuário ${u.login} ${id ? "atualizado" : "criado"}.`;
   } catch (e) {
@@ -176,10 +186,10 @@ export async function salvarUsuario(_: Estado, form: FormData): Promise<Estado> 
 
 // ---------------- Ativar / inativar ----------------
 const entidades = {
-  transportadora: { caminho: "/cadastros/transportadoras", admin: false },
-  fornecedor: { caminho: "/cadastros/fornecedores", admin: false },
-  cd: { caminho: "/cadastros/cds", admin: true },
-  usuario: { caminho: "/cadastros/usuarios", admin: true },
+  transportadora: { caminho: "/cadastros/transportadoras", exigir: () => exigir("cadastros") },
+  fornecedor: { caminho: "/cadastros/fornecedores", exigir: () => exigir("cadastros") },
+  cd: { caminho: "/cadastros/cds", exigir: () => exigir("cds") },
+  usuario: { caminho: "/cadastros/usuarios", exigir: () => exigirAdmin() },
 } as const;
 
 export async function alternarAtivo(_: Estado, form: FormData): Promise<Estado> {
@@ -188,7 +198,7 @@ export async function alternarAtivo(_: Estado, form: FormData): Promise<Estado> 
   const cfg = entidades[tipo];
   try {
     if (!cfg) throw new ErroNegocio("Cadastro inválido.");
-    const u = cfg.admin ? await requireAdmin() : await requireUsuario();
+    const u = await cfg.exigir();
     const id = String(form.get("id"));
     let nome: string;
     let ativo: boolean;
@@ -214,6 +224,7 @@ export async function alternarAtivo(_: Estado, form: FormData): Promise<Estado> 
       case "usuario": {
         if (id === u.id) throw new ErroNegocio("Você não pode inativar o próprio usuário.");
         const r = await prisma.usuario.findUniqueOrThrow({ where: { id } });
+        if (r.perfil === "MASTER" && !ehMaster(u)) throw new ErroNegocio("Somente um MASTER pode inativar outro MASTER.");
         await prisma.usuario.update({ where: { id }, data: { ativo: !r.ativo } });
         [nome, ativo] = [r.login, r.ativo];
         break;

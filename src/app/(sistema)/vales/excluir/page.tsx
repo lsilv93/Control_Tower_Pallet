@@ -1,3 +1,4 @@
+import { requirePermissao } from "@/lib/auth";
 import Link from "next/link";
 import { Search, Trash2 } from "lucide-react";
 import { excluirVale } from "@/actions/vales";
@@ -21,6 +22,7 @@ import { prisma } from "@/lib/prisma";
 export const metadata = { title: "Excluir Vale Pallet" };
 
 export default async function ExcluirValePage({ searchParams }: { searchParams: Promise<{ vale?: string; ok?: string }> }) {
+  await requirePermissao("excluir_vale");
   const { vale: busca = "", ok } = await searchParams;
   const numero = busca ? lerCodigoVale(busca) : null;
   const vale =
@@ -35,7 +37,7 @@ export default async function ExcluirValePage({ searchParams }: { searchParams: 
     <>
       <Cabecalho
         titulo="Excluir Vale Pallet"
-        descricao="Cancelamento de vales emitidos incorretamente. O vale é mantido para auditoria com status Excluído e a entrada no pulmão é estornada."
+        descricao="Cancelamento de vales emitidos incorretamente. O vale é mantido para auditoria com status Cancelado e a entrada original é estornada do Estoque do CD (CD → Fornecedor)."
       />
       <BannerOk mensagem={ok} />
 

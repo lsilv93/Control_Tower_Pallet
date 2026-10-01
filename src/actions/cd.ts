@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireUsuario } from "@/lib/auth";
+import { exigir } from "./guarda";
 import { comContaBloqueada, ErroNegocio, lancar } from "@/lib/conta";
 import { formatarNumero } from "@/lib/formatos";
 import { sucesso, tratarErro, type Estado } from "./estado";
@@ -15,7 +15,7 @@ const schema = z.object({
 
 async function movimentarCD(form: FormData, tipo: "ENVIO_CD" | "RECEBIMENTO_CD"): Promise<Estado> {
   try {
-    const usuario = await requireUsuario();
+    const usuario = await exigir("cd");
     const dados = schema.parse(Object.fromEntries(form));
     const cd = await comContaBloqueada(async (tx) => {
       const cd = await tx.centroDistribuicao.findUnique({ where: { id: dados.cdId } });
@@ -24,8 +24,11 @@ async function movimentarCD(form: FormData, tipo: "ENVIO_CD" | "RECEBIMENTO_CD")
       return cd;
     });
     revalidatePath("/", "layout");
-    const verbo = tipo === "ENVIO_CD" ? "enviados para" : "recebidos de";
-    return sucesso(`${formatarNumero(dados.quantidade)} pallet(s) ${verbo} ${cd.codigo} - ${cd.nome}.`);
+    return sucesso(
+      tipo === "ENVIO_CD"
+        ? `${formatarNumero(dados.quantidade)} pallet(s) transferidos: Estoque de Vazios → Estoque do CD (${cd.codigo}).`
+        : `${formatarNumero(dados.quantidade)} pallet(s) retornados: Estoque do CD (${cd.codigo}) → Estoque de Vazios.`,
+    );
   } catch (e) {
     return tratarErro(e);
   }

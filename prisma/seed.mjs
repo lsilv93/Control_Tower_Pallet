@@ -18,13 +18,13 @@ async function main() {
       nome: "Administrador",
       login,
       senhaHash: await bcrypt.hash(senha, 10),
-      perfil: "ADMIN",
+      perfil: "MASTER",
     },
   });
   await prisma.auditoria.create({
     data: { acao: "SEED_ADMIN", entidade: "Usuario", entidadeId: admin.id },
   });
-  console.log(`[seed] Usuário administrador "${login}" criado. Altere a senha após o primeiro acesso.`);
+  console.log(`[seed] Usuário MASTER "${login}" criado. Altere a senha após o primeiro acesso.`);
 }
 
 main()

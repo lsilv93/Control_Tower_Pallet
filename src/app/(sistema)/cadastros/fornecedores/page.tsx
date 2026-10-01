@@ -1,3 +1,4 @@
+import { requirePermissao } from "@/lib/auth";
 import { salvarFornecedor } from "@/actions/cadastros";
 import { AcoesLinha, BannerOk, Campo, RodapeForm, Situacao } from "@/components/Cadastro";
 import { FormAcao } from "@/components/FormAcao";
@@ -9,6 +10,7 @@ export const metadata = { title: "Fornecedores" };
 const CAMINHO = "/cadastros/fornecedores";
 
 export default async function FornecedoresPage({ searchParams }: { searchParams: Promise<{ editar?: string; ok?: string }> }) {
+  await requirePermissao("cadastros");
   const { editar, ok } = await searchParams;
   const [lista, editando] = await Promise.all([
     prisma.fornecedor.findMany({

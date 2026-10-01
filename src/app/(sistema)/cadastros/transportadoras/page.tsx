@@ -1,3 +1,4 @@
+import { requirePermissao } from "@/lib/auth";
 import { salvarTransportadora } from "@/actions/cadastros";
 import { AcoesLinha, BannerOk, Campo, RodapeForm, Situacao } from "@/components/Cadastro";
 import { FormAcao } from "@/components/FormAcao";
@@ -9,6 +10,7 @@ export const metadata = { title: "Transportadoras" };
 const CAMINHO = "/cadastros/transportadoras";
 
 export default async function TransportadorasPage({ searchParams }: { searchParams: Promise<{ editar?: string; ok?: string }> }) {
+  await requirePermissao("cadastros");
   const { editar, ok } = await searchParams;
   const [lista, editando] = await Promise.all([
     prisma.transportadora.findMany({ orderBy: [{ ativo: "desc" }, { nome: "asc" }] }),

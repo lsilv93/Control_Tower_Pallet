@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma, TipoMovimentacao } from "@prisma/client";
+import { Prisma, type TipoMovimentacao } from "@prisma/client";
 import { STATUS_ABERTOS } from "./conta";
 import { prisma } from "./prisma";
 import { idadeEmDias } from "./datas";
@@ -21,15 +21,61 @@ export async function totaisPorTipo(periodo: Intervalo = {}) {
   return (t: TipoMovimentacao) => totais[t] ?? 0;
 }
 
-/** Entradas e saídas do pulmão no período (sem período = consolidado de todo o histórico). */
-export async function entradasSaidas(periodo: Intervalo = {}) {
-  const w = periodoWhere(periodo);
-  const [entradas, saidas] = await Promise.all([
-    prisma.movimentacao.aggregate({ where: { ...w, deltaPulmao: { gt: 0 } }, _sum: { deltaPulmao: true } }),
-    prisma.movimentacao.aggregate({ where: { ...w, deltaPulmao: { lt: 0 } }, _sum: { deltaPulmao: true } }),
+const ESTOQUES_SQL = ["VAZIOS", "CD", "QUEBRADOS"] as const;
+
+/**
+ * Fluxo da conta corrente no período. Entradas: de conta externa (fornecedor,
+ * compra, ajuste) para um estoque. Saídas: de um estoque para conta externa
+ * (fornecedor, descarte, ajuste). Transferências internas (Vazios↔CD, quebra,
+ * conserto) não mudam o total e são somadas à parte.
+ */
+export async function fluxo(periodo: Intervalo = {}, fornecedorId?: string) {
+  const w: Prisma.MovimentacaoWhereInput = { ...periodoWhere(periodo), ...(fornecedorId ? { fornecedorId } : {}) };
+  const estoque = { in: [...ESTOQUES_SQL] };
+  const externo = { notIn: [...ESTOQUES_SQL] };
+  const [entradas, saidas, internas] = await Promise.all([
+    prisma.movimentacao.aggregate({ where: { ...w, destino: estoque, origem: externo }, _sum: { quantidade: true } }),
+    prisma.movimentacao.aggregate({ where: { ...w, origem: estoque, destino: externo }, _sum: { quantidade: true } }),
+    prisma.movimentacao.aggregate({ where: { ...w, origem: estoque, destino: estoque }, _sum: { quantidade: true } }),
   ]);
-  // Math.abs evita "-0" quando não há saídas no período
-  return { entradas: entradas._sum.deltaPulmao ?? 0, saidas: Math.abs(saidas._sum.deltaPulmao ?? 0) };
+  return {
+    entradas: entradas._sum.quantidade ?? 0,
+    saidas: saidas._sum.quantidade ?? 0,
+    transferencias: internas._sum.quantidade ?? 0,
+  };
+}
+
+export type Granularidade = "dia" | "semana" | "mes";
+
+/** Escolhe o agrupamento do gráfico de fluxo pelo tamanho do período. */
+export function granularidadePara(inicio?: Date, fim?: Date): Granularidade {
+  if (!inicio || !fim) return "mes";
+  const dias = (fim.getTime() - inicio.getTime()) / 86400000;
+  return dias <= 45 ? "dia" : dias <= 200 ? "semana" : "mes";
+}
+
+export type PontoFluxo = { inicio: string; entradas: number; saidas: number };
+
+/** Série de entradas x saídas por dia/semana/mês (fuso de São Paulo) para o extrato. */
+export async function serieFluxo(periodo: Intervalo, granularidade: Granularidade, fornecedorId?: string): Promise<PontoFluxo[]> {
+  const unidade = granularidade === "dia" ? "day" : granularidade === "semana" ? "week" : "month";
+  const condicoes: Prisma.Sql[] = [Prisma.sql`TRUE`];
+  if (periodo.inicio) condicoes.push(Prisma.sql`"criadoEm" >= ${periodo.inicio}`);
+  if (periodo.fim) condicoes.push(Prisma.sql`"criadoEm" < ${periodo.fim}`);
+  if (fornecedorId) condicoes.push(Prisma.sql`"fornecedorId" = ${fornecedorId}`);
+  const linhas = await prisma.$queryRaw<{ inicio: Date; entradas: bigint; saidas: bigint }[]>`
+    SELECT date_trunc(${unidade}, ("criadoEm" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo') AS inicio,
+           COALESCE(SUM("quantidade") FILTER (WHERE "destino" IN ('VAZIOS','CD','QUEBRADOS') AND "origem" NOT IN ('VAZIOS','CD','QUEBRADOS')), 0) AS entradas,
+           COALESCE(SUM("quantidade") FILTER (WHERE "origem" IN ('VAZIOS','CD','QUEBRADOS') AND "destino" NOT IN ('VAZIOS','CD','QUEBRADOS')), 0) AS saidas
+      FROM "Movimentacao"
+     WHERE ${Prisma.join(condicoes, " AND ")}
+     GROUP BY 1 ORDER BY 1`;
+  return linhas.map((l) => ({
+    // date_trunc devolve a data local sem fuso; o driver a entrega como UTC — basta formatar a parte da data.
+    inicio: l.inicio.toISOString().slice(0, 10),
+    entradas: Number(l.entradas),
+    saidas: Number(l.saidas),
+  }));
 }
 
 /** Vales em aberto (pendentes ou agendados) com idade e farol. */

@@ -1,3 +1,4 @@
+import { requirePermissao } from "@/lib/auth";
 import Link from "next/link";
 import { PackagePlus } from "lucide-react";
 import { SelecaoVales, type LinhaVale } from "@/components/SelecaoVales";
@@ -9,6 +10,7 @@ import { formatarCnpj, formatarPlaca, normalizarCnpj, numeroAgenda, numeroVale, 
 export const metadata = { title: "Vales Pendentes" };
 
 export default async function ValesPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
+  await requirePermissao("agendas");
   const { q = "", status = "" } = await searchParams;
   const vales = await valesEmAberto({
     ...(status === "PENDENTE" || status === "AGENDADO" ? { status } : {}),
@@ -46,7 +48,7 @@ export default async function ValesPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <Cabecalho
-        titulo="Vales Pendentes"
+        titulo="Agendar Retirada"
         descricao="Vales-pallet em aberto. Selecione vales pendentes para gerar a agenda de devolução (uma agenda por fornecedor)."
       >
         <Link href="/fornecedor/entrada" className="btn-secondary">

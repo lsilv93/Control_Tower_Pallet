@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { StatusVale } from "@prisma/client";
 import { z } from "zod";
-import { requireUsuario } from "@/lib/auth";
+import { exigir } from "./guarda";
 import { auditar, comContaBloqueada, ErroNegocio, lancar } from "@/lib/conta";
 import { prisma } from "@/lib/prisma";
 import { lerCodigoVale, numeroAgenda, numeroVale, rotuloMotivoCancelamento } from "@/lib/formatos";
@@ -13,19 +13,24 @@ import { sucesso, tratarErro, type Estado } from "./estado";
 
 const schemaAgenda = z.object({
   valeIds: z.array(z.string()).min(1, "Selecione ao menos um vale."),
-  dataPrevista: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data prevista da devolução."),
+  // datetime-local do navegador ("YYYY-MM-DDTHH:MM"), no fuso de operação (São Paulo).
+  dataHora: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Informe a data e a hora da retirada."),
   observacao: z.string().trim().max(500).optional(),
 });
 
 /** Gera agenda(s) de devolução a partir dos vales selecionados (uma por fornecedor). */
 export async function gerarAgenda(_: Estado, form: FormData): Promise<Estado> {
   try {
-    const usuario = await requireUsuario();
+    const usuario = await exigir("agendas");
     const d = schemaAgenda.parse({
       valeIds: form.getAll("valeIds").map(String),
-      dataPrevista: form.get("dataPrevista"),
+      dataHora: form.get("dataHora"),
       observacao: form.get("observacao") ?? undefined,
     });
+
+    const dataHora = new Date(`${d.dataHora}:00-03:00`);
+    if (Number.isNaN(dataHora.getTime())) throw new ErroNegocio("Data/hora da retirada inválida.");
+    if (dataHora < inicioDoDia()) throw new ErroNegocio("A retirada não pode ser agendada para uma data passada.");
 
     const agendas = await prisma.$transaction(async (tx) => {
       const vales = await tx.valePallet.findMany({ where: { id: { in: d.valeIds } } });
@@ -41,7 +46,7 @@ export async function gerarAgenda(_: Estado, form: FormData): Promise<Estado> {
         const agenda = await tx.agendaDevolucao.create({
           data: {
             fornecedorId,
-            dataPrevista: inicioDoDia(d.dataPrevista),
+            dataPrevista: dataHora,
             observacao: d.observacao || null,
             criadoPorId: usuario.id,
           },
@@ -57,7 +62,7 @@ export async function gerarAgenda(_: Estado, form: FormData): Promise<Estado> {
           entidade: "AgendaDevolucao",
           entidadeId: agenda.id,
           usuarioId: usuario.id,
-          detalhes: { numero: agenda.numero, vales: ids, dataPrevista: d.dataPrevista },
+          detalhes: { numero: agenda.numero, vales: ids, dataHoraRetirada: dataHora.toISOString() },
         });
         criadas.push(agenda);
       }
@@ -65,7 +70,9 @@ export async function gerarAgenda(_: Estado, form: FormData): Promise<Estado> {
     });
 
     revalidatePath("/", "layout");
-    return sucesso(`Agenda(s) gerada(s): ${agendas.map((a) => numeroAgenda(a.numero)).join(", ")}.`);
+    return sucesso(
+      `Retirada agendada para ${formatarDataHora(dataHora)}: ${agendas.map((a) => numeroAgenda(a.numero)).join(", ")}.`,
+    );
   } catch (e) {
     return tratarErro(e);
   }
@@ -75,7 +82,7 @@ export async function gerarAgenda(_: Estado, form: FormData): Promise<Estado> {
 export async function validarAgenda(_: Estado, form: FormData): Promise<Estado> {
   let mensagem: string;
   try {
-    const usuario = await requireUsuario();
+    const usuario = await exigir("agendas");
     const agendaId = String(form.get("agendaId") ?? "");
     const observacao = String(form.get("observacao") ?? "").trim() || null;
 
@@ -136,7 +143,7 @@ export async function validarAgenda(_: Estado, form: FormData): Promise<Estado> 
 export async function cancelarAgenda(_: Estado, form: FormData): Promise<Estado> {
   let mensagem: string;
   try {
-    const usuario = await requireUsuario();
+    const usuario = await exigir("agendas");
     const agendaId = String(form.get("agendaId") ?? "");
     const agenda = await prisma.$transaction(async (tx) => {
       const { count } = await tx.agendaDevolucao.updateMany({
@@ -162,14 +169,18 @@ export type ResultadoLeituraVale =
 
 /** Identifica o vale a partir da leitura óptica do código de barras (conteúdo: "VP-000123"). */
 export async function consultarVale(leitura: string): Promise<ResultadoLeituraVale> {
-  await requireUsuario();
+  try {
+    await exigir("vales", "agendas");
+  } catch {
+    return { ok: false, erro: "Você não tem permissão para consultar vales." };
+  }
   const numero = lerCodigoVale(leitura);
   if (numero === null) return { ok: false, erro: `Código "${leitura}" não é de um vale-pallet.` };
   const vale = await prisma.valePallet.findUnique({ where: { numero }, include: { fornecedor: true, agenda: true } });
   if (!vale) return { ok: false, erro: `Vale ${numeroVale(numero)} não encontrado.` };
   const detalhe =
     vale.status === "CANCELADO"
-      ? `EXCLUÍDO em ${formatarDataHora(vale.canceladoEm)}`
+      ? `CANCELADO (excluído) em ${formatarDataHora(vale.canceladoEm)}`
       : vale.status === "FINALIZADO"
       ? `finalizado em ${formatarDataHora(vale.finalizadoEm)}`
       : vale.status === "AGENDADO" && vale.agenda
@@ -201,7 +212,7 @@ const schemaExclusao = z.object({
 export async function excluirVale(_: Estado, form: FormData): Promise<Estado> {
   let mensagem: string;
   try {
-    const usuario = await requireUsuario();
+    const usuario = await exigir("excluir_vale");
     const d = schemaExclusao.parse(Object.fromEntries(form));
     const observacao = d.observacao || null;
 
@@ -254,7 +265,7 @@ export async function excluirVale(_: Estado, form: FormData): Promise<Estado> {
       });
       return vale;
     });
-    mensagem = `${numeroVale(vale.numero)} excluído (${rotuloMotivoCancelamento[d.motivo]}). ${vale.quantidade} pallet(s) estornados do pulmão.`;
+    mensagem = `${numeroVale(vale.numero)} excluído (${rotuloMotivoCancelamento[d.motivo]}). ${vale.quantidade} pallet(s) estornados do Estoque do CD.`;
   } catch (e) {
     return tratarErro(e);
   }

@@ -37,6 +37,13 @@
   --rec-l: rgba(52, 90, 120, 0.13);
   --halo: rgba(190, 249, 27, 0.5);
   --sulco: rgba(43, 74, 99, 0.35);
+  /* gráficos (paleta validada no tema escuro): estoques = slots 1-3; fluxo = par divergente */
+  --viz-vazios: #3987e5;
+  --viz-cd: #d95926;
+  --viz-quebrados: #199e70;
+  --viz-entrada: #3987e5;
+  --viz-saida: #e66767;
+  --viz-grade: rgba(141, 160, 179, 0.18);
   color-scheme: dark;
 }
 
@@ -70,6 +77,12 @@
   --rec-l: rgba(255, 255, 255, 0.8);
   --halo: rgba(110, 160, 0, 0.55);
   --sulco: rgba(120, 142, 165, 0.35);
+  --viz-vazios: #2a78d6;
+  --viz-cd: #eb6834;
+  --viz-quebrados: #1baf7a;
+  --viz-entrada: #2a78d6;
+  --viz-saida: #e34948;
+  --viz-grade: rgba(72, 92, 110, 0.18);
   color-scheme: light;
 }
 
@@ -392,6 +405,13 @@
   .tabular-nums {
     font-family: var(--mono);
   }
+}
+
+/* status (farol) — fixos nos dois temas; sempre acompanhados de rótulo */
+:root {
+  --viz-bom: #0ca30c;
+  --viz-alerta: #fab219;
+  --viz-critico: #d03b3b;
 }
 
 /* linha localizada pela leitura óptica do vale */

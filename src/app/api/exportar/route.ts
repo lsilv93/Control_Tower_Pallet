@@ -1,7 +1,8 @@
 import ExcelJS from "exceljs";
 import { NextResponse, type NextRequest } from "next/server";
 import { getUsuarioAtual } from "@/lib/auth";
-import { auditar, obterSaldos } from "@/lib/conta";
+import { auditar, obterSaldos, ROTULO_CONTA } from "@/lib/conta";
+import { tem } from "@/lib/permissoes";
 import { pendenciasPorFornecedor, valesEmAberto } from "@/lib/consultas";
 import { formatarData, formatarDataHora } from "@/lib/datas";
 import { lerFiltros } from "@/lib/filtros";
@@ -41,6 +42,7 @@ const csvCampo = (v: unknown) => {
 export async function GET(req: NextRequest) {
   const usuario = await getUsuarioAtual();
   if (!usuario) return NextResponse.json({ erro: "Não autenticado" }, { status: 401 });
+  if (!tem(usuario, "relatorios")) return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
 
   const sp = req.nextUrl.searchParams;
   const { de, ate, tipo, periodo, where } = lerFiltros({ de: sp.get("de"), ate: sp.get("ate"), tipo: sp.get("tipo") });
@@ -55,8 +57,8 @@ export async function GET(req: NextRequest) {
     dataHora: formatarDataHora(m.criadoEm),
     tipo: rotuloTipo[m.tipo],
     quantidade: m.quantidade,
-    deltaPulmao: m.deltaPulmao,
-    deltaAvaria: m.deltaAvaria,
+    origem: ROTULO_CONTA[m.origem],
+    destino: ROTULO_CONTA[m.destino],
     cd: m.cd ? `${m.cd.codigo} - ${m.cd.nome}` : "",
     fornecedor: m.fornecedor?.nome ?? "",
     cnpj: m.fornecedor ? formatarCnpj(m.fornecedor.cnpj) : "",
@@ -70,8 +72,8 @@ export async function GET(req: NextRequest) {
     { header: "Data/Hora", key: "dataHora", width: 20 },
     { header: "Tipo", key: "tipo", width: 30 },
     { header: "Quantidade", key: "quantidade" },
-    { header: "Variação Pulmão", key: "deltaPulmao", width: 16 },
-    { header: "Variação Avariados", key: "deltaAvaria", width: 18 },
+    { header: "Origem", key: "origem", width: 22 },
+    { header: "Destino", key: "destino", width: 22 },
     { header: "CD", key: "cd", width: 25 },
     { header: "Fornecedor", key: "fornecedor", width: 30 },
     { header: "CNPJ", key: "cnpj", width: 20 },
@@ -129,8 +131,10 @@ export async function GET(req: NextRequest) {
     { k: "Gerado por", v: `${usuario.nome} (${usuario.login})` },
     { k: "Período das movimentações", v: `${de} a ${ate}` },
     { k: "Filtro de tipo", v: tipo ? rotuloTipo[tipo] : "Todos" },
-    { k: "Saldo atual no pulmão", v: saldos.pulmao },
-    { k: "Avariados em estoque", v: saldos.avaria },
+    { k: "Estoque de Vazios (atual)", v: saldos.vazios },
+    { k: "Estoque do CD (atual)", v: saldos.cd },
+    { k: "Estoque de Quebrados (atual)", v: saldos.quebrados },
+    { k: "Total de pallets nos estoques", v: saldos.total },
     { k: "Pallets pendentes com fornecedores", v: saldos.pendenteFornecedores },
     { k: "Vales em aberto", v: saldos.valesEmAberto },
   ]);
@@ -268,6 +272,10 @@ export async function GET(req: NextRequest) {
       { header: "Data/Hora", key: "dataHora", width: 20 },
       { header: "Login", key: "usuario" },
       { header: "Ação", key: "acao", width: 30 },
+      { header: "Estoque origem", key: "origem", width: 22 },
+      { header: "Estoque destino", key: "destino", width: 22 },
+      { header: "Quantidade", key: "quantidade" },
+      { header: "Observação / justificativa", key: "observacao", width: 40 },
       { header: "Entidade", key: "entidade", width: 20 },
       { header: "ID", key: "entidadeId", width: 28 },
       { header: "Detalhes", key: "detalhes", width: 60 },
@@ -276,6 +284,10 @@ export async function GET(req: NextRequest) {
       dataHora: formatarDataHora(a.criadoEm),
       usuario: a.usuario?.login ?? "",
       acao: a.acao,
+      origem: a.origem ? ROTULO_CONTA[a.origem] : "",
+      destino: a.destino ? ROTULO_CONTA[a.destino] : "",
+      quantidade: a.quantidade ?? "",
+      observacao: a.observacao ?? "",
       entidade: a.entidade,
       entidadeId: a.entidadeId ?? "",
       detalhes: a.detalhes ? JSON.stringify(a.detalhes) : "",

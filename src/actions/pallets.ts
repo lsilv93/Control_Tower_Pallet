@@ -3,20 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { requireUsuario } from "@/lib/auth";
-import { auditar, comContaBloqueada, ErroNegocio, lancar } from "@/lib/conta";
+import { exigir, exigirMaster } from "./guarda";
+import { auditar, comContaBloqueada, ErroNegocio, lancar, ROTULO_CONTA } from "@/lib/conta";
 import { formatarDataHora } from "@/lib/datas";
 import { formatarCnpj, formatarNumero } from "@/lib/formatos";
 import { lerChaveNFe } from "@/lib/nfe";
-import { podeAdicionarPallets } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { sucesso, tratarErro, type Estado } from "./estado";
 
-async function exigirPermissao() {
-  const u = await requireUsuario();
-  if (!podeAdicionarPallets(u)) throw new ErroNegocio("Você não tem permissão para adicionar pallets.");
-  return u;
-}
+const exigirPermissao = () => exigir("compras");
 
 export type Identificacao =
   | {
@@ -103,7 +98,7 @@ export async function registrarCompra(_: Estado, form: FormData): Promise<Estado
     });
     revalidatePath("/", "layout");
     return sucesso(
-      `Compra registrada: ${formatarNumero(compra.quantidade)} pallet(s) da NF ${compra.notaFiscal} (${compra.fornecedor.nome}) adicionados ao pulmão.`,
+      `Compra registrada: ${formatarNumero(compra.quantidade)} pallet(s) da NF ${compra.notaFiscal} (${compra.fornecedor.nome}) adicionados ao Estoque de Vazios.`,
     );
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
@@ -113,18 +108,36 @@ export async function registrarCompra(_: Estado, form: FormData): Promise<Estado
   }
 }
 
-/** Ajuste de inventário (inclusão manual): apenas quantidade e motivo; auditado. */
+const schemaAjuste = z.object({
+  estoque: z.enum(["VAZIOS", "CD", "QUEBRADOS"], { message: "Selecione o estoque." }),
+  sentido: z.enum(["INCLUIR", "REMOVER"], { message: "Selecione incluir ou remover." }),
+  quantidade,
+  justificativa: z.string().trim().min(10, "Justificativa obrigatória (mínimo 10 caracteres).").max(500),
+});
+
+/**
+ * Ajuste manual de saldo (inclusão ou remoção) em qualquer estoque. Exclusivo do
+ * MASTER; a contrapartida é a conta AJUSTE e a justificativa vai para a auditoria.
+ */
 export async function ajustarInventario(_: Estado, form: FormData): Promise<Estado> {
   try {
-    const u = await exigirPermissao();
-    const d = z
-      .object({ quantidade, motivo: z.string().trim().min(5, "Informe o motivo do ajuste (mínimo 5 caracteres).").max(500) })
-      .parse(Object.fromEntries(form));
+    const u = await exigirMaster();
+    const d = schemaAjuste.parse(Object.fromEntries(form));
+    const incluir = d.sentido === "INCLUIR";
     await comContaBloqueada((tx) =>
-      lancar(tx, { tipo: "AJUSTE_ENTRADA", quantidade: d.quantidade, observacao: d.motivo, usuarioId: u.id }),
+      lancar(tx, {
+        tipo: incluir ? "AJUSTE_ENTRADA" : "AJUSTE_SAIDA",
+        quantidade: d.quantidade,
+        origem: incluir ? "AJUSTE" : d.estoque,
+        destino: incluir ? d.estoque : "AJUSTE",
+        observacao: d.justificativa,
+        usuarioId: u.id,
+      }),
     );
     revalidatePath("/", "layout");
-    return sucesso(`Ajuste de inventário registrado: +${formatarNumero(d.quantidade)} pallet(s) no pulmão.`);
+    return sucesso(
+      `Ajuste manual registrado: ${incluir ? "+" : "−"}${formatarNumero(d.quantidade)} pallet(s) no ${ROTULO_CONTA[d.estoque]}.`,
+    );
   } catch (e) {
     return tratarErro(e);
   }

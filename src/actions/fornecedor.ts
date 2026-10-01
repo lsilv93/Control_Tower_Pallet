@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUsuario } from "@/lib/auth";
+import { exigir } from "./guarda";
 import { auditar, comContaBloqueada, ErroNegocio, lancar } from "@/lib/conta";
 import { prisma } from "@/lib/prisma";
 import { cnpjValido, normalizarCnpj, normalizarPlaca, placaValida } from "@/lib/formatos";
@@ -50,7 +51,7 @@ const schemaCadastro = z.object({
  */
 export async function cadastrarFornecedorRapido(_: Estado, form: FormData): Promise<Estado> {
   try {
-    const u = await requireUsuario();
+    const u = await exigir("entrada", "compras", "cadastros");
     const d = schemaCadastro.parse(Object.fromEntries(form));
     const cnpj = normalizarCnpj(d.cnpj);
     if (await prisma.fornecedor.findUnique({ where: { cnpj } })) throw new ErroNegocio("Fornecedor já cadastrado.");
@@ -81,7 +82,7 @@ const schema = z.object({
 export async function registrarRecebimentoFornecedor(_: Estado, form: FormData): Promise<Estado> {
   let valeId: string;
   try {
-    const usuario = await requireUsuario();
+    const usuario = await exigir("entrada");
     const d = schema.parse(Object.fromEntries(form));
     const cnpj = normalizarCnpj(d.cnpj);
 

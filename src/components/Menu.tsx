@@ -12,6 +12,7 @@ import {
   CalendarCheck,
   ClipboardList,
   Factory,
+  FileSearch,
   FileX,
   FileSpreadsheet,
   Hammer,
@@ -22,73 +23,83 @@ import {
   PackagePlus,
   Plus,
   Recycle,
+  ShieldCheck,
+  SlidersHorizontal,
   Trash2,
   Truck,
   Users,
   X,
 } from "lucide-react";
 import { sair } from "@/actions/auth";
-import { podeAdicionarPallets } from "@/lib/permissoes";
+import { ehAdmin, ehMaster, ROTULO_PERFIL, tem, type Perfil, type Permissao } from "@/lib/permissoes";
 import { BotaoTema, type Tema } from "./BotaoTema";
 
-type Item = { href: string; rotulo: string; icone: typeof Boxes; admin?: boolean };
+type Item = { href: string; rotulo: string; icone: typeof Boxes; permissao?: Permissao; somente?: "admin" | "master" };
 
 const grupos: { titulo: string; itens: Item[] }[] = [
-  { titulo: "", itens: [{ href: "/", rotulo: "Dashboard", icone: LayoutDashboard }] },
+  { titulo: "", itens: [{ href: "/", rotulo: "Dashboard", icone: LayoutDashboard, permissao: "dashboard" }] },
   {
     titulo: "Centro de Distribuição",
     itens: [
-      { href: "/cd/envio", rotulo: "Envio para o CD", icone: ArrowUpFromLine },
-      { href: "/cd/recebimento", rotulo: "Recebimento do CD", icone: ArrowDownToLine },
+      { href: "/cd/envio", rotulo: "Transferência para o CD", icone: ArrowUpFromLine, permissao: "cd" },
+      { href: "/cd/recebimento", rotulo: "Retorno do CD", icone: ArrowDownToLine, permissao: "cd" },
     ],
   },
   {
     titulo: "Fornecedor & Vales",
     itens: [
-      { href: "/fornecedor/entrada", rotulo: "Entrada de Fornecedor", icone: PackagePlus },
-      { href: "/vales", rotulo: "Vales Pendentes", icone: ClipboardList },
-      { href: "/agendas", rotulo: "Baixa de Pagamento", icone: CalendarCheck },
-      { href: "/vales/excluir", rotulo: "Excluir Vale", icone: FileX },
+      { href: "/fornecedor/entrada", rotulo: "Entrada de Fornecedor", icone: PackagePlus, permissao: "entrada" },
+      { href: "/vales/consulta", rotulo: "Consulta de Vales", icone: FileSearch, permissao: "vales" },
+      { href: "/vales", rotulo: "Agendar Retirada", icone: ClipboardList, permissao: "agendas" },
+      { href: "/agendas", rotulo: "Baixa de Pagamento", icone: CalendarCheck, permissao: "agendas" },
+      { href: "/vales/excluir", rotulo: "Excluir Vale", icone: FileX, permissao: "excluir_vale" },
     ],
   },
   {
     titulo: "Avarias",
     itens: [
-      { href: "/avarias/quebras", rotulo: "Quebras", icone: Hammer },
-      { href: "/avarias/recuperados", rotulo: "Recuperados", icone: Recycle },
-      { href: "/avarias/descarte", rotulo: "Descarte", icone: Trash2 },
+      { href: "/avarias/quebras", rotulo: "Quebras", icone: Hammer, permissao: "avarias" },
+      { href: "/avarias/recuperados", rotulo: "Conserto / Reparo", icone: Recycle, permissao: "avarias" },
+      { href: "/avarias/descarte", rotulo: "Descarte", icone: Trash2, permissao: "avarias" },
     ],
   },
   {
     titulo: "Cadastros",
     itens: [
-      { href: "/cadastros/transportadoras", rotulo: "Transportadoras", icone: Truck },
-      { href: "/cadastros/fornecedores", rotulo: "Fornecedores", icone: Factory },
-      { href: "/cadastros/cds", rotulo: "Centros de Distribuição", icone: Building2, admin: true },
-      { href: "/cadastros/usuarios", rotulo: "Usuários", icone: Users, admin: true },
+      { href: "/cadastros/transportadoras", rotulo: "Transportadoras", icone: Truck, permissao: "cadastros" },
+      { href: "/cadastros/fornecedores", rotulo: "Fornecedores", icone: Factory, permissao: "cadastros" },
+      { href: "/cadastros/cds", rotulo: "Centros de Distribuição", icone: Building2, permissao: "cds" },
+      { href: "/cadastros/usuarios", rotulo: "Usuários e Permissões", icone: Users, somente: "admin" },
     ],
   },
   {
     titulo: "Gestão",
     itens: [
-      { href: "/relatorios", rotulo: "Relatórios", icone: FileSpreadsheet },
+      { href: "/estoque/ajuste", rotulo: "Ajuste Manual (Master)", icone: SlidersHorizontal, somente: "master" },
+      { href: "/auditoria", rotulo: "Auditoria", icone: ShieldCheck, permissao: "auditoria" },
+      { href: "/relatorios", rotulo: "Relatórios", icone: FileSpreadsheet, permissao: "relatorios" },
       { href: "/conta", rotulo: "Minha Senha", icone: KeyRound },
     ],
   },
 ];
 
+function visivel(i: Item, u: { perfil: Perfil; permissoes: string[] }) {
+  if (i.somente === "master") return ehMaster(u);
+  if (i.somente === "admin") return ehAdmin(u);
+  return !i.permissao || tem(u, i.permissao);
+}
+
 export function Menu({
   usuario,
   tema,
 }: {
-  usuario: { nome: string; login: string; perfil: "ADMIN" | "OPERADOR"; podeAdicionarPallets: boolean };
+  usuario: { nome: string; login: string; perfil: Perfil; permissoes: string[] };
   tema: Tema;
 }) {
   const pathname = usePathname();
   const [aberto, setAberto] = useState(false);
   const ativo = (href: string) =>
     href === "/" ? pathname === "/" : href === "/vales" ? pathname === "/vales" : pathname.startsWith(href);
-  const admin = usuario.perfil === "ADMIN";
 
   return (
     <>
@@ -131,21 +142,21 @@ export function Menu({
             </div>
           </div>
 
-          {podeAdicionarPallets(usuario) && (
+          {tem(usuario, "compras") && (
             <div className="px-3 pb-3">
               <Link
                 href="/pallets/adicionar"
                 onClick={() => setAberto(false)}
                 className={clsx("w-full", ativo("/pallets") ? "btn-secondary !text-lima" : "btn-primary")}
               >
-                <Plus className="h-4 w-4" /> Adicionar Pallets
+                <Plus className="h-4 w-4" /> Compra de Pallets
               </Link>
             </div>
           )}
 
           <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4">
             {grupos.map((g) => {
-              const itens = g.itens.filter((i) => !i.admin || admin);
+              const itens = g.itens.filter((i) => visivel(i, usuario));
               if (!itens.length) return null;
               return (
                 <div key={g.titulo}>
@@ -176,7 +187,7 @@ export function Menu({
             <div className="poco p-4">
               <p className="truncate text-[12px] font-semibold text-t1">{usuario.nome}</p>
               <p className="text-[11px] text-t3">
-                {usuario.login} · {admin ? "Administrador" : "Operador"}
+                {usuario.login} · {ROTULO_PERFIL[usuario.perfil]}
               </p>
             </div>
             <form action={sair} className="mt-3">

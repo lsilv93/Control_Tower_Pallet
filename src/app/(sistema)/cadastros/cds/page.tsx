@@ -2,14 +2,14 @@ import { salvarCD } from "@/actions/cadastros";
 import { AcoesLinha, BannerOk, Campo, RodapeForm, Situacao } from "@/components/Cadastro";
 import { FormAcao } from "@/components/FormAcao";
 import { Painel, Tabela, Vazio } from "@/components/ui";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermissao } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Centros de Distribuição" };
 const CAMINHO = "/cadastros/cds";
 
 export default async function CDsPage({ searchParams }: { searchParams: Promise<{ editar?: string; ok?: string }> }) {
-  await requireAdmin();
+  await requirePermissao("cds");
   const { editar, ok } = await searchParams;
   const [lista, editando] = await Promise.all([
     prisma.centroDistribuicao.findMany({ orderBy: [{ ativo: "desc" }, { codigo: "asc" }] }),

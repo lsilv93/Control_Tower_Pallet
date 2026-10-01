@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useActionState, useEffect, useMemo, useState } from "react";
 import { CalendarPlus } from "lucide-react";
 import { gerarAgenda } from "@/actions/vales";
 import type { Farol } from "@/lib/farol";
-import { BotaoEnviar, Mensagem, useAcao } from "./FormAcao";
+import { Mensagem } from "./FormAcao";
+import { Modal } from "./ModalFornecedor";
 import { LeitorVale } from "./LeitorVale";
 import { FarolBadge, StatusBadge } from "./ui";
 
@@ -29,7 +30,8 @@ export type LinhaVale = {
 };
 
 export function SelecaoVales({ vales, hoje }: { vales: LinhaVale[]; hoje: string }) {
-  const { estado, enviando, aoEnviar } = useAcao(gerarAgenda);
+  const [estado, executar, enviando] = useActionState(gerarAgenda, null);
+  const [modal, setModal] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const pendentes = vales.filter((v) => v.status === "PENDENTE");
 
@@ -69,7 +71,7 @@ export function SelecaoVales({ vales, hoje }: { vales: LinhaVale[]; hoje: string
         }}
       />
     </div>
-    <form onSubmit={aoEnviar}>
+    <div>
       <div className="card p-3 sm:p-4">
       <div className="poco overflow-x-auto">
         <table className="tabela">
@@ -154,24 +156,65 @@ export function SelecaoVales({ vales, hoje }: { vales: LinhaVale[]; hoje: string
             {resumo.fornecedores > 1 && <span className="text-t3"> · {resumo.fornecedores} agendas</span>}
           </p>
         </div>
-        <div>
-          <label className="label" htmlFor="dataPrevista">Data prevista da devolução *</label>
-          <input id="dataPrevista" name="dataPrevista" type="date" min={hoje} defaultValue={hoje} className="input" required />
-        </div>
-        <div className="min-w-[14rem] flex-1">
-          <label className="label" htmlFor="observacao">Observação</label>
-          <input id="observacao" name="observacao" className="input" maxLength={500} />
-        </div>
-        <BotaoEnviar enviando={enviando || selecionados.size === 0} textoEnviando={enviando ? "Gerando..." : "Selecione vales"}>
-          <CalendarPlus className="h-4 w-4" /> Gerar Agenda de Devolução
-        </BotaoEnviar>
+        <button
+          type="button"
+          className="btn-primary ml-auto"
+          disabled={enviando || selecionados.size === 0}
+          onClick={() => setModal(true)}
+        >
+          <CalendarPlus className="h-4 w-4" /> {selecionados.size === 0 ? "Selecione vales" : "Agendar retirada"}
+        </button>
         {estado && (
           <div className="w-full">
             <Mensagem estado={estado} />
           </div>
         )}
       </div>
-    </form>
+    </div>
+
+    {modal && (
+      <Modal titulo="Agendar retirada de pallets" aoFechar={() => setModal(false)}>
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
+            selecionados.forEach((id) => fd.append("valeIds", id));
+            setModal(false);
+            startTransition(() => executar(fd));
+          }}
+        >
+          <div className="poco p-4 text-[12px] text-t2">
+            <p className="num text-[13px] font-semibold text-t1">
+              {selecionados.size} vale(s) · {resumo.qtd} pallet(s)
+            </p>
+            {resumo.fornecedores > 1 && <p className="mt-1">Serão geradas {resumo.fornecedores} agendas (uma por fornecedor).</p>}
+          </div>
+          <div>
+            <label className="label" htmlFor="dataHora">Data e hora da retirada *</label>
+            <input id="dataHora" name="dataHora" type="datetime-local" min={`${hoje}T00:00`} defaultValue={sugestaoHorario(hoje)} className="input" required autoFocus />
+          </div>
+          <div>
+            <label className="label" htmlFor="observacao">Observação</label>
+            <input id="observacao" name="observacao" className="input" maxLength={500} placeholder="Ex.: transportadora, contato, doca" />
+          </div>
+          <div className="flex gap-3">
+            <button type="button" className="btn-secondary flex-1" onClick={() => setModal(false)}>Cancelar</button>
+            <button type="submit" className="btn-primary flex-1"><CalendarPlus className="h-4 w-4" /> Confirmar agendamento</button>
+          </div>
+        </form>
+      </Modal>
+    )}
     </>
   );
+}
+
+/** Próxima hora cheia de hoje (ou 08:00 de amanhã se já passou das 17h). */
+function sugestaoHorario(hoje: string) {
+  const agora = new Date();
+  const hora = agora.getHours() + 1;
+  if (hora <= 17) return `${hoje}T${String(Math.max(hora, 8)).padStart(2, "0")}:00`;
+  const amanha = new Date(agora.getTime() + 86400000);
+  const d = `${amanha.getFullYear()}-${String(amanha.getMonth() + 1).padStart(2, "0")}-${String(amanha.getDate()).padStart(2, "0")}`;
+  return `${d}T08:00`;
 }

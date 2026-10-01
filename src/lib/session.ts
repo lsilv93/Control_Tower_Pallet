@@ -9,7 +9,7 @@ export type SessionPayload = {
   sub: string;
   login: string;
   nome: string;
-  perfil: "ADMIN" | "OPERADOR";
+  perfil: "MASTER" | "ADMIN" | "OPERADOR";
 };
 
 function secret() {

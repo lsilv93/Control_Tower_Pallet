@@ -1,3 +1,4 @@
+import { requirePermissao } from "@/lib/auth";
 import { registrarRecebimentoFornecedor } from "@/actions/fornecedor";
 import { CamposFornecedor } from "@/components/CamposFornecedor";
 import { FormAcao } from "@/components/FormAcao";
@@ -8,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 export const metadata = { title: "Entrada de Fornecedor" };
 
 export default async function EntradaFornecedorPage() {
+  await requirePermissao("entrada");
   const transportadoras = await prisma.transportadora.findMany({
     where: { ativo: true },
     select: { id: true, nome: true },
@@ -18,7 +20,7 @@ export default async function EntradaFornecedorPage() {
     <>
       <Cabecalho
         titulo="Recebimento de Fornecedor"
-        descricao="Registra a entrada de pallets no pulmão e gera automaticamente o Vale-Pallet (impressão A4 em 2 vias)."
+        descricao="Recebimento de fornecedor: Fornecedor → Estoque do CD (soma). Gera automaticamente o Vale-Pallet (impressão A4 em 2 vias)."
       />
       <Painel titulo="Dados do recebimento">
         <FormAcao acao={registrarRecebimentoFornecedor} botao="Salvar e gerar Vale-Pallet" limpar={false}>

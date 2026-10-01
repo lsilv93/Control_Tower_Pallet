@@ -1,32 +1,57 @@
 import "server-only";
-import { Prisma, type TipoMovimentacao } from "@prisma/client";
+import { Prisma, type Conta, type TipoMovimentacao } from "@prisma/client";
 import { prisma } from "./prisma";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
-/** Variação aplicada ao pulmão e ao estoque de avariados por tipo de movimentação. */
-export const DELTAS: Record<TipoMovimentacao, { pulmao: -1 | 0 | 1; avaria: -1 | 0 | 1 }> = {
-  ENVIO_CD: { pulmao: -1, avaria: 0 },
-  RECEBIMENTO_CD: { pulmao: 1, avaria: 0 },
-  RECEBIMENTO_FORNECEDOR: { pulmao: 1, avaria: 0 },
-  DEVOLUCAO_FORNECEDOR: { pulmao: -1, avaria: 0 },
-  QUEBRA: { pulmao: -1, avaria: 1 },
-  RECUPERADO: { pulmao: 1, avaria: -1 },
-  DESCARTE: { pulmao: 0, avaria: -1 },
-  AJUSTE_ENTRADA: { pulmao: 1, avaria: 0 },
-  AJUSTE_SAIDA: { pulmao: -1, avaria: 0 },
-  COMPRA: { pulmao: 1, avaria: 0 },
-  ESTORNO_VALE: { pulmao: -1, avaria: 0 },
+/**
+ * Conta corrente em partida dobrada. Toda movimentação debita uma conta (origem)
+ * e credita outra (destino) na mesma quantidade: nenhum pallet surge ou some.
+ * Estoques físicos: VAZIOS, CD e QUEBRADOS. FORNECEDOR, COMPRA, DESCARTE e AJUSTE
+ * são contrapartidas externas (não têm restrição de saldo).
+ */
+export const ESTOQUES = ["VAZIOS", "CD", "QUEBRADOS"] as const;
+export type Estoque = (typeof ESTOQUES)[number];
+export const ehEstoque = (c: Conta): c is Estoque => (ESTOQUES as readonly string[]).includes(c);
+
+/** Regras de movimentação: origem e destino permitidos para cada tipo. */
+export const REGRAS: Record<TipoMovimentacao, { origem: readonly Conta[]; destino: readonly Conta[] }> = {
+  ENVIO_CD: { origem: ["VAZIOS"], destino: ["CD"] }, // transferência para o CD
+  RECEBIMENTO_CD: { origem: ["CD"], destino: ["VAZIOS"] }, // retorno do CD para vazios
+  RECEBIMENTO_FORNECEDOR: { origem: ["FORNECEDOR"], destino: ["CD"] }, // vale-pallet soma no CD
+  DEVOLUCAO_FORNECEDOR: { origem: ["VAZIOS"], destino: ["FORNECEDOR"] }, // baixa de pagamento sai dos vazios
+  ESTORNO_VALE: { origem: ["CD"], destino: ["FORNECEDOR"] }, // exclusão do vale cancela a entrada no CD
+  QUEBRA: { origem: ["VAZIOS"], destino: ["QUEBRADOS"] },
+  RECUPERADO: { origem: ["QUEBRADOS"], destino: ["VAZIOS"] }, // conserto/reparo
+  DESCARTE: { origem: ["VAZIOS", "QUEBRADOS"], destino: ["DESCARTE"] }, // usuário escolhe o pulmão
+  COMPRA: { origem: ["COMPRA"], destino: ["VAZIOS"] },
+  AJUSTE_ENTRADA: { origem: ["AJUSTE"], destino: ["VAZIOS", "CD", "QUEBRADOS"] }, // somente MASTER
+  AJUSTE_SAIDA: { origem: ["VAZIOS", "CD", "QUEBRADOS"], destino: ["AJUSTE"] }, // somente MASTER
 };
 
-/** Vales em aberto (ainda devidos ao fornecedor). Cancelados e finalizados ficam de fora. */
+/** Vales em aberto (ainda devidos ao fornecedor). Cancelados e baixados ficam de fora. */
 export const STATUS_ABERTOS = ["PENDENTE", "AGENDADO"] as const;
 
 export class ErroNegocio extends Error {}
 
+export type Saldos = Record<Conta, number>;
+
+/** Saldo de cada conta = entradas (destino) − saídas (origem). Opcionalmente até uma data. */
+export async function saldosPorConta(db: Db = prisma, ate?: Date): Promise<Saldos> {
+  const where = ate ? { criadoEm: { lt: ate } } : {};
+  const [entradas, saidas] = await Promise.all([
+    db.movimentacao.groupBy({ by: ["destino"], where, _sum: { quantidade: true } }),
+    db.movimentacao.groupBy({ by: ["origem"], where, _sum: { quantidade: true } }),
+  ]);
+  const s = { VAZIOS: 0, CD: 0, QUEBRADOS: 0, FORNECEDOR: 0, COMPRA: 0, DESCARTE: 0, AJUSTE: 0 } as Saldos;
+  for (const e of entradas) s[e.destino] += e._sum.quantidade ?? 0;
+  for (const o of saidas) s[o.origem] -= o._sum.quantidade ?? 0;
+  return s;
+}
+
 export async function obterSaldos(db: Db = prisma) {
-  const [conta, pendentes] = await Promise.all([
-    db.movimentacao.aggregate({ _sum: { deltaPulmao: true, deltaAvaria: true } }),
+  const [contas, pendentes] = await Promise.all([
+    saldosPorConta(db),
     db.valePallet.aggregate({
       where: { status: { in: [...STATUS_ABERTOS] } },
       _sum: { quantidade: true },
@@ -34,16 +59,19 @@ export async function obterSaldos(db: Db = prisma) {
     }),
   ]);
   return {
-    pulmao: conta._sum.deltaPulmao ?? 0,
-    avaria: conta._sum.deltaAvaria ?? 0,
+    vazios: contas.VAZIOS,
+    cd: contas.CD,
+    quebrados: contas.QUEBRADOS,
+    total: contas.VAZIOS + contas.CD + contas.QUEBRADOS,
+    contas,
     pendenteFornecedores: pendentes._sum.quantidade ?? 0,
     valesEmAberto: pendentes._count,
   };
 }
 
 /**
- * Serializa as movimentações da conta corrente dentro da transação corrente,
- * garantindo que duas saídas simultâneas não deixem o saldo negativo.
+ * Serializa as movimentações dentro da transação corrente (lock consultivo do
+ * PostgreSQL): duas saídas simultâneas não conseguem deixar um estoque negativo.
  */
 export async function bloquearConta(tx: Prisma.TransactionClient) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(815001)`;
@@ -53,6 +81,9 @@ export type NovoLancamento = {
   tipo: TipoMovimentacao;
   quantidade: number;
   usuarioId: string;
+  /** Obrigatórios só quando a regra admite mais de uma conta (descarte, ajuste). */
+  origem?: Conta;
+  destino?: Conta;
   observacao?: string | null;
   cdId?: string | null;
   fornecedorId?: string | null;
@@ -61,29 +92,45 @@ export type NovoLancamento = {
   compraId?: string | null;
 };
 
+export const ROTULO_CONTA: Record<Conta, string> = {
+  VAZIOS: "Estoque de Vazios",
+  CD: "Estoque do CD",
+  QUEBRADOS: "Estoque de Quebrados",
+  FORNECEDOR: "Fornecedor",
+  COMPRA: "Compra",
+  DESCARTE: "Descarte",
+  AJUSTE: "Ajuste manual",
+};
+
+function resolverConta(permitidas: readonly Conta[], informada: Conta | undefined, papel: string): Conta {
+  if (informada) {
+    if (!permitidas.includes(informada)) throw new ErroNegocio(`Conta de ${papel} inválida para esta movimentação.`);
+    return informada;
+  }
+  if (permitidas.length !== 1) throw new ErroNegocio(`Informe a conta de ${papel}.`);
+  return permitidas[0];
+}
+
 /**
- * Lança uma movimentação na conta corrente. Deve ser chamado dentro de uma
- * transação que já executou `bloquearConta`. Valida saldo suficiente e
- * registra a trilha de auditoria (data/hora + usuário).
+ * Lança uma movimentação (partida dobrada). Deve ser chamado dentro de uma
+ * transação que já executou `bloquearConta`. Valida a regra do tipo, o saldo
+ * do estoque de origem e grava a auditoria (data/hora, usuário, origem, destino,
+ * quantidade e justificativa) na mesma transação.
  */
 export async function lancar(tx: Prisma.TransactionClient, l: NovoLancamento) {
   if (!Number.isInteger(l.quantidade) || l.quantidade <= 0) {
     throw new ErroNegocio("A quantidade deve ser um número inteiro maior que zero.");
   }
-  const d = DELTAS[l.tipo];
-  const deltaPulmao = d.pulmao * l.quantidade;
-  const deltaAvaria = d.avaria * l.quantidade;
+  const regra = REGRAS[l.tipo];
+  const origem = resolverConta(regra.origem, l.origem, "origem");
+  const destino = resolverConta(regra.destino, l.destino, "destino");
+  if (origem === destino) throw new ErroNegocio("Origem e destino não podem ser iguais.");
 
-  if (deltaPulmao < 0 || deltaAvaria < 0) {
-    const saldos = await obterSaldos(tx);
-    if (saldos.pulmao + deltaPulmao < 0) {
+  if (ehEstoque(origem)) {
+    const saldos = await saldosPorConta(tx);
+    if (saldos[origem] < l.quantidade) {
       throw new ErroNegocio(
-        `Saldo insuficiente no pulmão: disponível ${saldos.pulmao}, solicitado ${l.quantidade}.`,
-      );
-    }
-    if (saldos.avaria + deltaAvaria < 0) {
-      throw new ErroNegocio(
-        `Saldo insuficiente de pallets avariados: disponível ${saldos.avaria}, solicitado ${l.quantidade}.`,
+        `Saldo insuficiente no ${ROTULO_CONTA[origem]}: disponível ${saldos[origem]}, solicitado ${l.quantidade}.`,
       );
     }
   }
@@ -92,8 +139,8 @@ export async function lancar(tx: Prisma.TransactionClient, l: NovoLancamento) {
     data: {
       tipo: l.tipo,
       quantidade: l.quantidade,
-      deltaPulmao,
-      deltaAvaria,
+      origem,
+      destino,
       observacao: l.observacao || null,
       usuarioId: l.usuarioId,
       cdId: l.cdId ?? null,
@@ -108,14 +155,27 @@ export async function lancar(tx: Prisma.TransactionClient, l: NovoLancamento) {
     entidade: "Movimentacao",
     entidadeId: mov.id,
     usuarioId: l.usuarioId,
-    detalhes: { quantidade: l.quantidade, deltaPulmao, deltaAvaria, observacao: l.observacao ?? null },
+    origem,
+    destino,
+    quantidade: l.quantidade,
+    observacao: l.observacao ?? null,
   });
   return mov;
 }
 
 export async function auditar(
   db: Db,
-  a: { acao: string; entidade: string; entidadeId?: string | null; usuarioId?: string | null; detalhes?: Prisma.InputJsonValue },
+  a: {
+    acao: string;
+    entidade: string;
+    entidadeId?: string | null;
+    usuarioId?: string | null;
+    origem?: Conta | null;
+    destino?: Conta | null;
+    quantidade?: number | null;
+    observacao?: string | null;
+    detalhes?: Prisma.InputJsonValue;
+  },
 ) {
   await db.auditoria.create({
     data: {
@@ -123,12 +183,16 @@ export async function auditar(
       entidade: a.entidade,
       entidadeId: a.entidadeId ?? null,
       usuarioId: a.usuarioId ?? null,
+      origem: a.origem ?? null,
+      destino: a.destino ?? null,
+      quantidade: a.quantidade ?? null,
+      observacao: a.observacao ?? null,
       detalhes: a.detalhes,
     },
   });
 }
 
-/** Executa `fn` numa transação com a conta corrente bloqueada. */
+/** Executa `fn` numa transação ACID com a conta corrente bloqueada. */
 export function comContaBloqueada<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) {
   return prisma.$transaction(
     async (tx) => {

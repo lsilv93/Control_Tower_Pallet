@@ -17,16 +17,30 @@ const opcoes: { tipo: TipoPeriodo; rotulo: string; icone: typeof Calendar }[] = 
 ];
 
 /** Filtro temporal global do Dashboard. A seleção vai para a URL (compartilhável e mantida no auto-refresh). */
-export function FiltroPeriodo({ atual, rotulo, anoAtual }: { atual: Valores; rotulo: string; anoAtual: number }) {
+export function FiltroPeriodo({
+  atual,
+  rotulo,
+  anoAtual,
+  fornecedores,
+  fornecedor,
+}: {
+  atual: Valores;
+  rotulo: string;
+  anoAtual: number;
+  fornecedores?: { id: string; nome: string }[];
+  fornecedor?: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [v, setV] = useState<Valores>(atual);
   const [carregando, iniciar] = useTransition();
+  const [forn, setForn] = useState(fornecedor ?? "");
   const anos = Array.from({ length: 6 }, (_, i) => anoAtual - 4 + i).filter((a) => a <= anoAtual + 1);
 
   function aplicar(novo: Valores) {
     setV(novo);
     const q = new URLSearchParams({ periodo: novo.tipo });
+    if (forn) q.set("fornecedor", forn);
     if (novo.tipo === "dia") q.set("dia", novo.dia);
     if (novo.tipo === "semana") {
       q.set("ano", String(novo.ano));
@@ -72,7 +86,7 @@ export function FiltroPeriodo({ atual, rotulo, anoAtual }: { atual: Valores; rot
         </p>
       </div>
 
-      {v.tipo !== "todos" && (
+      {(v.tipo !== "todos" || fornecedores) && (
         <div className="mt-4 flex flex-wrap items-end gap-3">
           {v.tipo === "dia" && (
             <div>
@@ -114,6 +128,30 @@ export function FiltroPeriodo({ atual, rotulo, anoAtual }: { atual: Valores; rot
               <select id="filtro-mes" className="input" value={v.mes} onChange={(e) => aplicar({ ...v, mes: Number(e.target.value) })}>
                 {NOMES_MESES.map((m, i) => (
                   <option key={m} value={i + 1}>{m}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {fornecedores && (
+            <div className="min-w-[14rem]">
+              <label className="label" htmlFor="filtro-fornecedor">Fornecedor</label>
+              <select
+                id="filtro-fornecedor"
+                className="input"
+                value={forn}
+                onChange={(e) => {
+                  const novo = e.target.value;
+                  setForn(novo);
+                  const q = new URLSearchParams(window.location.search);
+                  if (novo) q.set("fornecedor", novo);
+                  else q.delete("fornecedor");
+                  if (!q.get("periodo")) q.set("periodo", v.tipo);
+                  iniciar(() => router.push(`${pathname}?${q.toString()}`, { scroll: false }));
+                }}
+              >
+                <option value="">Todos os fornecedores</option>
+                {fornecedores.map((f) => (
+                  <option key={f.id} value={f.id}>{f.nome}</option>
                 ))}
               </select>
             </div>

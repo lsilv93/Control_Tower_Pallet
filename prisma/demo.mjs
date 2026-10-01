@@ -11,7 +11,7 @@ async function main() {
     console.log("[demo] Já existem movimentações — nada foi alterado.");
     return;
   }
-  const admin = await prisma.usuario.findFirstOrThrow({ where: { perfil: "ADMIN" } });
+  const admin = await prisma.usuario.findFirstOrThrow({ where: { perfil: { in: ["MASTER", "ADMIN"] } } });
 
   const cds = await Promise.all(
     [
@@ -32,12 +32,29 @@ async function main() {
     ].map(([cnpj, nome]) => prisma.fornecedor.upsert({ where: { cnpj }, update: {}, create: { cnpj, nome } })),
   );
 
-  const mov = (tipo, quantidade, deltaPulmao, deltaAvaria, criadoEm, extra = {}) =>
-    prisma.movimentacao.create({
-      data: { tipo, quantidade, deltaPulmao, deltaAvaria, criadoEm, usuarioId: admin.id, ...extra },
+  // Partida dobrada: cada lançamento tem conta de origem e de destino.
+  // Cada lançamento gera também o registro de auditoria (como na aplicação).
+  const mov = async (tipo, quantidade, origem, destino, criadoEm, extra = {}) => {
+    const m = await prisma.movimentacao.create({
+      data: { tipo, quantidade, origem, destino, criadoEm, usuarioId: admin.id, ...extra },
     });
+    await prisma.auditoria.create({
+      data: {
+        acao: `MOVIMENTACAO_${tipo}`,
+        entidade: "Movimentacao",
+        entidadeId: m.id,
+        usuarioId: admin.id,
+        origem,
+        destino,
+        quantidade,
+        observacao: extra.observacao ?? "Dados de demonstração",
+        criadoEm,
+      },
+    });
+    return m;
+  };
 
-  await mov("AJUSTE_ENTRADA", 500, 500, 0, dias(40), { observacao: "Saldo inicial (inventário)" });
+  await mov("AJUSTE_ENTRADA", 500, "AJUSTE", "VAZIOS", dias(40), { observacao: "Saldo inicial (inventário)" });
 
   const vales = [
     [0, 38, 60, "Transportes Rápido", "ABC1D23", "10231"],
@@ -60,20 +77,20 @@ async function main() {
         criadoPorId: admin.id,
       },
     });
-    await mov("RECEBIMENTO_FORNECEDOR", qtd, qtd, 0, dias(idade), {
+    await mov("RECEBIMENTO_FORNECEDOR", qtd, "FORNECEDOR", "CD", dias(idade), {
       fornecedorId: fornecedores[f].id,
       valeId: vale.id,
       observacao: `NF ${nf} - ${transportadora} - ${placa}`,
     });
   }
 
-  await mov("ENVIO_CD", 120, -120, 0, dias(10), { cdId: cds[0].id });
-  await mov("RECEBIMENTO_CD", 70, 70, 0, dias(6), { cdId: cds[1].id });
-  await mov("ENVIO_CD", 40, -40, 0, dias(0), { cdId: cds[2].id });
-  await mov("RECEBIMENTO_CD", 25, 25, 0, dias(0), { cdId: cds[0].id });
-  await mov("QUEBRA", 15, -15, 15, dias(4), { observacao: "Longarinas quebradas na descarga" });
-  await mov("RECUPERADO", 6, 6, -6, dias(2), { observacao: "Reparados pela manutenção" });
-  await mov("DESCARTE", 4, 0, -4, dias(1), { observacao: "Pallets irrecuperáveis - madeira podre" });
+  await mov("ENVIO_CD", 120, "VAZIOS", "CD", dias(10), { cdId: cds[0].id });
+  await mov("RECEBIMENTO_CD", 70, "CD", "VAZIOS", dias(6), { cdId: cds[1].id });
+  await mov("ENVIO_CD", 40, "VAZIOS", "CD", dias(0), { cdId: cds[2].id });
+  await mov("RECEBIMENTO_CD", 25, "CD", "VAZIOS", dias(0), { cdId: cds[0].id });
+  await mov("QUEBRA", 15, "VAZIOS", "QUEBRADOS", dias(4), { observacao: "Longarinas quebradas na descarga" });
+  await mov("RECUPERADO", 6, "QUEBRADOS", "VAZIOS", dias(2), { observacao: "Reparados pela manutenção" });
+  await mov("DESCARTE", 4, "QUEBRADOS", "DESCARTE", dias(1), { observacao: "Pallets irrecuperáveis - madeira podre" });
 
   console.log("[demo] Dados de demonstração criados.");
 }

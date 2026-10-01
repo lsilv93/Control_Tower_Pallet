@@ -59,15 +59,15 @@ export const numeroAgenda = (n: number) => `AG-${String(n).padStart(5, "0")}`;
 export const formatarNumero = (n: number) => new Intl.NumberFormat("pt-BR").format(n);
 
 export const rotuloTipo: Record<TipoMovimentacao, string> = {
-  ENVIO_CD: "Envio para CD",
-  RECEBIMENTO_CD: "Recebimento do CD",
+  ENVIO_CD: "Transferência para o CD",
+  RECEBIMENTO_CD: "Retorno do CD",
   RECEBIMENTO_FORNECEDOR: "Recebimento de Fornecedor",
   DEVOLUCAO_FORNECEDOR: "Devolução ao Fornecedor",
   QUEBRA: "Quebra",
-  RECUPERADO: "Recuperado",
+  RECUPERADO: "Conserto / Reparo",
   DESCARTE: "Descarte",
-  AJUSTE_ENTRADA: "Ajuste de inventário (entrada)",
-  AJUSTE_SAIDA: "Ajuste de inventário (saída)",
+  AJUSTE_ENTRADA: "Ajuste manual (inclusão)",
+  AJUSTE_SAIDA: "Ajuste manual (remoção)",
   COMPRA: "Compra de pallets",
   ESTORNO_VALE: "Estorno de vale excluído",
 };
@@ -75,8 +75,8 @@ export const rotuloTipo: Record<TipoMovimentacao, string> = {
 export const rotuloStatusVale: Record<StatusVale, string> = {
   PENDENTE: "Pendente",
   AGENDADO: "Agendado",
-  FINALIZADO: "Finalizado",
-  CANCELADO: "Excluído",
+  FINALIZADO: "Baixado",
+  CANCELADO: "Cancelado",
 };
 
 export const rotuloMotivoCancelamento: Record<MotivoCancelamento, string> = {

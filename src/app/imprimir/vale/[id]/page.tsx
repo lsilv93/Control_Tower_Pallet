@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Scissors } from "lucide-react";
 import { ImpressaoAutomatica } from "@/components/ImpressaoAutomatica";
-import { requireUsuario } from "@/lib/auth";
+import { requireAlguma } from "@/lib/auth";
 import { codigo128Svg } from "@/lib/codigoBarras";
 import { EMISSOR } from "@/lib/emissor";
 import { prisma } from "@/lib/prisma";
@@ -37,7 +37,7 @@ function Via({ vale, via, barras }: { vale: Vale; via: string; barras: string })
       {vale.status === "CANCELADO" && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
           <span className="-rotate-[18deg] border-[3px] border-red-700 px-6 py-1 text-[44px] font-black tracking-[0.2em] text-red-700 opacity-40">
-            EXCLUÍDO
+            CANCELADO
           </span>
         </div>
       )}
@@ -109,7 +109,7 @@ export default async function ImprimirValePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ auto?: string }>;
 }) {
-  await requireUsuario();
+  await requireAlguma("vales", "entrada", "agendas", "excluir_vale");
   const [{ id }, { auto }] = await Promise.all([params, searchParams]);
   const vale = await buscar(id);
   if (!vale) notFound();
