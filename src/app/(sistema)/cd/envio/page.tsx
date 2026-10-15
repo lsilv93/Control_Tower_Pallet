@@ -1,7 +1,7 @@
-import { PaginaCD } from "@/components/PaginaCD";
+import { PaginaEnvio } from "@/components/PaginaEnvio";
 
-export const metadata = { title: "Envio para o CD" };
+export const metadata = { title: "Envio para CD" };
 
 export default function Page() {
-  return <PaginaCD modo="envio" />;
+  return <PaginaEnvio tipo="CD" />;
 }

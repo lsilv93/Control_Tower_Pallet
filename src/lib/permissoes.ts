@@ -3,7 +3,8 @@
 /** Permissões granulares por tela/funcionalidade, atribuíveis a operadores. */
 export const PERMISSOES = [
   { chave: "dashboard", rotulo: "Dashboard" },
-  { chave: "cd", rotulo: "Transferências do CD (envio e retorno)" },
+  { chave: "tv", rotulo: "Tela TV gerencial (Control Center)" },
+  { chave: "cd", rotulo: "Envio para CD / Ponto de Cross e conferência de retorno" },
   { chave: "entrada", rotulo: "Entrada de fornecedor (gerar vale-pallet)" },
   { chave: "vales", rotulo: "Vales pendentes e consulta / PDF de vales" },
   { chave: "agendas", rotulo: "Agendamento de retirada e baixa de pagamento" },
@@ -13,7 +14,7 @@ export const PERMISSOES = [
   { chave: "relatorios", rotulo: "Relatórios e exportação" },
   { chave: "auditoria", rotulo: "Auditoria (consulta e exportação)" },
   { chave: "cadastros", rotulo: "Cadastro de transportadoras e fornecedores" },
-  { chave: "cds", rotulo: "Cadastro de centros de distribuição" },
+  { chave: "cds", rotulo: "Cadastro de CDs e Pontos de Cross" },
 ] as const;
 
 export type Permissao = (typeof PERMISSOES)[number]["chave"];
@@ -37,12 +38,15 @@ export function tem(u: ComAcesso, p: Permissao): boolean {
   return ehAdmin(u) || !!u.permissoes?.includes(p);
 }
 
-/** Inclusão/remoção manual de saldo em qualquer estoque: exclusivo do MASTER. */
+/** Correção de inventário (incluir/remover em qualquer estoque): exclusiva do MASTER. */
 export const podeAjustarManual = (u: ComAcesso) => ehMaster(u);
+/** Inclusão manual de vazios e de saldo devedor: MASTER e ADMIN. */
+export const podeIncluirSaldo = (u: ComAcesso) => ehAdmin(u);
 
 /** Tela inicial de cada permissão (para quem não tem acesso ao Dashboard). */
 const ROTA_INICIAL: Record<Permissao, string> = {
   dashboard: "/",
+  tv: "/tv",
   cd: "/cd/envio",
   entrada: "/fornecedor/entrada",
   vales: "/vales/consulta",

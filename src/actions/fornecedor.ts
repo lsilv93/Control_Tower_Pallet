@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUsuario } from "@/lib/auth";
-import { exigir } from "./guarda";
+import { exigir, exigirGlobal } from "./guarda";
 import { auditar, comContaBloqueada, ErroNegocio, lancar } from "@/lib/conta";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
@@ -54,7 +54,7 @@ const schemaCadastro = z.object({
  */
 export async function cadastrarFornecedorRapido(_: Estado, form: FormData): Promise<Estado> {
   try {
-    const u = await exigir("entrada", "compras", "cadastros");
+    const u = await exigirGlobal("entrada", "compras", "cadastros");
     const d = schemaCadastro.parse(Object.fromEntries(form));
     const cnpj = normalizarCnpj(d.cnpj);
     if (await prisma.fornecedor.findUnique({ where: { cnpj } })) throw new ErroNegocio("Fornecedor já cadastrado.");
@@ -102,7 +102,7 @@ export async function identificarNfRecebimento(leitura: string): Promise<Identif
     if (existente) {
       return {
         ok: false,
-        erro: `Esta NF já foi recebida: ${numeroVale(existente.numero)} emitido em ${formatarDataHora(existente.criadoEm)} (${rotuloStatusVale[existente.status]}).`,
+        erro: `Esta NF já foi recebida: ${numeroVale(existente.numero, "FORNECEDOR")} emitido em ${formatarDataHora(existente.criadoEm)} (${rotuloStatusVale[existente.status]}).`,
       };
     }
     const f = await prisma.fornecedor.findUnique({ where: { cnpj: nfe.cnpj }, select: { nome: true, ativo: true } });
@@ -125,6 +125,7 @@ const operacionais = {
   placa: z.string().refine(placaValida, "Placa inválida (use ABC1234 ou ABC1D23)."),
   quantidade: z.coerce.number({ message: "Informe a quantidade." }).int("Quantidade deve ser inteira.").positive("Quantidade deve ser maior que zero."),
   conferente: z.string().trim().min(2, "Informe o conferente.").max(120),
+  motorista: z.string().trim().max(120).optional().transform((v) => v || null),
   observacao: z.string().trim().max(500).optional(),
 };
 
@@ -153,6 +154,8 @@ export async function registrarRecebimentoFornecedor(_: Estado, form: FormData):
       }
       const vale = await tx.valePallet.create({
         data: {
+          tipo: "FORNECEDOR",
+          cdId: usuario.cd.id,
           fornecedorId: fornecedor.id,
           transportadora: d.transportadora,
           placa: normalizarPlaca(d.placa),
@@ -161,6 +164,7 @@ export async function registrarRecebimentoFornecedor(_: Estado, form: FormData):
           chaveNfe: nfe?.chave ?? null,
           semNotaFiscal: !nfe,
           conferente: d.conferente,
+          motorista: d.motorista,
           quantidade: d.quantidade,
           observacao: d.observacao || null,
           criadoPorId: usuario.id,
@@ -171,6 +175,7 @@ export async function registrarRecebimentoFornecedor(_: Estado, form: FormData):
         entidade: "ValePallet",
         entidadeId: vale.id,
         usuarioId: usuario.id,
+        cdId: usuario.cd.id,
         observacao: nfe ? `NF ${nfe.numero} série ${nfe.serie}` : "Recebimento SEM NOTA FISCAL",
         quantidade: d.quantidade,
         detalhes: {
@@ -183,11 +188,13 @@ export async function registrarRecebimentoFornecedor(_: Estado, form: FormData):
           conferente: d.conferente,
         },
       });
-      // Regra vigente: o vale-pallet soma no Estoque do CD (contrapartida: Fornecedor).
+      // O vale de fornecedor sobe o saldo do CD com o fornecedor (Fornecedor → Carga);
+      // os vazios só mudam na baixa/pagamento.
       await lancar(tx, {
         tipo: "RECEBIMENTO_FORNECEDOR",
         quantidade: d.quantidade,
         usuarioId: usuario.id,
+        cdId: usuario.cd.id,
         fornecedorId: fornecedor.id,
         valeId: vale.id,
         observacao: `${rotulo} - ${d.transportadora} - ${normalizarPlaca(d.placa)}`,

@@ -3,7 +3,8 @@ import PDFDocument from "pdfkit";
 import bwipjs from "bwip-js/node";
 import { EMISSOR } from "./emissor";
 import { formatarDataHora } from "./datas";
-import { formatarCnpj, formatarNumero, formatarPlaca, numeroAgenda, numeroVale, rotuloMotivoCancelamento, rotuloNf, rotuloStatusVale } from "./formatos";
+import { documentoVale, INCLUDE_VALE_DOC, type DocumentoVale } from "./documentoVale";
+import { formatarNumero } from "./formatos";
 import { prisma } from "./prisma";
 
 // A4 em pontos (1 pt = 1/72 pol). Fontes padrão do PDF (WinAnsi): acentos OK; evitar "→".
@@ -51,18 +52,10 @@ function textoAjustado(doc: PDFKit.PDFDocument, texto: string, x: number, y: num
 type ValePdf = NonNullable<Awaited<ReturnType<typeof buscarVale>>>;
 
 function buscarVale(id: string) {
-  return prisma.valePallet.findUnique({
-    where: { id },
-    include: {
-      fornecedor: true,
-      criadoPor: { select: { login: true, nome: true } },
-      canceladoPor: { select: { login: true } },
-      agenda: true,
-    },
-  });
+  return prisma.valePallet.findUnique({ where: { id }, include: INCLUDE_VALE_DOC });
 }
 
-function via(doc: PDFKit.PDFDocument, vale: ValePdf, topo: number, nomeVia: string, barras: Buffer) {
+function via(doc: PDFKit.PDFDocument, vale: ValePdf, d: DocumentoVale, topo: number, nomeVia: string, barras: Buffer) {
   const x0 = 14 * MM;
   const largura = A4.w - 28 * MM;
   let y = topo + 8 * MM;
@@ -74,15 +67,16 @@ function via(doc: PDFKit.PDFDocument, vale: ValePdf, topo: number, nomeVia: stri
 
   // Cabeçalho: logotipo + emissor | código de barras + número
   logotipo(doc, x0, y);
-  doc.font("Helvetica-Bold").fontSize(7).fillColor(COR.cinza).text("REMETENTE (EMISSOR)", x0, y + 36);
+  doc.font("Helvetica-Bold").fontSize(7).fillColor(COR.cinza).text(`REMETENTE (EMISSOR) · CD ${vale.cd.codigo}`, x0, y + 36);
   const larguraEmissor = largura - 180;
   doc.font("Helvetica-Bold").fontSize(7.5).fillColor(COR.tinta).text(`${EMISSOR.razaoSocial} · CNPJ ${EMISSOR.cnpj}`, x0, y + 45, { width: larguraEmissor, lineBreak: false });
   textoAjustado(doc, `${EMISSOR.endereco}, ${EMISSOR.cidade}, CEP ${EMISSOR.cep}`, x0, y + 55, larguraEmissor, 7, "Helvetica");
 
-  const xd = x0 + largura - 165;
-  doc.font("Helvetica-Bold").fontSize(15).fillColor(COR.tinta).text("VALE-PALLET PBR", xd, y, { width: 165, align: "right" });
-  doc.image(barras, xd + 10, y + 20, { width: 155, height: 30 });
-  doc.font("Courier-Bold").fontSize(12).text(numeroVale(vale.numero), xd, y + 53, { width: 165, align: "right", characterSpacing: 2 });
+  const xd = x0 + largura - 175;
+  doc.fillColor(COR.tinta);
+  textoAjustado(doc, d.titulo, xd, y, 175, 15);
+  doc.image(barras, xd + 20, y + 20, { width: 155, height: 30 });
+  doc.font("Courier-Bold").fontSize(12).text(d.codigo, xd, y + 53, { width: 175, align: "right", characterSpacing: 2 });
   y += 70;
   doc.moveTo(x0, y).lineTo(x0 + largura, y).lineWidth(1.5).stroke();
   y += 8;
@@ -95,47 +89,29 @@ function via(doc: PDFKit.PDFDocument, vale: ValePdf, topo: number, nomeVia: stri
     textoAjustado(doc, valor, x + 5, yy + 13, w - 10, 9.5);
   };
   const c = largura / 4;
-  campo("Fornecedor", vale.fornecedor.nome, x0, c * 3, y);
-  campo("CNPJ", formatarCnpj(vale.fornecedor.cnpj), x0 + c * 3, c, y);
-  y += 26;
-  campo("Transportadora", vale.transportadora, x0, c * 2, y);
-  campo("Placa do veículo", formatarPlaca(vale.placa), x0 + c * 2, c, y);
-  campo("Nota fiscal", rotuloNf(vale), x0 + c * 3, c, y);
-  y += 26;
-  campo("Data/hora de emissão", formatarDataHora(vale.criadoEm), x0, c * 2, y);
-  campo("Emitido por", vale.criadoPor.login, x0 + c * 2, c, y);
-  campo("Status atual", rotuloStatusVale[vale.status], x0 + c * 3, c, y);
-  y += 26;
-  const situacao =
-    vale.status === "CANCELADO"
-      ? `Cancelado em ${formatarDataHora(vale.canceladoEm)} por ${vale.canceladoPor?.login ?? "-"} · ${vale.motivoCancelamento ? rotuloMotivoCancelamento[vale.motivoCancelamento] : ""}`
-      : vale.status === "FINALIZADO"
-        ? `Baixado em ${formatarDataHora(vale.finalizadoEm)}${vale.agenda ? ` · ${numeroAgenda(vale.agenda.numero)}` : ""}`
-        : vale.status === "AGENDADO" && vale.agenda
-          ? `Retirada agendada para ${formatarDataHora(vale.agenda.dataPrevista)} · ${numeroAgenda(vale.agenda.numero)}`
-          : "Pendente de devolução ao fornecedor";
-  campo("ID único do documento", `${numeroVale(vale.numero)} · ${vale.id}`, x0, c * 2, y);
-  campo("Situação", situacao, x0 + c * 2, c * 2, y);
-  y += 32;
+  for (const linha of d.linhas) {
+    let x = x0;
+    for (const cel of linha) {
+      campo(cel.rotulo, cel.valor, x, c * cel.colunas, y);
+      x += c * cel.colunas;
+    }
+    y += 26;
+  }
+  y += 6;
 
   // Quantidade e tipo
   doc.lineWidth(1.5).strokeColor(COR.tinta).rect(x0, y, largura, 30).stroke();
-  doc.font("Helvetica-Bold").fontSize(9).fillColor(COR.tinta).text("QUANTIDADE E TIPO DE PALLETS RECEBIDOS", x0 + 10, y + 6);
+  doc.font("Helvetica-Bold").fontSize(9).fillColor(COR.tinta).text(d.rotuloQuantidade.toUpperCase(), x0 + 10, y + 6);
   doc.font("Helvetica").fontSize(8).fillColor(COR.cinza).text("Pallet PBR (padrão 1,00 x 1,20 m)", x0 + 10, y + 17);
   doc.font("Helvetica-Bold").fontSize(20).fillColor(COR.tinta).text(formatarNumero(vale.quantidade), x0, y + 6, { width: largura - 12, align: "right" });
   y += 38;
 
-  // Destaque obrigatório quando o recebimento foi feito sem nota fiscal
-  if (vale.semNotaFiscal) {
+  // Destaque: recebimento sem nota fiscal ou ocorrência de divergência física
+  if (d.destaque) {
     doc.lineWidth(2).strokeColor(COR.tinta).rect(x0, y, largura, 24).stroke();
-    doc.font("Helvetica-Bold").fontSize(8.5).fillColor(COR.tinta).text(
-      'ATENÇÃO: OPERAÇÃO REALIZADA NA OPÇÃO "SEM NOTA FISCAL"',
-      x0 + 8, y + 4.5, { width: largura - 16, lineBreak: false },
-    );
-    doc.font("Helvetica").fontSize(7).fillColor(COR.tinta).text(
-      "Recebimento registrado sem documento fiscal vinculado. Conferir a origem dos pallets antes da devolução.",
-      x0 + 8, y + 14, { width: largura - 16, lineBreak: false },
-    );
+    doc.fillColor(COR.tinta);
+    textoAjustado(doc, d.destaque.titulo, x0 + 8, y + 4.5, largura - 16, 8.5);
+    textoAjustado(doc, d.destaque.texto, x0 + 8, y + 14, largura - 16, 7, "Helvetica");
     y += 30;
   }
   if (vale.observacao) {
@@ -143,10 +119,7 @@ function via(doc: PDFKit.PDFDocument, vale: ValePdf, topo: number, nomeVia: stri
     textoAjustado(doc, `Observações: ${vale.observacao}`, x0, y, largura, 7.5, "Helvetica");
     y += 12;
   }
-  doc.font("Helvetica").fontSize(6.8).fillColor(COR.cinza).text(
-    "Declaramos o recebimento da quantidade de pallets PBR acima, registrada como crédito do fornecedor, a ser devolvida mediante agenda de retirada. Apresente este vale no momento da retirada.",
-    x0, y, { width: largura },
-  );
+  doc.font("Helvetica").fontSize(6.8).fillColor(COR.cinza).text(d.declaracao, x0, y, { width: largura });
 
   // Assinaturas
   const ya = topo + A4.h / 2 - 18 * MM;
@@ -154,15 +127,15 @@ function via(doc: PDFKit.PDFDocument, vale: ValePdf, topo: number, nomeVia: stri
   doc.lineWidth(0.8).strokeColor(COR.tinta);
   doc.moveTo(x0, ya).lineTo(x0 + wa, ya).stroke();
   doc.moveTo(x0 + wa + 40, ya).lineTo(x0 + largura, ya).stroke();
-  if (vale.conferente) {
+  if (d.nomeAssinatura) {
     doc.fillColor(COR.tinta);
-    const nome = vale.conferente;
+    const nome = d.nomeAssinatura;
     doc.font("Helvetica-Bold").fontSize(8);
     doc.text(nome, x0, ya - 12, { width: wa, align: "center", lineBreak: false });
   }
   doc.font("Helvetica").fontSize(7.5).fillColor(COR.tinta);
-  doc.text("Conferente / Recebedor", x0, ya + 4, { width: wa, align: "center" });
-  doc.text("Motorista / Transportador", x0 + wa + 40, ya + 4, { width: wa, align: "center" });
+  doc.text(d.assinaturas[0], x0, ya + 4, { width: wa, align: "center" });
+  doc.text(d.assinaturas[1], x0 + wa + 40, ya + 4, { width: wa, align: "center" });
 
   if (vale.status === "CANCELADO") {
     doc.save().rotate(-18, { origin: [A4.w / 2, topo + A4.h / 4] });
@@ -171,25 +144,27 @@ function via(doc: PDFKit.PDFDocument, vale: ValePdf, topo: number, nomeVia: stri
   }
 }
 
-/** PDF do Vale-Pallet: A4 com duas vias (Martin Brower / Fornecedor) e linha de recorte. */
-export async function gerarPdfVale(id: string): Promise<{ arquivo: Buffer; nome: string } | null> {
+/** PDF do vale (qualquer tipo): A4 com duas vias e linha de recorte. Só vales do CD informado. */
+export async function gerarPdfVale(id: string, cdId: string): Promise<{ arquivo: Buffer; nome: string } | null> {
   const vale = await buscarVale(id);
-  if (!vale) return null;
-  const codigo = numeroVale(vale.numero);
+  if (!vale || vale.cdId !== cdId) return null;
+  const d = documentoVale(vale);
+  const codigo = d.codigo;
   const barras = await bwipjs.toBuffer({ bcid: "code128", text: codigo, scale: 4, height: 12, includetext: false, paddingwidth: 12, paddingheight: 2, backgroundcolor: "FFFFFF" });
 
-  const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `Vale-Pallet ${codigo}`, Author: EMISSOR.nomeFantasia } });
-  via(doc, vale, 0, "Via Martin Brower", barras);
+  const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `${d.titulo} ${codigo}`, Author: EMISSOR.nomeFantasia } });
+  via(doc, vale, d, 0, d.vias[0], barras);
   // linha de recorte
   doc.save().dash(4, { space: 4 }).lineWidth(0.6).strokeColor(COR.linha).moveTo(0, A4.h / 2).lineTo(A4.w, A4.h / 2).stroke().restore();
   doc.font("Helvetica").fontSize(6.5).fillColor(COR.cinza).text("recorte aqui", 0, A4.h / 2 - 3.5, { width: A4.w, align: "center" });
-  via(doc, vale, A4.h / 2, "Via Fornecedor", barras);
+  via(doc, vale, d, A4.h / 2, d.vias[1], barras);
   return { arquivo: await paraBuffer(doc), nome: `${codigo}.pdf` };
 }
 
 export type LinhaAuditoriaPdf = {
   dataHora: string;
   usuario: string;
+  cd: string;
   acao: string;
   origem: string;
   destino: string;
@@ -204,11 +179,12 @@ export async function gerarPdfAuditoria(linhas: LinhaAuditoriaPdf[], filtros: st
   const colunas: { k: keyof LinhaAuditoriaPdf; t: string; w: number; a?: "right" }[] = [
     { k: "dataHora", t: "Data/Hora", w: 0.12 },
     { k: "usuario", t: "Usuário", w: 0.08 },
-    { k: "acao", t: "Tipo de ação", w: 0.18 },
-    { k: "origem", t: "Estoque origem", w: 0.12 },
-    { k: "destino", t: "Estoque destino", w: 0.12 },
-    { k: "quantidade", t: "Qtd.", w: 0.06, a: "right" },
-    { k: "observacao", t: "Observação / justificativa", w: 0.32 },
+    { k: "cd", t: "CD", w: 0.06 },
+    { k: "acao", t: "Tipo de ação", w: 0.17 },
+    { k: "origem", t: "Origem", w: 0.11 },
+    { k: "destino", t: "Destino", w: 0.11 },
+    { k: "quantidade", t: "Qtd.", w: 0.05, a: "right" },
+    { k: "observacao", t: "Observação / justificativa", w: 0.30 },
   ];
 
   const cabecalho = () => {
@@ -227,7 +203,7 @@ export async function gerarPdfAuditoria(linhas: LinhaAuditoriaPdf[], filtros: st
 
   let y = cabecalho();
   linhas.forEach((l, i) => {
-    const obsAltura = doc.font("Helvetica").fontSize(7.5).heightOfString(l.observacao || "-", { width: 0.32 * W - 8 });
+    const obsAltura = doc.font("Helvetica").fontSize(7.5).heightOfString(l.observacao || "-", { width: 0.30 * W - 8 });
     const h = Math.max(14, obsAltura + 6);
     if (y + h > doc.page.height - 36) {
       doc.addPage();

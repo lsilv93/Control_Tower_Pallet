@@ -1,4 +1,4 @@
-import type { MotivoCancelamento, StatusAgenda, StatusVale, TipoMovimentacao } from "@prisma/client";
+import type { MotivoCancelamento, StatusAgenda, StatusVale, TipoMovimentacao, TipoUnidade, TipoVale } from "@prisma/client";
 
 export const somenteDigitos = (v: string) => v.replace(/\D/g, "");
 
@@ -44,32 +44,58 @@ export function formatarPlaca(placa: string): string {
   return /^[A-Z]{3}\d{4}$/.test(p) ? `${p.slice(0, 3)}-${p.slice(3)}` : p;
 }
 
-export const numeroVale = (n: number) => `VP-${String(n).padStart(6, "0")}`;
+/** Prefixo do número do vale por tipo (numeração única para todos os tipos). */
+export const PREFIXO_VALE: Record<TipoVale, string> = { FORNECEDOR: "VP", ENVIO: "VE", OCORRENCIA: "VO", AJUSTE: "VA" };
+
+/** Número do vale: VP-000123 (fornecedor), VE- (envio), VO- (ocorrência), VA- (ajuste). */
+export const numeroVale = (n: number, tipo: TipoVale = "FORNECEDOR") => `${PREFIXO_VALE[tipo]}-${String(n).padStart(6, "0")}`;
 
 /**
- * Lê o conteúdo do código de barras do vale ("VP-000123", "VP000123",
- * "vp 123" ou só "123") e devolve o número do vale.
+ * Lê o conteúdo do código de barras do vale ("VP-000123", "VE000123",
+ * "vo 123" ou só "123") e devolve o número do vale.
  */
 export function lerCodigoVale(codigo: string): number | null {
-  const m = codigo.trim().toUpperCase().match(/^(?:VP[\s-]*)?0*(\d{1,9})$/);
+  const m = codigo.trim().toUpperCase().match(/^(?:V[PEOA][\s-]*)?0*(\d{1,9})$/);
   return m ? Number(m[1]) : null;
 }
+
+export const numeroRetorno = (n: number) => `RC-${String(n).padStart(5, "0")}`;
+
+export const rotuloTipoVale: Record<TipoVale, string> = {
+  FORNECEDOR: "Vale-Pallet de Fornecedor",
+  ENVIO: "Vale-Pallet de Envio",
+  OCORRENCIA: "Vale-Ocorrência (falta)",
+  AJUSTE: "Vale de Ajuste de Saldo Devedor",
+};
+
+export const rotuloTipoUnidade: Record<TipoUnidade, string> = { CD: "CD", CROSS: "Ponto de Cross" };
+
+/** Motivos da inclusão manual de vazios (administrador). */
+export const MOTIVOS_INCLUSAO = { COMPRA: "Compra", ESTORNO: "Estorno", DEVOLUCAO: "Devolução" } as const;
+export type MotivoInclusao = keyof typeof MOTIVOS_INCLUSAO;
 export const numeroAgenda = (n: number) => `AG-${String(n).padStart(5, "0")}`;
 
 export const formatarNumero = (n: number) => new Intl.NumberFormat("pt-BR").format(n);
 
 export const rotuloTipo: Record<TipoMovimentacao, string> = {
-  ENVIO_CD: "Transferência para o CD",
-  RECEBIMENTO_CD: "Retorno do CD",
+  ENVIO_CD: "Transferência para o CD (legado)",
+  RECEBIMENTO_CD: "Retorno do CD (legado)",
   RECEBIMENTO_FORNECEDOR: "Recebimento de Fornecedor",
-  DEVOLUCAO_FORNECEDOR: "Devolução ao Fornecedor",
+  DEVOLUCAO_FORNECEDOR: "Baixa / pagamento ao Fornecedor",
   QUEBRA: "Quebra",
   RECUPERADO: "Conserto / Reparo",
   DESCARTE: "Descarte",
-  AJUSTE_ENTRADA: "Ajuste manual (inclusão)",
-  AJUSTE_SAIDA: "Ajuste manual (remoção)",
+  AJUSTE_ENTRADA: "Correção de inventário (inclusão)",
+  AJUSTE_SAIDA: "Correção de inventário (remoção)",
   COMPRA: "Compra de pallets",
-  ESTORNO_VALE: "Estorno de vale excluído",
+  ESTORNO_VALE: "Estorno de vale de fornecedor",
+  ENVIO_UNIDADE: "Envio para CD / Cross",
+  RETORNO_UNIDADE: "Retorno de CD / Cross",
+  ESTORNO_ENVIO: "Estorno de vale de envio",
+  INCLUSAO_VAZIOS: "Inclusão manual de vazios",
+  INCLUSAO_DEVEDOR: "Inclusão manual de saldo devedor",
+  CANIBALIZACAO: "Pallets utilizados no reparo",
+  MIGRACAO_CUSTODIA: "Saldo devedor migrado",
 };
 
 export const rotuloStatusVale: Record<StatusVale, string> = {
@@ -84,6 +110,8 @@ export const rotuloMotivoCancelamento: Record<MotivoCancelamento, string> = {
   TRANSPORTADORA_INCORRETA: "Transportadora Incorreta",
   QUANTIDADE_INCORRETA: "Quantidade Incorreta",
   DOCUMENTO_ERRADO: "Documento Errado",
+  DESTINO_INCORRETO: "CD / Cross de destino incorreto",
+  DIVERGENCIA_ABONADA: "Divergência abonada",
 };
 
 export const rotuloStatusAgenda: Record<StatusAgenda, string> = {
@@ -98,4 +126,14 @@ export const SEM_NOTA_FISCAL = "SEM NOTA FISCAL";
 export function rotuloNf(v: { semNotaFiscal: boolean; notaFiscal: string | null; serieNf?: string | null }): string {
   if (v.semNotaFiscal || !v.notaFiscal) return SEM_NOTA_FISCAL;
   return v.serieNf ? `${v.notaFiscal} (série ${v.serieNf})` : v.notaFiscal;
+}
+
+/** Contraparte do vale: fornecedor (vale de fornecedor) ou CD / Ponto de Cross (demais tipos). */
+export function parteVale(v: {
+  fornecedor?: { nome: string } | null;
+  unidade?: { codigo: string; nome: string } | null;
+}): string {
+  if (v.fornecedor) return v.fornecedor.nome;
+  if (v.unidade) return `${v.unidade.codigo} - ${v.unidade.nome}`;
+  return "—";
 }

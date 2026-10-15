@@ -3,6 +3,8 @@ import { SignJWT } from "jose/jwt/sign";
 import { jwtVerify } from "jose/jwt/verify";
 
 export const SESSION_COOKIE = "ctp_session";
+/** CD de operação escolhido no modal (validado no servidor a cada requisição). */
+export const CD_COOKIE = "ctp_cd";
 export const SESSION_MAX_AGE = 60 * 60 * 12; // 12 horas (um turno)
 
 export type SessionPayload = {

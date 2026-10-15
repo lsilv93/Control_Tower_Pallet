@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { obterSaldos } from "@/lib/conta";
 import { formatarDataHora } from "@/lib/datas";
 import { lerFiltros } from "@/lib/filtros";
-import { formatarNumero, numeroAgenda, numeroVale, rotuloTipo } from "@/lib/formatos";
+import { formatarNumero, numeroAgenda, numeroRetorno, numeroVale, rotuloTipo } from "@/lib/formatos";
 
 export const metadata = { title: "Relatórios" };
 
@@ -18,26 +18,26 @@ export default async function RelatoriosPage({
 }: {
   searchParams: Promise<{ de?: string; ate?: string; tipo?: string }>;
 }) {
-  await requirePermissao("relatorios");
-  const { de, ate, tipo, periodo, where } = lerFiltros(await searchParams);
+  const u = await requirePermissao("relatorios");
+  const { de, ate, tipo, periodo, where } = lerFiltros(await searchParams, u.cd.id);
   const [movs, total, porTipo, saldos, fluxoPeriodo] = await Promise.all([
     prisma.movimentacao.findMany({
       where,
-      include: { usuario: true, cd: true, fornecedor: true, vale: true, agenda: true },
+      include: { usuario: true, unidade: true, fornecedor: true, vale: true, agenda: true, retorno: true },
       orderBy: { criadoEm: "desc" },
       take: LIMITE,
     }),
     prisma.movimentacao.count({ where }),
     prisma.movimentacao.groupBy({ by: ["tipo"], where, _sum: { quantidade: true }, _count: { _all: true } }),
-    obterSaldos(),
-    fluxo({ inicio: periodo.gte, fim: periodo.lt }),
+    obterSaldos(u.cd.id),
+    fluxo(u.cd.id, { inicio: periodo.gte, fim: periodo.lt }),
   ]);
   const qs = new URLSearchParams({ de, ate, ...(tipo ? { tipo } : {}) }).toString();
   const liquido = fluxoPeriodo.entradas - fluxoPeriodo.saidas;
 
   return (
     <>
-      <Cabecalho titulo="Relatórios" descricao="Consulta e exportação de todas as movimentações, vales, agendas e trilha de auditoria.">
+      <Cabecalho titulo="Relatórios" descricao={`Consulta e exportação das movimentações, vales, conferências e agendas de ${u.cd.codigo}.`}>
         <a href={`/api/exportar?${qs}`} className="btn-success">
           <Download className="h-4 w-4" /> Exportar Excel (.xlsx)
         </a>
@@ -69,8 +69,8 @@ export default async function RelatoriosPage({
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Indicador titulo="Estoque de Vazios (atual)" valor={formatarNumero(saldos.vazios)} />
-        <Indicador titulo="Estoque do CD (atual)" valor={formatarNumero(saldos.cd)} cor="neutro" />
         <Indicador titulo="Estoque de Quebrados (atual)" valor={formatarNumero(saldos.quebrados)} cor="ouro" />
+        <Indicador titulo="Saldo devedor CDs/Cross (atual)" valor={formatarNumero(saldos.devedor)} detalhe={`fornecedores: ${formatarNumero(saldos.fornecedores)} pendentes`} cor="neutro" />
         <Indicador
           titulo="Variação líquida no período"
           valor={liquido > 0 ? `+${liquido}` : liquido}
@@ -109,7 +109,7 @@ export default async function RelatoriosPage({
               <thead className="sticky top-0">
                 <tr>
                   <th>Data/Hora</th><th>Tipo</th><th>Origem → Destino</th><th className="text-right">Qtd.</th>
-                  <th>CD / Fornecedor</th><th>Documento</th><th>Usuário</th><th>Observação</th>
+                  <th>CD/Cross · Fornecedor</th><th>Documento</th><th>Usuário</th><th>Observação</th>
                 </tr>
               </thead>
               <tbody>
@@ -119,9 +119,9 @@ export default async function RelatoriosPage({
                     <td>{rotuloTipo[m.tipo]}</td>
                     <td><Fluxo origem={m.origem} destino={m.destino} /></td>
                     <td className="text-right font-semibold tabular-nums text-t1">{m.quantidade}</td>
-                    <td>{m.cd ? `${m.cd.codigo} - ${m.cd.nome}` : m.fornecedor?.nome ?? "—"}</td>
+                    <td>{m.unidade ? `${m.unidade.codigo} - ${m.unidade.nome}` : m.fornecedor?.nome ?? "—"}</td>
                     <td className="font-mono text-[11px]">
-                      {[m.vale && numeroVale(m.vale.numero), m.agenda && numeroAgenda(m.agenda.numero)].filter(Boolean).join(" / ") || "—"}
+                      {[m.vale && numeroVale(m.vale.numero, m.vale.tipo), m.agenda && numeroAgenda(m.agenda.numero), m.retorno && numeroRetorno(m.retorno.numero)].filter(Boolean).join(" / ") || "—"}
                     </td>
                     <td>{m.usuario.login}</td>
                     <td className="max-w-xs truncate text-t3" title={m.observacao ?? ""}>{m.observacao ?? "—"}</td>

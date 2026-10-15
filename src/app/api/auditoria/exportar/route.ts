@@ -5,7 +5,7 @@ import { lerFiltrosAuditoria, rotuloAcao } from "@/lib/auditoria";
 import { auditar, ROTULO_CONTA } from "@/lib/conta";
 import { formatarDataHora } from "@/lib/datas";
 import { gerarPdfAuditoria, type LinhaAuditoriaPdf } from "@/lib/pdf";
-import { tem } from "@/lib/permissoes";
+import { ehAdmin, tem } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -21,18 +21,23 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams;
   const formato = sp.get("formato") === "pdf" ? "pdf" : "xlsx";
-  const { filtros, where, descricao } = lerFiltrosAuditoria({ de: sp.get("de"), ate: sp.get("ate"), usuario: sp.get("usuario"), acao: sp.get("acao") });
+  const { filtros, where, descricao } = lerFiltrosAuditoria(
+    { de: sp.get("de"), ate: sp.get("ate"), usuario: sp.get("usuario"), acao: sp.get("acao"), cd: sp.get("cd") },
+    { cd: usuario.cd, cds: usuario.cds, admin: ehAdmin(usuario) },
+  );
+  if (!filtros.cd) return NextResponse.json({ erro: "Selecione o CD de operação" }, { status: 409 });
 
   try {
     const registros = await prisma.auditoria.findMany({
       where,
-      include: { usuario: { select: { login: true } } },
+      include: { usuario: { select: { login: true } }, cd: { select: { codigo: true } } },
       orderBy: { criadoEm: "asc" },
       take: MAXIMO,
     });
     const linhas: LinhaAuditoriaPdf[] = registros.map((r) => ({
       dataHora: formatarDataHora(r.criadoEm),
       usuario: r.usuario?.login ?? "",
+      cd: r.cd?.codigo ?? "",
       acao: rotuloAcao(r.acao),
       origem: r.origem ? ROTULO_CONTA[r.origem] : "",
       destino: r.destino ? ROTULO_CONTA[r.destino] : "",
@@ -40,7 +45,13 @@ export async function GET(req: NextRequest) {
       observacao: r.observacao ?? (r.detalhes ? JSON.stringify(r.detalhes) : ""),
     }));
     // A própria exportação também fica registrada (após a leitura, para não entrar no arquivo).
-    await auditar(prisma, { acao: "EXPORTAR_AUDITORIA", entidade: "Auditoria", usuarioId: usuario.id, detalhes: { ...filtros, formato, registros: linhas.length } });
+    await auditar(prisma, {
+      acao: "EXPORTAR_AUDITORIA",
+      entidade: "Auditoria",
+      usuarioId: usuario.id,
+      cdId: usuario.cd?.id ?? null,
+      detalhes: { ...filtros, formato, registros: linhas.length },
+    });
     const nome = `auditoria_${filtros.de}_a_${filtros.ate}`;
 
     if (formato === "pdf") {
@@ -56,6 +67,7 @@ export async function GET(req: NextRequest) {
     ws.columns = [
       { header: "Data/Hora", key: "dataHora", width: 20 },
       { header: "Usuário", key: "usuario", width: 14 },
+      { header: "CD da operação", key: "cd", width: 14 },
       { header: "Tipo de ação", key: "acao", width: 38 },
       { header: "Estoque origem", key: "origem", width: 22 },
       { header: "Estoque destino", key: "destino", width: 22 },
@@ -65,7 +77,7 @@ export async function GET(req: NextRequest) {
     ws.addRows(linhas.map((l) => ({ ...l, quantidade: l.quantidade ? Number(l.quantidade) : "" })));
     ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
     ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0A1B29" } };
-    if (linhas.length) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 7 } };
+    if (linhas.length) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 8 } };
     const buf = await wb.xlsx.writeBuffer();
     return new NextResponse(new Uint8Array(buf as ArrayBuffer), {
       headers: {

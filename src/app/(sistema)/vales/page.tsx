@@ -11,9 +11,9 @@ import { formatarCnpj, formatarPlaca, normalizarCnpj, numeroAgenda, numeroVale, 
 export const metadata = { title: "Vales Pendentes" };
 
 export default async function ValesPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
-  await requirePermissao("agendas");
+  const u = await requirePermissao("agendas");
   const { q = "", status = "" } = await searchParams;
-  const vales = await valesEmAberto({
+  const vales = await valesEmAberto(u.cd.id, {
     ...(status === "PENDENTE" || status === "AGENDADO" ? { status } : {}),
     ...(q
       ? {
@@ -21,7 +21,7 @@ export default async function ValesPage({ searchParams }: { searchParams: Promis
             { fornecedor: { nome: { contains: q, mode: "insensitive" } } },
             { fornecedor: { cnpj: { contains: normalizarCnpj(q) || q } } },
             { notaFiscal: { contains: q, mode: "insensitive" } },
-            ...(/^\d+$/.test(q.replace(/^VP-?/i, "")) ? [{ numero: Number(q.replace(/^VP-?/i, "")) }] : []),
+            ...(/^\d+$/.test(q.replace(/^V[PEOA]-?/i, "")) ? [{ numero: Number(q.replace(/^V[PEOA]-?/i, "")) }] : []),
           ],
         }
       : {}),
@@ -30,12 +30,12 @@ export default async function ValesPage({ searchParams }: { searchParams: Promis
   const linhas: LinhaVale[] = vales.map((v) => ({
     id: v.id,
     num: v.numero,
-    numero: numeroVale(v.numero),
-    fornecedor: v.fornecedor.nome,
-    cnpj: formatarCnpj(v.fornecedor.cnpj),
+    numero: numeroVale(v.numero, v.tipo),
+    fornecedor: v.fornecedor?.nome ?? "—",
+    cnpj: v.fornecedor ? formatarCnpj(v.fornecedor.cnpj) : "",
     notaFiscal: rotuloNf(v),
-    transportadora: v.transportadora,
-    placa: formatarPlaca(v.placa),
+    transportadora: v.transportadora ?? "—",
+    placa: v.placa ? formatarPlaca(v.placa) : "—",
     emissao: formatarData(v.criadoEm),
     usuario: v.criadoPor.login,
     quantidade: v.quantidade,
@@ -50,7 +50,7 @@ export default async function ValesPage({ searchParams }: { searchParams: Promis
     <>
       <Cabecalho
         titulo="Agendar Retirada"
-        descricao="Vales-pallet em aberto. Selecione vales pendentes para gerar a agenda de devolução (uma agenda por fornecedor)."
+        descricao={`Vales-pallet de fornecedor em aberto em ${u.cd.codigo}. Selecione vales pendentes para gerar a agenda de devolução (uma agenda por fornecedor).`}
       >
         <Link href="/fornecedor/entrada" className="btn-secondary">
           <PackagePlus className="h-4 w-4" /> Nova entrada

@@ -5,10 +5,16 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import clsx from "clsx";
 import {
-  ArrowDownToLine,
   ArrowUpFromLine,
   Boxes,
   Building2,
+  ClipboardCheck,
+  Lock,
+  MonitorPlay,
+  Network,
+  PackageCheck,
+  Repeat,
+  Scale,
   CalendarCheck,
   ClipboardList,
   Factory,
@@ -37,12 +43,19 @@ import { BotaoTema, type Tema } from "./BotaoTema";
 type Item = { href: string; rotulo: string; icone: typeof Boxes; permissao?: Permissao; somente?: "admin" | "master" };
 
 const grupos: { titulo: string; itens: Item[] }[] = [
-  { titulo: "", itens: [{ href: "/", rotulo: "Dashboard", icone: LayoutDashboard, permissao: "dashboard" }] },
   {
-    titulo: "Centro de Distribuição",
+    titulo: "",
     itens: [
-      { href: "/cd/envio", rotulo: "Transferência para o CD", icone: ArrowUpFromLine, permissao: "cd" },
-      { href: "/cd/recebimento", rotulo: "Retorno do CD", icone: ArrowDownToLine, permissao: "cd" },
+      { href: "/", rotulo: "Dashboard", icone: LayoutDashboard, permissao: "dashboard" },
+      { href: "/tv", rotulo: "Tela TV (Control Center)", icone: MonitorPlay, permissao: "tv" },
+    ],
+  },
+  {
+    titulo: "CDs & Pontos de Cross",
+    itens: [
+      { href: "/cd/envio", rotulo: "Envio para CD", icone: ArrowUpFromLine, permissao: "cd" },
+      { href: "/cross/envio", rotulo: "Envio para Ponto de Cross", icone: Network, permissao: "cd" },
+      { href: "/retorno", rotulo: "Retorno / Conferência", icone: ClipboardCheck, permissao: "cd" },
     ],
   },
   {
@@ -69,13 +82,16 @@ const grupos: { titulo: string; itens: Item[] }[] = [
       { href: "/cadastros/transportadoras", rotulo: "Transportadoras", icone: Truck, permissao: "cadastros" },
       { href: "/cadastros/fornecedores", rotulo: "Fornecedores", icone: Factory, permissao: "cadastros" },
       { href: "/cadastros/cds", rotulo: "Centros de Distribuição", icone: Building2, permissao: "cds" },
+      { href: "/cadastros/cross", rotulo: "Pontos de Cross", icone: Network, permissao: "cds" },
       { href: "/cadastros/usuarios", rotulo: "Usuários e Permissões", icone: Users, somente: "admin" },
     ],
   },
   {
     titulo: "Gestão",
     itens: [
-      { href: "/estoque/ajuste", rotulo: "Ajuste Manual (Master)", icone: SlidersHorizontal, somente: "master" },
+      { href: "/estoque/vazios", rotulo: "Inclusão de Vazios (Admin)", icone: PackageCheck, somente: "admin" },
+      { href: "/estoque/devedor", rotulo: "Saldo Devedor (Admin)", icone: Scale, somente: "admin" },
+      { href: "/estoque/ajuste", rotulo: "Correção de Inventário (Master)", icone: SlidersHorizontal, somente: "master" },
       { href: "/auditoria", rotulo: "Auditoria", icone: ShieldCheck, permissao: "auditoria" },
       { href: "/relatorios", rotulo: "Relatórios", icone: FileSpreadsheet, permissao: "relatorios" },
       { href: "/conta", rotulo: "Minha Senha", icone: KeyRound },
@@ -91,9 +107,13 @@ function visivel(i: Item, u: { perfil: Perfil; permissoes: string[] }) {
 
 export function Menu({
   usuario,
+  cd,
+  podeTrocarCD,
   tema,
 }: {
   usuario: { nome: string; login: string; perfil: Perfil; permissoes: string[] };
+  cd: { codigo: string; nome: string } | null;
+  podeTrocarCD: boolean;
   tema: Tema;
 }) {
   const pathname = usePathname();
@@ -108,7 +128,10 @@ export function Menu({
           <span className="fill-lima flex h-9 w-9 items-center justify-center rounded-2xl">
             <Boxes className="h-4 w-4" />
           </span>
-          Control Tower Pallet
+          <span className="flex flex-col leading-tight">
+            Control Tower Pallet
+            {cd && <span className="num text-[10px] font-medium text-lima">CD {cd.codigo}</span>}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <BotaoTema inicial={tema} />
@@ -140,6 +163,10 @@ export function Menu({
               <BotaoTema inicial={tema} />
               <BotaoSair />
             </div>
+          </div>
+
+          <div className="px-3 pb-3">
+            <CDAtivo cd={cd} podeTrocar={podeTrocarCD} onNavegar={() => setAberto(false)} />
           </div>
 
           {tem(usuario, "compras") && (
@@ -212,5 +239,34 @@ function BotaoSair() {
         <LogOut className="h-5 w-5" />
       </button>
     </form>
+  );
+}
+
+/** CD de operação da sessão: fixo (cadeado) quando o usuário tem um só CD; senão, botão Trocar CD. */
+function CDAtivo({ cd, podeTrocar, onNavegar }: { cd: { codigo: string; nome: string } | null; podeTrocar: boolean; onNavegar: () => void }) {
+  if (!cd) {
+    return (
+      <Link href="/selecionar-cd" onClick={onNavegar} className="poco-erro flex items-center gap-2 px-4 py-3 text-[11px] font-semibold text-erro-claro">
+        <Building2 className="h-4 w-4" /> Nenhum CD de operação
+      </Link>
+    );
+  }
+  return (
+    <div className="poco flex items-center gap-3 px-4 py-3" data-testid="cd-ativo">
+      <Building2 className="h-4 w-4 flex-none text-lima" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] uppercase tracking-[0.12em] text-t4">CD de operação</p>
+        <p className="truncate text-[12px] font-semibold text-t1" title={cd.nome}>
+          <span className="num">{cd.codigo}</span> · {cd.nome}
+        </p>
+      </div>
+      {podeTrocar ? (
+        <Link href="/selecionar-cd?trocar=1" onClick={onNavegar} className="btn-icone !h-8 !w-8" title="Trocar CD" aria-label="Trocar CD">
+          <Repeat className="h-4 w-4" />
+        </Link>
+      ) : (
+        <span title="Seu usuário opera somente neste CD" aria-label="CD fixo"><Lock className="h-3.5 w-3.5 text-t4" /></span>
+      )}
+    </div>
   );
 }

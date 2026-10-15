@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatarDataHora } from "@/lib/datas";
-import { numeroVale, rotuloMotivoCancelamento } from "@/lib/formatos";
+import { numeroVale, parteVale, rotuloMotivoCancelamento } from "@/lib/formatos";
 import { Painel, Tabela, Vazio } from "./ui";
 
 /** Histórico analítico das exclusões de vale: ID, data/hora, usuário, motivo e observação. */
@@ -10,17 +10,23 @@ export async function HistoricoExclusoes({
   titulo = "Histórico de vales excluídos",
   inicio,
   fim,
+  cdId,
 }: {
+  cdId: string;
   limite?: number;
   titulo?: string;
   inicio?: Date;
   fim?: Date;
 }) {
-  const where = { status: "CANCELADO" as const, ...(inicio && fim ? { canceladoEm: { gte: inicio, lt: fim } } : {}) };
+  const where = { cdId, status: "CANCELADO" as const, ...(inicio && fim ? { canceladoEm: { gte: inicio, lt: fim } } : {}) };
   const [excluidos, total] = await Promise.all([
     prisma.valePallet.findMany({
       where,
-      include: { canceladoPor: { select: { login: true, nome: true } }, fornecedor: { select: { nome: true } } },
+      include: {
+        canceladoPor: { select: { login: true, nome: true } },
+        fornecedor: { select: { nome: true } },
+        unidade: { select: { codigo: true, nome: true } },
+      },
       orderBy: { canceladoEm: "desc" },
       take: limite,
     }),
@@ -57,10 +63,10 @@ export async function HistoricoExclusoes({
                 <tr key={v.id}>
                   <td>
                     <Link prefetch={false} href={`/imprimir/vale/${v.id}`} className="num font-semibold text-erro hover:underline">
-                      {numeroVale(v.numero)}
+                      {numeroVale(v.numero, v.tipo)}
                     </Link>
-                    <p className="max-w-[12rem] truncate text-[11px] text-t4" title={v.fornecedor.nome}>
-                      {v.fornecedor.nome} · {v.quantidade} pallet(s)
+                    <p className="max-w-[12rem] truncate text-[11px] text-t4" title={parteVale(v)}>
+                      {parteVale(v)} · {v.quantidade} pallet(s)
                     </p>
                   </td>
                   <td className="num">{formatarDataHora(v.canceladoEm)}</td>

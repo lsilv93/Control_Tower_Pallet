@@ -1,9 +1,10 @@
-import { registrarQuebra, registrarRecuperado } from "@/actions/avarias";
+import { registrarQuebra } from "@/actions/avarias";
 import { requirePermissao } from "@/lib/auth";
 import { obterSaldos } from "@/lib/conta";
 import { Fluxo, SaldosEstoques } from "./Contas";
 import { FormAcao } from "./FormAcao";
 import { FormDescarte } from "./FormDescarte";
+import { FormReparo } from "./FormReparo";
 import { UltimasMovimentacoes } from "./UltimasMovimentacoes";
 import { Abas, Cabecalho, Painel } from "./ui";
 
@@ -15,7 +16,7 @@ const config = {
   },
   recuperados: {
     titulo: "Conserto / Reparo de Pallets",
-    descricao: "Origem: Estoque de Quebrados (subtrai) → Destino: Estoque de Vazios (soma).",
+    descricao: "Recuperados: Quebrados → Vazios. Pallets quebrados desmontados para o reparo: Quebrados → Descartados. A soma nunca ultrapassa o saldo de quebrados.",
     tipo: "RECUPERADO",
   },
   descarte: {
@@ -26,13 +27,13 @@ const config = {
 } as const;
 
 export async function PaginaAvaria({ modo }: { modo: keyof typeof config }) {
-  await requirePermissao("avarias");
+  const u = await requirePermissao("avarias");
   const c = config[modo];
-  const saldos = await obterSaldos();
+  const saldos = await obterSaldos(u.cd.id);
 
   return (
     <>
-      <Cabecalho titulo={c.titulo} descricao={c.descricao} />
+      <Cabecalho titulo={c.titulo} descricao={`${c.descricao} · CD ${u.cd.codigo}`} />
       <Abas
         ativo={`/avarias/${modo}`}
         itens={[
@@ -41,7 +42,7 @@ export async function PaginaAvaria({ modo }: { modo: keyof typeof config }) {
           { href: "/avarias/descarte", rotulo: "Descarte" },
         ]}
       />
-      <SaldosEstoques destaque={["VAZIOS", "QUEBRADOS"]} />
+      <SaldosEstoques cdId={u.cd.id} destaque={["VAZIOS", "QUEBRADOS"]} />
       <div className="grid gap-6 lg:grid-cols-3">
         <Painel titulo="Novo lançamento">
           <p className="mb-4">
@@ -51,35 +52,23 @@ export async function PaginaAvaria({ modo }: { modo: keyof typeof config }) {
           </p>
           {modo === "descarte" ? (
             <FormDescarte saldoVazios={saldos.vazios} saldoQuebrados={saldos.quebrados} />
+          ) : modo === "recuperados" ? (
+            <FormReparo saldoQuebrados={saldos.quebrados} />
           ) : (
-            <FormAcao
-              acao={modo === "quebras" ? registrarQuebra : registrarRecuperado}
-              botao={modo === "quebras" ? "Registrar quebra" : "Registrar conserto"}
-              classeBotao={modo === "quebras" ? "btn-danger w-full" : "btn-primary w-full"}
-            >
+            <FormAcao acao={registrarQuebra} botao="Registrar quebra" classeBotao="btn-danger w-full">
               <div>
                 <label className="label" htmlFor="quantidade">Quantidade de pallets *</label>
                 <input id="quantidade" name="quantidade" type="number" min={1} step={1} className="input" required />
               </div>
               <div>
-                <label className="label" htmlFor="observacao">
-                  {modo === "quebras" ? "Observação (motivo da quebra) *" : "Observação"}
-                </label>
-                <textarea
-                  id="observacao"
-                  name="observacao"
-                  rows={3}
-                  className="input"
-                  required={modo === "quebras"}
-                  minLength={modo === "quebras" ? 5 : undefined}
-                  maxLength={500}
-                />
+                <label className="label" htmlFor="observacao">Observação (motivo da quebra) *</label>
+                <textarea id="observacao" name="observacao" rows={3} className="input" required minLength={5} maxLength={500} />
               </div>
             </FormAcao>
           )}
         </Painel>
         <div className="lg:col-span-2">
-          <UltimasMovimentacoes tipos={[c.tipo]} titulo="Últimos lançamentos" />
+          <UltimasMovimentacoes cdId={u.cd.id} tipos={modo === "recuperados" ? ["RECUPERADO", "CANIBALIZACAO"] : modo === "descarte" ? ["DESCARTE", "CANIBALIZACAO"] : [c.tipo]} titulo="Últimos lançamentos" />
         </div>
       </div>
     </>

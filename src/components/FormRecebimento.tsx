@@ -216,7 +216,11 @@ export function FormRecebimento({ transportadoras, conferentePadrao }: { transpo
               title="Placa no formato ABC1234 ou ABC1D23"
             />
           </div>
-          <div className="md:col-span-2 xl:col-span-4">
+          <div>
+            <label className="label" htmlFor="motorista">Motorista</label>
+            <input id="motorista" name="motorista" className="input" maxLength={120} />
+          </div>
+          <div className="md:col-span-2 xl:col-span-3">
             <label className="label" htmlFor="observacao">Observações</label>
             <textarea id="observacao" name="observacao" rows={2} className="input" maxLength={500} />
           </div>

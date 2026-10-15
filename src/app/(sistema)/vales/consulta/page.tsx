@@ -1,12 +1,12 @@
 import Link from "next/link";
-import type { Prisma, StatusVale } from "@prisma/client";
+import type { Prisma, StatusVale, TipoVale } from "@prisma/client";
 import { Search } from "lucide-react";
 import { BotoesVale } from "@/components/BotoesVale";
 import { Cabecalho, Painel, StatusBadge, Tabela, Vazio } from "@/components/ui";
 import { requirePermissao } from "@/lib/auth";
 import { fimDoDia, formatarDataHora, inicioDoDia } from "@/lib/datas";
 import { rotuloNf } from "@/lib/formatos";
-import { formatarCnpj, formatarNumero, lerCodigoVale, numeroVale, rotuloStatusVale } from "@/lib/formatos";
+import { formatarCnpj, formatarNumero, lerCodigoVale, numeroVale, rotuloStatusVale, rotuloTipoVale } from "@/lib/formatos";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Consulta de Vales" };
@@ -14,26 +14,32 @@ export const metadata = { title: "Consulta de Vales" };
 const LIMITE = 200;
 const reData = /^\d{4}-\d{2}-\d{2}$/;
 const STATUS: StatusVale[] = ["PENDENTE", "AGENDADO", "FINALIZADO", "CANCELADO"];
+const TIPOS: TipoVale[] = ["FORNECEDOR", "ENVIO", "OCORRENCIA", "AJUSTE"];
 
-type Busca = { numero?: string; fornecedor?: string; status?: string; de?: string; ate?: string };
+type Busca = { numero?: string; fornecedor?: string; unidade?: string; tipo?: string; status?: string; de?: string; ate?: string };
 
 export default async function ConsultaValesPage({ searchParams }: { searchParams: Promise<Busca> }) {
-  await requirePermissao("vales");
+  const u = await requirePermissao("vales");
   const f = await searchParams;
+  const tipo = TIPOS.includes(f.tipo as TipoVale) ? (f.tipo as TipoVale) : undefined;
   const numero = f.numero ? lerCodigoVale(f.numero) : null;
   const status = STATUS.includes(f.status as StatusVale) ? (f.status as StatusVale) : undefined;
   const de = f.de && reData.test(f.de) ? f.de : undefined;
   const ate = f.ate && reData.test(f.ate) ? f.ate : undefined;
 
   const where: Prisma.ValePalletWhereInput = {
+    cdId: u.cd.id,
     ...(numero !== null ? { numero } : {}),
+    ...(tipo ? { tipo } : {}),
     ...(f.fornecedor ? { fornecedorId: f.fornecedor } : {}),
+    ...(f.unidade ? { unidadeId: f.unidade } : {}),
     ...(status ? { status } : {}),
     ...(de || ate ? { criadoEm: { ...(de ? { gte: inicioDoDia(de) } : {}), ...(ate ? { lt: fimDoDia(ate) } : {}) } } : {}),
   };
-  const [fornecedores, vales, total, soma] = await Promise.all([
+  const [fornecedores, unidades, vales, total, soma] = await Promise.all([
     prisma.fornecedor.findMany({ select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
-    prisma.valePallet.findMany({ where, include: { fornecedor: true }, orderBy: { numero: "desc" }, take: LIMITE }),
+    prisma.centroDistribuicao.findMany({ where: { id: { not: u.cd.id } }, select: { id: true, codigo: true, nome: true, tipo: true }, orderBy: [{ tipo: "asc" }, { codigo: "asc" }] }),
+    prisma.valePallet.findMany({ where, include: { fornecedor: true, unidade: true }, orderBy: { numero: "desc" }, take: LIMITE }),
     prisma.valePallet.count({ where }),
     prisma.valePallet.aggregate({ where, _sum: { quantidade: true } }),
   ]);
@@ -41,13 +47,31 @@ export default async function ConsultaValesPage({ searchParams }: { searchParams
 
   return (
     <>
-      <Cabecalho titulo="Consulta de Vales-Pallet" descricao="Busque por número, fornecedor, status ou período de emissão. Cada vale pode ser baixado em PDF ou impresso." />
+      <Cabecalho titulo="Consulta de Vales-Pallet" descricao={`Vales emitidos por ${u.cd.codigo}: fornecedor (VP), envio (VE), ocorrência (VO) e ajuste (VA). Busque por número, tipo, fornecedor, CD/Cross, status ou período. Cada vale pode ser baixado em PDF ou impresso.`} />
 
       <Painel className="mb-6">
-        <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1.4fr_1fr_1fr_1fr_auto] xl:items-end" action="/vales/consulta">
+        <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:items-end" action="/vales/consulta">
           <div>
             <label className="label" htmlFor="numero">Número do vale</label>
             <input id="numero" name="numero" defaultValue={f.numero ?? ""} className="input num uppercase placeholder:normal-case" placeholder="VP-000123" autoComplete="off" />
+          </div>
+          <div>
+            <label className="label" htmlFor="tipo">Tipo</label>
+            <select id="tipo" name="tipo" defaultValue={tipo ?? ""} className="input">
+              <option value="">Todos</option>
+              {TIPOS.map((t) => (
+                <option key={t} value={t}>{rotuloTipoVale[t]}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="unidade">CD / Ponto de Cross</label>
+            <select id="unidade" name="unidade" defaultValue={f.unidade ?? ""} className="input">
+              <option value="">Todos</option>
+              {unidades.map((x) => (
+                <option key={x.id} value={x.id}>{x.tipo === "CROSS" ? "Cross" : "CD"} · {x.codigo} - {x.nome}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="label" htmlFor="fornecedor">Fornecedor</label>
@@ -93,21 +117,31 @@ export default async function ConsultaValesPage({ searchParams }: { searchParams
           <Tabela>
             <table className="tabela">
               <thead>
-                <tr><th>Vale</th><th>Emissão</th><th>Fornecedor</th><th>Transportadora</th><th className="text-right">Qtd.</th><th>Status</th><th className="text-right">Documento</th></tr>
+                <tr><th>Vale</th><th>Emissão</th><th>Fornecedor / Destino</th><th>Transportadora</th><th className="text-right">Qtd.</th><th>Status</th><th className="text-right">Documento</th></tr>
               </thead>
               <tbody>
                 {vales.map((v) => (
                   <tr key={v.id}>
                     <td>
-                      <Link href={`/vales/${v.id}`} className="num font-semibold text-lima hover:underline">{numeroVale(v.numero)}</Link>
-                      <p className={v.semNotaFiscal ? "text-[11px] font-semibold text-ouro" : "text-[11px] text-t4"}>{v.semNotaFiscal ? rotuloNf(v) : `NF ${rotuloNf(v)}`}</p>
+                      <Link href={`/vales/${v.id}`} className={`num font-semibold hover:underline ${v.tipo === "OCORRENCIA" ? "text-erro" : "text-lima"}`}>{numeroVale(v.numero, v.tipo)}</Link>
+                      {v.tipo === "FORNECEDOR" ? (
+                        <p className={v.semNotaFiscal ? "text-[11px] font-semibold text-ouro" : "text-[11px] text-t4"}>{v.semNotaFiscal ? rotuloNf(v) : `NF ${rotuloNf(v)}`}</p>
+                      ) : (
+                        <p className="text-[11px] text-t4">{rotuloTipoVale[v.tipo]}</p>
+                      )}
                     </td>
                     <td className="num">{formatarDataHora(v.criadoEm)}</td>
                     <td>
-                      <p className="max-w-[14rem] truncate font-medium text-t1" title={v.fornecedor.nome}>{v.fornecedor.nome}</p>
-                      <p className="num text-[11px] text-t4">{formatarCnpj(v.fornecedor.cnpj)}</p>
+                      {v.fornecedor ? (
+                        <>
+                          <p className="max-w-[14rem] truncate font-medium text-t1" title={v.fornecedor.nome}>{v.fornecedor.nome}</p>
+                          <p className="num text-[11px] text-t4">{formatarCnpj(v.fornecedor.cnpj)}</p>
+                        </>
+                      ) : (
+                        <p className="max-w-[14rem] truncate font-medium text-t1">{v.unidade ? `${v.unidade.tipo === "CROSS" ? "Cross" : "CD"} ${v.unidade.codigo} - ${v.unidade.nome}` : "—"}</p>
+                      )}
                     </td>
-                    <td className="max-w-[10rem] truncate">{v.transportadora}</td>
+                    <td className="max-w-[10rem] truncate">{v.transportadora ?? "—"}</td>
                     <td className="num text-right font-semibold text-t1">{v.quantidade}</td>
                     <td><StatusBadge status={v.status} rotulo={rotuloStatusVale[v.status]} /></td>
                     <td className="text-right"><BotoesVale id={v.id} compacto /></td>

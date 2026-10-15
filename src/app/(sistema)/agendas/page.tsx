@@ -15,28 +15,28 @@ import { formatarCnpj, formatarNumero, numeroAgenda, numeroVale, rotuloStatusAge
 export const metadata = { title: "Baixa de Pagamento" };
 
 export default async function AgendasPage({ searchParams }: { searchParams: Promise<{ ok?: string }> }) {
-  await requirePermissao("agendas");
+  const u = await requirePermissao("agendas");
   const { ok } = await searchParams;
   const [abertas, historico, saldos] = await Promise.all([
     prisma.agendaDevolucao.findMany({
-      where: { status: "ABERTA" },
+      where: { status: "ABERTA", cdId: u.cd.id },
       include: { fornecedor: true, vales: { orderBy: { numero: "asc" } }, criadoPor: true },
       orderBy: { dataPrevista: "asc" },
     }),
     prisma.agendaDevolucao.findMany({
-      where: { status: { not: "ABERTA" } },
+      where: { status: { not: "ABERTA" }, cdId: u.cd.id },
       include: { fornecedor: true, vales: { select: { quantidade: true } }, criadoPor: true, validadoPor: true },
       orderBy: { numero: "desc" },
       take: 20,
     }),
-    obterSaldos(),
+    obterSaldos(u.cd.id),
   ]);
 
   return (
     <>
       <Cabecalho
         titulo="Baixa de Pagamento"
-        descricao="Valide as agendas de devolução realizadas. A validação finaliza os vales e dá saída oficial dos pallets da conta corrente."
+        descricao={`Valide as agendas de devolução realizadas em ${u.cd.codigo}. A baixa finaliza os vales, subtrai do Estoque de Vazios e reduz a dívida com o fornecedor.`}
       >
         <Link href="/vales" className="btn-secondary">Gerar nova agenda</Link>
       </Cabecalho>

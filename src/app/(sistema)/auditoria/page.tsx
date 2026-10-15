@@ -6,18 +6,20 @@ import { requirePermissao } from "@/lib/auth";
 import { lerFiltrosAuditoria, rotuloAcao } from "@/lib/auditoria";
 import { formatarDataHora } from "@/lib/datas";
 import { formatarNumero } from "@/lib/formatos";
+import { ehAdmin } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Auditoria" };
 const LIMITE = 300;
 
-type Busca = { de?: string; ate?: string; usuario?: string; acao?: string };
+type Busca = { de?: string; ate?: string; usuario?: string; acao?: string; cd?: string };
 
 export default async function AuditoriaPage({ searchParams }: { searchParams: Promise<Busca> }) {
-  await requirePermissao("auditoria");
-  const { filtros, where, descricao } = lerFiltrosAuditoria(await searchParams);
+  const u = await requirePermissao("auditoria");
+  const admin = ehAdmin(u);
+  const { filtros, where, descricao } = lerFiltrosAuditoria(await searchParams, { cd: u.cd, cds: u.cds, admin });
   const [registros, total, usuarios, acoes, movimentado] = await Promise.all([
-    prisma.auditoria.findMany({ where, include: { usuario: { select: { login: true, nome: true } } }, orderBy: { criadoEm: "desc" }, take: LIMITE }),
+    prisma.auditoria.findMany({ where, include: { usuario: { select: { login: true, nome: true } }, cd: { select: { codigo: true } } }, orderBy: { criadoEm: "desc" }, take: LIMITE }),
     prisma.auditoria.count({ where }),
     prisma.usuario.findMany({ select: { id: true, login: true, nome: true }, orderBy: { login: "asc" } }),
     prisma.auditoria.groupBy({ by: ["acao"], orderBy: { acao: "asc" } }),
@@ -29,14 +31,23 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Pr
     <>
       <Cabecalho
         titulo="Auditoria"
-        descricao="Log imutável de todas as inclusões, edições, exclusões, transferências e ajustes manuais. Registros não podem ser alterados nem apagados (bloqueio no banco de dados)."
+        descricao="Log imutável de todas as movimentações, inclusões, baixas, cancelamentos e ajustes manuais, com data/hora, usuário, tipo de operação, CD, origem/destino, quantidade e observações. Registros não podem ser alterados nem apagados (bloqueio no banco de dados)."
       >
         <a href={`/api/auditoria/exportar?formato=xlsx&${qs}`} className="btn-primary"><FileSpreadsheet className="h-4 w-4" /> Exportar Excel</a>
         <a href={`/api/auditoria/exportar?formato=pdf&${qs}`} className="btn-secondary"><FileText className="h-4 w-4" /> Exportar PDF</a>
       </Cabecalho>
 
       <Painel className="mb-6">
-        <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1.2fr_1.6fr_auto] xl:items-end" action="/auditoria">
+        <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.2fr_1.6fr_auto] xl:items-end" action="/auditoria">
+          <div>
+            <label className="label" htmlFor="cd">CD da operação</label>
+            <select id="cd" name="cd" defaultValue={filtros.cd} className="input">
+              {u.cds.map((c) => (
+                <option key={c.id} value={c.id}>{c.codigo}{c.id === u.cd.id ? " (atual)" : ""}</option>
+              ))}
+              {admin && <option value="TODOS">Todos os CDs (inclui login e cadastros)</option>}
+            </select>
+          </div>
           <div>
             <label className="label" htmlFor="de">De</label>
             <input id="de" name="de" type="date" defaultValue={filtros.de} className="input" />
@@ -85,13 +96,14 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Pr
           <Tabela className="max-h-[40rem] overflow-auto">
             <table className="tabela">
               <thead className="sticky top-0">
-                <tr><th>Data/Hora</th><th>Usuário</th><th>Tipo de ação</th><th>Estoque origem → destino</th><th className="text-right">Qtd.</th><th>Observação / justificativa</th></tr>
+                <tr><th>Data/Hora</th><th>Usuário</th><th>CD</th><th>Tipo de ação</th><th>Origem → destino</th><th className="text-right">Qtd.</th><th>Observação / justificativa</th></tr>
               </thead>
               <tbody>
                 {registros.map((r) => (
-                  <tr key={r.id} className={r.acao.startsWith("MOVIMENTACAO_AJUSTE") ? "bg-erro/[.06]" : undefined}>
+                  <tr key={r.id} className={r.acao.startsWith("MOVIMENTACAO_AJUSTE") || r.acao.startsWith("MOVIMENTACAO_INCLUSAO") || r.acao === "GERAR_VALE_OCORRENCIA" ? "bg-erro/[.06]" : undefined}>
                     <td className="num">{formatarDataHora(r.criadoEm)}</td>
                     <td>{r.usuario?.login ?? "—"}</td>
+                    <td className="num">{r.cd?.codigo ?? "—"}</td>
                     <td className="font-medium text-t1">{rotuloAcao(r.acao)}</td>
                     <td>
                       {r.origem && r.destino ? <Fluxo origem={r.origem} destino={r.destino} /> : r.origem ? <ContaTag conta={r.origem} /> : "—"}

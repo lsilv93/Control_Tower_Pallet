@@ -12,7 +12,11 @@ import {
   formatarNumero,
   formatarPlaca,
   numeroAgenda,
+  numeroRetorno,
   numeroVale,
+  parteVale,
+  rotuloTipoUnidade,
+  rotuloTipoVale,
   rotuloMotivoCancelamento,
   rotuloStatusVale,
   rotuloTipo,
@@ -22,18 +26,23 @@ import { prisma } from "@/lib/prisma";
 export const metadata = { title: "Vale-Pallet" };
 
 export default async function DetalheValePage({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermissao("vales");
+  const u = await requirePermissao("vales");
   const vale = await prisma.valePallet.findUnique({
     where: { id: (await params).id },
     include: {
       fornecedor: true,
+      unidade: true,
+      cd: true,
+      retorno: { include: { usuario: { select: { login: true } } } },
+      retornoOrigem: true,
       criadoPor: { select: { login: true, nome: true } },
       canceladoPor: { select: { login: true } },
       agenda: { include: { validadoPor: { select: { login: true } } } },
       movimentacoes: { include: { usuario: { select: { login: true } } }, orderBy: { criadoEm: "asc" } },
     },
   });
-  if (!vale) notFound();
+  if (!vale || vale.cdId !== u.cd.id) notFound();
+  const codigo = numeroVale(vale.numero, vale.tipo);
 
   const dado = (rotulo: string, valor: React.ReactNode) => (
     <div>
@@ -44,7 +53,7 @@ export default async function DetalheValePage({ params }: { params: Promise<{ id
 
   return (
     <>
-      <Cabecalho titulo={`Vale-Pallet ${numeroVale(vale.numero)}`} descricao={`${vale.fornecedor.nome} · emitido em ${formatarDataHora(vale.criadoEm)}`}>
+      <Cabecalho titulo={`${rotuloTipoVale[vale.tipo]} ${codigo}`} descricao={`${parteVale(vale)} · emitido por ${vale.cd.codigo} em ${formatarDataHora(vale.criadoEm)}`}>
         <Link href="/vales/consulta" className="btn-secondary"><ArrowLeft className="h-4 w-4" /> Consulta</Link>
         <BotoesVale id={vale.id} />
       </Cabecalho>
@@ -52,18 +61,30 @@ export default async function DetalheValePage({ params }: { params: Promise<{ id
       <div className="grid gap-6 xl:grid-cols-3">
         <Painel titulo="Dados do documento" acoes={<StatusBadge status={vale.status} rotulo={rotuloStatusVale[vale.status]} />} className="xl:col-span-2">
           <dl className="poco grid gap-5 p-5 sm:grid-cols-3">
-            {dado("Fornecedor", vale.fornecedor.nome)}
-            {dado("CNPJ", <span className="num">{formatarCnpj(vale.fornecedor.cnpj)}</span>)}
-            {dado("Nota fiscal", <span className={vale.semNotaFiscal ? "font-semibold text-ouro" : "num"}>{rotuloNf(vale)}</span>)}
-            {dado("Conferente", vale.conferente ?? "—")}
+            {dado("Tipo", rotuloTipoVale[vale.tipo])}
+            {dado("CD emissor", `${vale.cd.codigo} - ${vale.cd.nome}`)}
+            {vale.fornecedor && dado("Fornecedor", vale.fornecedor.nome)}
+            {vale.fornecedor && dado("CNPJ", <span className="num">{formatarCnpj(vale.fornecedor.cnpj)}</span>)}
+            {vale.unidade && dado(`${rotuloTipoUnidade[vale.unidade.tipo]} (deve devolver)`, `${vale.unidade.codigo} - ${vale.unidade.nome}`)}
+            {vale.tipo === "FORNECEDOR" && dado("Nota fiscal", <span className={vale.semNotaFiscal ? "font-semibold text-ouro" : "num"}>{rotuloNf(vale)}</span>)}
+            {vale.tipo === "FORNECEDOR" && dado("Conferente", vale.conferente ?? "—")}
             {vale.chaveNfe && dado("Chave de acesso NF-e", <span className="num break-all text-[11px]">{vale.chaveNfe}</span>)}
-            {dado("Transportadora", vale.transportadora)}
-            {dado("Placa", <span className="num">{formatarPlaca(vale.placa)}</span>)}
+            {dado("Transportadora", vale.transportadora ?? "—")}
+            {dado("Placa", <span className="num">{vale.placa ? formatarPlaca(vale.placa) : "—"}</span>)}
+            {dado("Motorista", vale.motorista ?? "—")}
+            {vale.retornoOrigem && dado("Ocorrência da conferência", <span className="num font-semibold text-erro">{numeroRetorno(vale.retornoOrigem.numero)} · vales {vale.retornoOrigem.totalVales} × físico {vale.retornoOrigem.quantidadeFisica}</span>)}
             {dado("Quantidade / tipo", <span><span className="num text-[20px] font-semibold">{formatarNumero(vale.quantidade)}</span> pallets PBR</span>)}
             {dado("Emissão", <span className="num">{formatarDataHora(vale.criadoEm)} · {vale.criadoPor.login}</span>)}
             {dado("ID único", <span className="num text-[11px]">{vale.id}</span>)}
             {vale.agenda && dado("Agenda", <span className="num">{numeroAgenda(vale.agenda.numero)} · retirada {formatarDataHora(vale.agenda.dataPrevista)}</span>)}
-            {vale.status === "FINALIZADO" && dado("Baixa", <span className="num">{formatarDataHora(vale.finalizadoEm)} · {vale.agenda?.validadoPor?.login ?? "-"}</span>)}
+            {vale.status === "FINALIZADO" &&
+              dado(
+                "Baixa",
+                <span className="num">
+                  {formatarDataHora(vale.finalizadoEm)} · {vale.retorno ? `${numeroRetorno(vale.retorno.numero)} · ${vale.retorno.usuario.login}` : (vale.agenda?.validadoPor?.login ?? "-")}
+                </span>,
+              )}
+            {vale.observacao && <div className="sm:col-span-3">{dado("Observação", <span className="whitespace-pre-line text-[12px]">{vale.observacao}</span>)}</div>}
             {vale.status === "CANCELADO" &&
               dado(
                 "Cancelamento",

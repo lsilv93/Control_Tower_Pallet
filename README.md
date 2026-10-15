@@ -8,45 +8,73 @@ Sistema web para controlar a **conta corrente de pallets PBR**: saldo do pulmão
 
 ## Funcionalidades
 
+### Multi-CD e sessão
+
+- **Unidades:** **CDs** (operam o sistema, com estoques próprios, e também recebem envios) e **Pontos de Cross-Docking** (só recebem envios). Cadastros em *Cadastros → CDs* e *Cadastros → Pontos de Cross*.
+- **Usuário x CDs:** no cadastro de usuários marcam-se os CDs em que cada um opera.
+  - **1 CD:** selecionado automaticamente ao entrar; a troca fica bloqueada (cadeado no menu).
+  - **Mais de 1 CD:** a cada acesso abre o **modal obrigatório "Em qual CD você vai operar?"**; o botão *Trocar CD* do menu reabre o modal.
+  - Administradores sem CD marcado operam em todos; operadores precisam de ao menos 1 CD.
+- O CD escolhido fica num cookie **revalidado no servidor a cada requisição** (só CDs permitidos ao usuário). Todas as telas, ações, relatórios, PDFs e a auditoria usam o CD ativo; dados de outro CD não aparecem nem podem ser alterados.
+
+### Telas
+
 | Módulo | Rota | O que faz |
 |---|---|---|
-| Centro de Comando (Dashboard) | `/` | KPIs: saldo do **Estoque de Vazios**, **Estoque do CD**, **Estoque de Quebrados**, **Total geral** (com barra de composição) e **SSTK enviados/recebidos** (transferências Vazios ↔ CD). Gráfico de **extrato da conta corrente** (entradas x saídas por dia/semana/mês + saldo total ao fim de cada período) e gráfico de **pendências por fornecedor** (cor = farol). Filtros: Dia, Semana do Ano, Mês, Intervalo (De/Até), Geral e **Fornecedor**. Farol Vale-pallet, vales cancelados e últimas movimentações. |
-| Transferência para o CD / Retorno do CD | `/cd/envio`, `/cd/recebimento` | Vazios → CD e CD → Vazios. |
-| Recebimento de Pallets | `/fornecedor/entrada` | **Foco automático no código de barras da NF-e** (chave de acesso, 44 dígitos; Enter valida e o leitor sem Enter é reconhecido ao completar 44). A chave é validada (tamanho, UF, mês, dígito verificador, modelo 55, CNPJ) e dela são extraídos **CNPJ do emitente** (índices 6–19) e **número/série da NF** (índices 25–33). Fornecedor cadastrado: campos preenchidos e foco na quantidade; não cadastrado: cadastro com o CNPJ pré-preenchido. NF já recebida é bloqueada. Opção **"Sem Nota Fiscal"**: oculta o código de barras e busca o fornecedor pelo CNPJ. Campos: quantidade, conferente, transportadora, placa e observações. Gera o Vale-Pallet: **Fornecedor → Estoque do CD**. |
-| Consulta de Vales | `/vales/consulta`, `/vales/[id]` | Busca por número, fornecedor, status (Pendente / Agendado / Baixado / Cancelado) e período. Botões **Baixar PDF** e **Imprimir** em cada vale e no detalhe (que mostra os lançamentos do vale na conta corrente). |
-| Agendar Retirada | `/vales` | Seleciona os vales (clique ou leitura do código de barras) e abre o **pop-up de data e hora** da retirada; grava a agenda e muda o status para Agendado. |
-| Baixa de Pagamento | `/agendas` | Valida a agenda: vales Baixados e saída **Vazios → Fornecedor**. |
-| Excluir Vale | `/vales/excluir` | Motivo obrigatório + observação + confirmação; vale fica Cancelado e a entrada é estornada **CD → Fornecedor**. |
-| Quebras / Conserto / Descarte | `/avarias/*` | Vazios → Quebrados; Quebrados → Vazios; descarte com **pop-up "De qual pulmão este pallet será descartado/destruído?"** (Vazios ou Quebrados). |
-| Compra de Pallets | `/pallets/adicionar` | Leitura da chave da NF-e; **Compra → Vazios**. |
-| Ajuste Manual (Master) | `/estoque/ajuste` | **Somente MASTER**: inclui/remove saldo em qualquer estoque com justificativa obrigatória (contrapartida: conta Ajuste). |
-| Auditoria | `/auditoria` | Log imutável: data/hora, usuário, tipo de ação, estoque origem, estoque destino, quantidade e justificativa. Filtros por período, usuário e tipo; exportação **Excel** e **PDF**. |
-| Relatórios | `/relatorios` | Movimentações por período/tipo e exportação Excel/CSV completa. |
-| Cadastros | `/cadastros/*` | Transportadoras, fornecedores, CDs e **usuários com permissões por tela**. |
-| PDF do vale | `/api/vales/[id]/pdf` | PDF A4 com 2 vias (Martin Brower / Fornecedor), logotipo, remetente, número, data/hora, fornecedor, transportadora, **número da NF** (ou **"SEM NOTA FISCAL"** com observação de destaque), quantidade e tipo, status atual, código de barras e assinaturas (Conferente, com o nome / Motorista). |
+| Dashboard (Control Tower) | `/` | Cards do CD: **Vazios**, **Saldo do CD (entradas de fornecedores)**, **Quebrados**, **Saldo devedor de CDs/Cross**. Indicadores do período (entradas, envios, retornos e faltas, recuperados, descartados), **saldos devedores por Ponto de Cross e CD destino**, **vales pendentes por fornecedor**, **consolidação por transportadora/motorista**, extrato dos estoques físicos, Farol Vale-pallet, cancelados e últimas movimentações. Filtros: Dia, Semana do Ano, Mês, Intervalo, Geral e Fornecedor. |
+| **Tela TV (Control Center)** | `/tv` | Tela cheia para monitores da gerência: Vazios, Quebrados, Recuperados e Descartados (Dia/Mês/Geral), entradas e envios, vales pendentes (total e por fornecedor), saldo devedor por CD/Cross, recebidos no dia por unidade (com faltas) e retiradas agendadas para hoje. **Auto-refresh:** consulta a cada 10 s se houve novo lançamento e recarrega na hora; recarrega também a cada 60 s. |
+| Envio para CD / Ponto de Cross | `/cd/envio`, `/cross/envio` | Gera o **Vale-Pallet de Envio** (VE-). **Não subtrai dos Vazios**: só soma no saldo devedor e nos vales pendentes do destino. |
+| **Retorno / Conferência** | `/retorno` | Seleciona os vales devolvidos pelo CD/Cross (soma automática) e a **quantidade física contada**. Física menor que os vales: aviso *"Quantidade física (290) menor que o total dos vales (300). Confirmar a falta de 10 pallets?"*; ao confirmar, **placa, transportadora e justificativa são obrigatórias**. Entra nos Vazios só o físico, os vales são baixados e é gerado automaticamente o **Vale-Ocorrência** (VO-) com a diferença, que volta ao saldo devedor do remetente. Física maior que os vales é bloqueada. |
+| Recebimento de Pallets | `/fornecedor/entrada` | Leitura da chave da NF-e (ou *Sem Nota Fiscal*), com motorista opcional. Gera o **Vale-Pallet de Fornecedor** (VP-) e **sobe o saldo do CD com o fornecedor**; os Vazios não mudam. |
+| Agendar Retirada / Baixa de Pagamento | `/vales`, `/agendas` | Agenda a retirada dos vales de fornecedor; a baixa **subtrai dos Vazios** e reduz a dívida com o fornecedor. |
+| Consulta de Vales | `/vales/consulta`, `/vales/[id]` | Todos os tipos (VP, VE, VO, VA), com filtros por tipo, fornecedor, CD/Cross, status e período. PDF e impressão A4 em 2 vias com código de barras. |
+| Excluir Vale | `/vales/excluir` | Cancela qualquer tipo de vale pendente com motivo. Fornecedor: estorna o saldo com o fornecedor. Envio, ocorrência ou ajuste: reduz o saldo devedor. |
+| Quebras / Conserto / Descarte | `/avarias/*` | Quebra: Vazios → Quebrados. **Reparo** pergunta se outros quebrados foram desmontados; com a **trava matemática** recuperados + utilizados ≤ saldo de quebrados (*"Restam no máximo X pallets para utilização"*), validada no servidor. Recuperados voltam aos Vazios e os utilizados vão para Descartados. Descarte de Vazios ou Quebrados. |
+| Compra de Pallets | `/pallets/adicionar` | Leitura da NF-e; Compra → Vazios. |
+| **Inclusão de Vazios (Admin)** | `/estoque/vazios` | MASTER/ADMIN sobem o pulmão com **motivo (Compra, Estorno, Devolução)** e observação. Devolução de CD/Cross vai pela conferência de retorno. |
+| **Saldo Devedor (Admin)** | `/estoque/devedor` | MASTER/ADMIN incluem saldo devedor de um CD/Cross com **observação e justificativa**; gera um Vale de Ajuste (VA-) baixável no retorno. |
+| Correção de Inventário (Master) | `/estoque/ajuste` | Somente MASTER: inclui/remove em Vazios ou Quebrados com justificativa. |
+| Auditoria | `/auditoria` | Log imutável com data/hora, usuário, **CD da operação**, tipo, origem/destino, quantidade e observação. Filtro por CD (administrador: "Todos os CDs"), período, usuário e ação; exportação Excel e PDF. |
+| Relatórios | `/relatorios` | Movimentações do CD e Excel completo (vales de todos os tipos, conferências de retorno, saldos devedores, agendas, compras, pendências e auditoria). |
 
-### Conta corrente em partida dobrada
+### Conta corrente em partida dobrada (por CD)
 
-Toda movimentação registra uma **conta de origem** e uma **conta de destino** com a mesma quantidade: nenhum pallet surge ou desaparece. Os três **estoques físicos** são VAZIOS, CD e QUEBRADOS; FORNECEDOR, COMPRA, DESCARTE e AJUSTE são as **contrapartidas externas**. A soma de todas as contas é sempre zero.
+Cada movimentação tem uma conta de origem e uma de destino com a mesma quantidade, sempre dentro do CD da operação.
 
-| Operação | Origem (subtrai) | Destino (soma) |
-|---|---|---|
-| Transferência para o CD | Vazios | CD |
-| Retorno do CD | CD | Vazios |
-| Recebimento de fornecedor (gera vale) | Fornecedor | CD |
-| Baixa de pagamento (devolução) | Vazios | Fornecedor |
-| Exclusão de vale (estorno) | CD | Fornecedor |
-| Quebra | Vazios | Quebrados |
-| Conserto / reparo | Quebrados | Vazios |
-| Descarte / destruição | Vazios **ou** Quebrados (pop-up) | Descarte |
-| Compra | Compra | Vazios |
-| Ajuste manual (somente MASTER) | Ajuste ↔ qualquer estoque | |
+- **Estoques físicos** (nunca negativos): VAZIOS e QUEBRADOS.
+- **CUSTODIA:** saldo devedor de cada CD destino / Ponto de Cross (nunca negativo).
+- **FORNECEDOR:** saldo negativo = pallets devidos aos fornecedores.
+- CARGA, COMPRA, DESCARTE e AJUSTE são contrapartidas.
 
-- **ACID:** cada operação roda numa transação do PostgreSQL com bloqueio consultivo; um estoque nunca fica negativo, mesmo com usuários simultâneos.
-- **Imutável:** triggers no banco impedem `UPDATE`/`DELETE` em `Movimentacao` e `Auditoria`; correções são feitas por novos lançamentos (estorno/ajuste).
-- **Migração do histórico:** a migração `partida_dobrada_dados` converte os lançamentos antigos (pulmão/avariados) para origem/destino e **aborta** se qualquer linha divergir dos saldos antigos.
+| Operação | Origem | Destino | Efeito |
+|---|---|---|---|
+| Recebimento de fornecedor (VP) | Fornecedor | Carga | sobe o saldo do CD com o fornecedor |
+| Baixa / pagamento ao fornecedor | Vazios | Fornecedor | −Vazios, −dívida |
+| Envio para CD / Cross (VE) | Carga | Custódia | +saldo devedor (Vazios inalterados) |
+| Retorno de CD / Cross | Custódia | Vazios | +físico nos Vazios, −saldo devedor |
+| Falta na conferência (VO) | — | — | a diferença permanece no saldo devedor |
+| Quebra | Vazios | Quebrados | |
+| Reparo: recuperados / utilizados | Quebrados | Vazios / Descarte | trava: recuperados + utilizados ≤ quebrados |
+| Descarte | Vazios ou Quebrados | Descarte | |
+| Compra / Inclusão de vazios | Compra / Ajuste | Vazios | |
+| Inclusão de saldo devedor (VA) | Ajuste | Custódia | |
+| Exclusão de vale | estorno do lançamento original | | |
 
-> **Banco zerado em 01/10/2026:** a migração `20261001160000_zerar_dados` apagou (uma única vez, no deploy seguinte) todos os dados e cadastros e reiniciou a numeração de vales e agendas, mantendo apenas as contas de usuário.
+- **ACID:** cada operação roda numa transação com bloqueio consultivo; nenhum saldo fica negativo, mesmo com usuários simultâneos.
+- **Imutável:** triggers no banco impedem `UPDATE`/`DELETE` em `Movimentacao` e `Auditoria`.
+- **Invariantes conferidos nos testes:**
+  - a soma de todas as contas de cada CD é zero;
+  - o saldo devedor de cada unidade é igual à soma dos seus vales pendentes;
+  - a dívida com fornecedores é igual à soma dos vales de fornecedor em aberto.
+
+### Migração para multi-CD (15/10/2026)
+
+As migrações `multi_cd_estrutura` e `multi_cd_dados` rodam sozinhas no próximo deploy:
+
+1. Criam o **CD Principal** (código `PRINCIPAL`) e vinculam a ele todo o histórico (movimentações, vales, agendas, compras). **Renomeie-o em Cadastros → CDs.**
+2. Operadores existentes passam a operar no CD Principal; administradores operam em todos.
+3. Transferências antigas para CDs ainda não retornadas viram **saldo devedor** do CD destino (um Vale de Ajuste "Saldo migrado" por CD).
+4. Os saldos de Vazios, Quebrados e vales de fornecedor ficam **exatamente iguais**.
 
 ## Deploy na Vercel (passo a passo)
 
@@ -60,7 +88,7 @@ Toda movimentação registra uma **conta de origem** e uma **conta de destino** 
 4. **Faça o deploy.** O `build` roda automaticamente:
    `prisma generate → prisma migrate deploy → prisma db seed → next build` (script `scripts/build.mjs`).
    Ou seja, cria as tabelas e o usuário administrador (só se o banco ainda não tiver nenhum usuário).
-5. Entre com o administrador, **troque a senha** em *Minha Senha*, cadastre os **CDs** em *Cadastros* e lance o **saldo inicial** em *Adicionar Pallets → Ajuste de Inventário*.
+5. Entre com o administrador, **troque a senha** em *Minha Senha*, renomeie o **CD Principal** e cadastre os demais CDs e Pontos de Cross em *Cadastros*, vincule os usuários aos CDs e lance o **saldo inicial** em *Inclusão de Vazios*.
 
 > Os deploys de *Preview* usam as mesmas variáveis. Se não quiser que previews rodem migrações no banco de produção, crie um banco separado para o ambiente Preview.
 
@@ -133,8 +161,9 @@ Leitores USB/Bluetooth funcionam como teclado (digitam o código e dão Enter): 
 
 ## Perfis de acesso (RBAC)
 
-- **MASTER:** todas as telas e o **ajuste manual de saldos** (exclusivo). Só um MASTER cria/edita outro MASTER.
-- **ADMIN:** todas as telas e a gestão de usuários, **sem** ajuste manual.
-- **OPERADOR:** apenas as telas marcadas no cadastro (Dashboard, Transferências do CD, Entrada de fornecedor, Vales/consulta, Agendamento e baixa, Excluir vale, Avarias, Compras, Relatórios, Auditoria, Cadastros, CDs). Sem acesso ao Dashboard, o operador entra na primeira tela liberada.
+- **MASTER:** todas as telas, inclusões manuais e a **correção de inventário** (exclusiva). Só um MASTER cria ou edita outro MASTER.
+- **ADMIN:** todas as telas, gestão de usuários e as **inclusões manuais de vazios e de saldo devedor**, sem correção de inventário.
+- **OPERADOR:** apenas as telas marcadas no cadastro e somente nos CDs vinculados.
+  - Telas disponíveis: Dashboard, Tela TV, Envio/Retorno de CDs e Cross, Entrada de fornecedor, Vales, Agendamento e baixa, Excluir vale, Avarias, Compras, Relatórios, Auditoria, Cadastros, CDs/Cross.
 
-As permissões valem nas telas, nas ações do servidor e nas APIs (exportações e PDF retornam 403 sem permissão). Na migração, administradores existentes viraram MASTER e operadores mantiveram o acesso que tinham.
+As permissões valem nas telas, nas ações do servidor e nas APIs (exportações e PDF retornam 403 sem permissão e 404 para vales de outro CD).

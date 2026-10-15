@@ -3,15 +3,19 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getUsuarioAtual } from "@/lib/auth";
 import { auditar, obterSaldos, ROTULO_CONTA } from "@/lib/conta";
 import { tem } from "@/lib/permissoes";
-import { pendenciasPorFornecedor, valesEmAberto } from "@/lib/consultas";
+import { devedoresPorUnidade, pendenciasPorFornecedor, valesEmAberto } from "@/lib/consultas";
 import { formatarData, formatarDataHora } from "@/lib/datas";
 import { lerFiltros } from "@/lib/filtros";
 import {
   formatarCnpj,
   formatarPlaca,
   numeroAgenda,
+  numeroRetorno,
   numeroVale,
+  parteVale,
   rotuloMotivoCancelamento,
+  rotuloTipoUnidade,
+  rotuloTipoVale,
   rotuloNf,
   rotuloStatusAgenda,
   rotuloStatusVale,
@@ -44,14 +48,16 @@ export async function GET(req: NextRequest) {
   const usuario = await getUsuarioAtual();
   if (!usuario) return NextResponse.json({ erro: "Não autenticado" }, { status: 401 });
   if (!tem(usuario, "relatorios")) return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
+  const cd = usuario.cd;
+  if (!cd) return NextResponse.json({ erro: "Selecione o CD de operação" }, { status: 409 });
 
   const sp = req.nextUrl.searchParams;
-  const { de, ate, tipo, periodo, where } = lerFiltros({ de: sp.get("de"), ate: sp.get("ate"), tipo: sp.get("tipo") });
+  const { de, ate, tipo, periodo, where } = lerFiltros({ de: sp.get("de"), ate: sp.get("ate"), tipo: sp.get("tipo") }, cd.id);
   const formato = sp.get("formato") === "csv" ? "csv" : "xlsx";
 
   const movs = await prisma.movimentacao.findMany({
     where,
-    include: { usuario: true, cd: true, fornecedor: true, vale: true, agenda: true },
+    include: { usuario: true, unidade: true, fornecedor: true, vale: true, agenda: true, retorno: true },
     orderBy: { criadoEm: "asc" },
   });
   const linhasMov = movs.map((m) => ({
@@ -60,11 +66,14 @@ export async function GET(req: NextRequest) {
     quantidade: m.quantidade,
     origem: ROTULO_CONTA[m.origem],
     destino: ROTULO_CONTA[m.destino],
-    cd: m.cd ? `${m.cd.codigo} - ${m.cd.nome}` : "",
+    cd: cd.codigo,
+    unidade: m.unidade ? `${m.unidade.codigo} - ${m.unidade.nome}` : "",
     fornecedor: m.fornecedor?.nome ?? "",
     cnpj: m.fornecedor ? formatarCnpj(m.fornecedor.cnpj) : "",
-    vale: m.vale ? numeroVale(m.vale.numero) : "",
+    vale: m.vale ? numeroVale(m.vale.numero, m.vale.tipo) : "",
     agenda: m.agenda ? numeroAgenda(m.agenda.numero) : "",
+    retorno: m.retorno ? numeroRetorno(m.retorno.numero) : "",
+    motivo: m.motivo ?? "",
     usuario: m.usuario.login,
     nomeUsuario: m.usuario.nome,
     observacao: m.observacao ?? "",
@@ -75,11 +84,14 @@ export async function GET(req: NextRequest) {
     { header: "Quantidade", key: "quantidade" },
     { header: "Origem", key: "origem", width: 22 },
     { header: "Destino", key: "destino", width: 22 },
-    { header: "CD", key: "cd", width: 25 },
+    { header: "CD da operação", key: "cd", width: 16 },
+    { header: "CD destino / Cross", key: "unidade", width: 25 },
     { header: "Fornecedor", key: "fornecedor", width: 30 },
     { header: "CNPJ", key: "cnpj", width: 20 },
     { header: "Vale", key: "vale" },
     { header: "Agenda", key: "agenda" },
+    { header: "Conferência", key: "retorno" },
+    { header: "Motivo", key: "motivo" },
     { header: "Login", key: "usuario" },
     { header: "Usuário", key: "nomeUsuario", width: 25 },
     { header: "Observação", key: "observacao", width: 40 },
@@ -89,9 +101,10 @@ export async function GET(req: NextRequest) {
     acao: "EXPORTAR_RELATORIO",
     entidade: "Relatorio",
     usuarioId: usuario.id,
+    cdId: cd.id,
     detalhes: { de, ate, tipo: tipo ?? null, formato },
   });
-  const nomeArquivo = `pallets_${de}_a_${ate}`;
+  const nomeArquivo = `pallets_${cd.codigo}_${de}_a_${ate}`;
 
   if (formato === "csv") {
     const csv = [
@@ -106,20 +119,28 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const [saldos, vales, agendas, fornecedores, abertos, auditoria, compras] = await Promise.all([
-    obterSaldos(),
+  const [saldos, vales, agendas, fornecedores, abertos, auditoria, compras, retornos, devedores] = await Promise.all([
+    obterSaldos(cd.id),
     prisma.valePallet.findMany({
-      include: { fornecedor: true, criadoPor: true, agenda: true, canceladoPor: true },
+      where: { cdId: cd.id },
+      include: { fornecedor: true, unidade: true, criadoPor: true, agenda: true, canceladoPor: true, retorno: true },
       orderBy: { numero: "asc" },
     }),
     prisma.agendaDevolucao.findMany({
+      where: { cdId: cd.id },
       include: { fornecedor: true, criadoPor: true, validadoPor: true, vales: { select: { numero: true, quantidade: true } } },
       orderBy: { numero: "asc" },
     }),
-    pendenciasPorFornecedor(),
-    valesEmAberto(),
-    prisma.auditoria.findMany({ where: { criadoEm: periodo }, include: { usuario: true }, orderBy: { criadoEm: "asc" } }),
-    prisma.compra.findMany({ where: { criadoEm: periodo }, include: { fornecedor: true, usuario: true }, orderBy: { criadoEm: "asc" } }),
+    pendenciasPorFornecedor(cd.id),
+    valesEmAberto(cd.id),
+    prisma.auditoria.findMany({ where: { criadoEm: periodo, cdId: cd.id }, include: { usuario: true }, orderBy: { criadoEm: "asc" } }),
+    prisma.compra.findMany({ where: { criadoEm: periodo, cdId: cd.id }, include: { fornecedor: true, usuario: true }, orderBy: { criadoEm: "asc" } }),
+    prisma.retornoConferencia.findMany({
+      where: { criadoEm: periodo, cdId: cd.id },
+      include: { unidade: true, usuario: true, ocorrencia: true, vales: { select: { numero: true, tipo: true } } },
+      orderBy: { criadoEm: "asc" },
+    }),
+    devedoresPorUnidade(cd.id),
   ]);
   const farolVale = new Map(abertos.map((v) => [v.id, v]));
 
@@ -130,14 +151,15 @@ export async function GET(req: NextRequest) {
   planilha(wb, "Resumo", [{ header: "Indicador", key: "k", width: 40 }, { header: "Valor", key: "v", width: 30 }], [
     { k: "Gerado em", v: formatarDataHora(new Date()) },
     { k: "Gerado por", v: `${usuario.nome} (${usuario.login})` },
+    { k: "CD de operação", v: `${cd.codigo} - ${cd.nome}` },
     { k: "Período das movimentações", v: `${de} a ${ate}` },
     { k: "Filtro de tipo", v: tipo ? rotuloTipo[tipo] : "Todos" },
     { k: "Estoque de Vazios (atual)", v: saldos.vazios },
-    { k: "Estoque do CD (atual)", v: saldos.cd },
     { k: "Estoque de Quebrados (atual)", v: saldos.quebrados },
-    { k: "Total de pallets nos estoques", v: saldos.total },
-    { k: "Pallets pendentes com fornecedores", v: saldos.pendenteFornecedores },
-    { k: "Vales em aberto", v: saldos.valesEmAberto },
+    { k: "Saldo do CD com fornecedores (vales pendentes)", v: saldos.fornecedores },
+    { k: "Vales de fornecedor em aberto", v: saldos.valesFornecedorEmAberto },
+    { k: "Saldo devedor total (CDs destino e Cross)", v: saldos.devedor },
+    { k: "Descartados/destruídos (acumulado)", v: saldos.descartados },
   ]);
 
   planilha(wb, "Movimentações", colunasMov, linhasMov);
@@ -147,42 +169,46 @@ export async function GET(req: NextRequest) {
     "Vales-Pallet",
     [
       { header: "Vale", key: "numero" },
+      { header: "Tipo", key: "tipo", width: 26 },
       { header: "Status", key: "status" },
       { header: "Farol", key: "farol" },
       { header: "Idade (dias)", key: "idade" },
-      { header: "Fornecedor", key: "fornecedor", width: 30 },
+      { header: "Fornecedor / CD-Cross", key: "fornecedor", width: 30 },
       { header: "CNPJ", key: "cnpj", width: 20 },
       { header: "Transportadora", key: "transportadora", width: 25 },
       { header: "Placa", key: "placa" },
+      { header: "Motorista", key: "motorista", width: 20 },
       { header: "Nota Fiscal", key: "nf", width: 18 },
       { header: "Chave NF-e", key: "chaveNfe", width: 48 },
       { header: "Conferente", key: "conferente", width: 20 },
       { header: "Quantidade", key: "quantidade" },
       { header: "Emissão", key: "emissao", width: 20 },
       { header: "Emitido por", key: "usuario" },
-      { header: "Agenda", key: "agenda" },
-      { header: "Finalizado em", key: "finalizado", width: 20 },
+      { header: "Agenda / Conferência", key: "agenda" },
+      { header: "Baixado em", key: "finalizado", width: 20 },
       { header: "Excluído em", key: "excluido", width: 20 },
       { header: "Excluído por", key: "excluidoPor" },
       { header: "Motivo da exclusão", key: "motivo", width: 24 },
       { header: "Observação da exclusão", key: "obsExclusao", width: 40 },
     ],
     vales.map((v) => ({
-      numero: numeroVale(v.numero),
+      numero: numeroVale(v.numero, v.tipo),
+      tipo: rotuloTipoVale[v.tipo],
       status: rotuloStatusVale[v.status],
       farol: farolVale.get(v.id)?.farol ?? "",
       idade: farolVale.get(v.id)?.idade ?? "",
-      fornecedor: v.fornecedor.nome,
-      cnpj: formatarCnpj(v.fornecedor.cnpj),
-      transportadora: v.transportadora,
-      placa: formatarPlaca(v.placa),
-      nf: rotuloNf(v),
+      fornecedor: parteVale(v),
+      cnpj: v.fornecedor ? formatarCnpj(v.fornecedor.cnpj) : "",
+      transportadora: v.transportadora ?? "",
+      placa: v.placa ? formatarPlaca(v.placa) : "",
+      motorista: v.motorista ?? "",
+      nf: v.tipo === "FORNECEDOR" ? rotuloNf(v) : "",
       chaveNfe: v.chaveNfe ?? "",
       conferente: v.conferente ?? "",
       quantidade: v.quantidade,
       emissao: formatarDataHora(v.criadoEm),
       usuario: v.criadoPor.login,
-      agenda: v.agenda ? numeroAgenda(v.agenda.numero) : "",
+      agenda: v.agenda ? numeroAgenda(v.agenda.numero) : v.retorno ? numeroRetorno(v.retorno.numero) : "",
       finalizado: v.finalizadoEm ? formatarDataHora(v.finalizadoEm) : "",
       excluido: v.canceladoEm ? formatarDataHora(v.canceladoEm) : "",
       excluidoPor: v.canceladoPor?.login ?? "",
@@ -212,7 +238,7 @@ export async function GET(req: NextRequest) {
       status: rotuloStatusAgenda[a.status],
       fornecedor: a.fornecedor.nome,
       prevista: formatarData(a.dataPrevista),
-      vales: a.vales.map((v) => numeroVale(v.numero)).join(", "),
+      vales: a.vales.map((v) => numeroVale(v.numero, "FORNECEDOR")).join(", "),
       total: a.vales.reduce((s, v) => s + v.quantidade, 0),
       criada: formatarDataHora(a.criadoEm),
       criadoPor: a.criadoPor.login,
@@ -267,6 +293,62 @@ export async function GET(req: NextRequest) {
       vales: f.vales,
       total: f.total,
       antigo: formatarData(f.maisAntigo),
+    })),
+  );
+
+  planilha(
+    wb,
+    "Conferências de Retorno",
+    [
+      { header: "Conferência", key: "numero" },
+      { header: "Data/Hora", key: "dataHora", width: 20 },
+      { header: "Remetente", key: "unidade", width: 28 },
+      { header: "Vales baixados", key: "vales", width: 30 },
+      { header: "Total dos vales", key: "total" },
+      { header: "Quantidade física", key: "fisico" },
+      { header: "Falta", key: "falta" },
+      { header: "Vale-Ocorrência", key: "ocorrencia" },
+      { header: "Placa", key: "placa" },
+      { header: "Transportadora", key: "transportadora", width: 24 },
+      { header: "Motorista", key: "motorista", width: 20 },
+      { header: "Login", key: "usuario" },
+      { header: "Observação", key: "obs", width: 40 },
+    ],
+    retornos.map((r) => ({
+      numero: numeroRetorno(r.numero),
+      dataHora: formatarDataHora(r.criadoEm),
+      unidade: `${rotuloTipoUnidade[r.unidade.tipo]} ${r.unidade.codigo} - ${r.unidade.nome}`,
+      vales: r.vales.map((v) => numeroVale(v.numero, v.tipo)).join(", "),
+      total: r.totalVales,
+      fisico: r.quantidadeFisica,
+      falta: r.falta,
+      ocorrencia: r.ocorrencia ? numeroVale(r.ocorrencia.numero, "OCORRENCIA") : "",
+      placa: r.placa ? formatarPlaca(r.placa) : "",
+      transportadora: r.transportadora ?? "",
+      motorista: r.motorista ?? "",
+      usuario: r.usuario.login,
+      obs: r.observacao ?? "",
+    })),
+  );
+
+  planilha(
+    wb,
+    "Saldos Devedores",
+    [
+      { header: "Tipo", key: "tipo" },
+      { header: "Código", key: "codigo" },
+      { header: "Unidade", key: "nome", width: 30 },
+      { header: "Vales pendentes", key: "vales" },
+      { header: "Vale mais antigo", key: "antigo" },
+      { header: "Saldo devedor", key: "saldo" },
+    ],
+    devedores.map((d) => ({
+      tipo: rotuloTipoUnidade[d.unidade.tipo],
+      codigo: d.unidade.codigo,
+      nome: d.unidade.nome,
+      vales: d.vales,
+      antigo: d.maisAntigo ? formatarData(d.maisAntigo) : "",
+      saldo: d.saldo,
     })),
   );
 

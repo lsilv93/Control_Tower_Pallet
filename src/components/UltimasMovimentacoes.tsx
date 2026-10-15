@@ -13,7 +13,9 @@ export async function UltimasMovimentacoes({
   inicio,
   fim,
   fornecedorId,
+  cdId,
 }: {
+  cdId: string;
   tipos?: TipoMovimentacao[];
   titulo?: string;
   limite?: number;
@@ -23,11 +25,12 @@ export async function UltimasMovimentacoes({
 }) {
   const movs = await prisma.movimentacao.findMany({
     where: {
+      cdId,
       ...(tipos ? { tipo: { in: tipos } } : {}),
       ...(inicio && fim ? { criadoEm: { gte: inicio, lt: fim } } : {}),
       ...(fornecedorId ? { fornecedorId } : {}),
     },
-    include: { usuario: true, cd: true, fornecedor: true, vale: true },
+    include: { usuario: true, unidade: true, fornecedor: true, vale: true },
     orderBy: { criadoEm: "desc" },
     take: limite,
   });
@@ -58,8 +61,8 @@ export async function UltimasMovimentacoes({
                   <td><Fluxo origem={m.origem} destino={m.destino} /></td>
                   <td className="num text-right font-semibold text-t1">{m.quantidade}</td>
                   <td>
-                    {m.cd ? `${m.cd.codigo} - ${m.cd.nome}` : m.fornecedor?.nome ?? "—"}
-                    {m.vale && <span className="ml-1 text-[11px] text-t4">({numeroVale(m.vale.numero)})</span>}
+                    {m.unidade ? `${m.unidade.codigo} - ${m.unidade.nome}` : m.fornecedor?.nome ?? "—"}
+                    {m.vale && <span className="ml-1 text-[11px] text-t4">({numeroVale(m.vale.numero, m.vale.tipo)})</span>}
                   </td>
                   <td>{m.usuario.login}</td>
                   <td className="max-w-xs truncate text-t3" title={m.observacao ?? ""}>{m.observacao ?? "—"}</td>

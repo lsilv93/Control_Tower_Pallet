@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { CHAVES_PERMISSAO, ehMaster } from "@/lib/permissoes";
-import { exigir, exigirAdmin } from "./guarda";
+import { exigirAdmin, exigirGlobal as exigir } from "./guarda";
 import { auditar, ErroNegocio } from "@/lib/conta";
 import { cnpjValido, normalizarCnpj } from "@/lib/formatos";
 import { prisma } from "@/lib/prisma";
@@ -99,31 +99,47 @@ export async function salvarFornecedor(_: Estado, form: FormData): Promise<Estad
   concluir("/cadastros/fornecedores", msg);
 }
 
-// ---------------- CDs (administrador) ----------------
+// ---------------- CDs e Pontos de Cross ----------------
 const schemaCD = z.object({
-  codigo: z.string().trim().min(1, "Informe o código do CD.").max(20).transform((v) => v.toUpperCase()),
-  nome: z.string().trim().min(2, "Informe o nome do CD.").max(120),
+  tipo: z.enum(["CD", "CROSS"]).default("CD"),
+  codigo: z.string().trim().min(1, "Informe o código.").max(20).transform((v) => v.toUpperCase()),
+  nome: z.string().trim().min(2, "Informe o nome.").max(120),
   cidade: opcional(120),
   responsavel: opcional(120),
 });
 
 export async function salvarCD(_: Estado, form: FormData): Promise<Estado> {
   let msg: string;
+  let caminhoCD = "/cadastros/cds";
   try {
     const admin = await exigir("cds");
     const id = lerId(form);
     const d = schemaCD.parse(Object.fromEntries(form));
     const duplicado = await prisma.centroDistribuicao.findUnique({ where: { codigo: d.codigo } });
-    if (duplicado && duplicado.id !== id) throw new ErroNegocio(`Já existe um CD com o código ${d.codigo}.`);
+    if (duplicado && duplicado.id !== id) throw new ErroNegocio(`Já existe uma unidade com o código ${d.codigo}.`);
+    if (id) {
+      // O tipo (CD / Cross) não muda depois do cadastro: o histórico depende dele.
+      const atual = await prisma.centroDistribuicao.findUnique({ where: { id } });
+      if (!atual) throw new ErroNegocio("Cadastro não encontrado.");
+      if (atual.tipo !== d.tipo) throw new ErroNegocio("Não é possível transformar um CD em Ponto de Cross (ou o contrário).");
+    }
     const cd = id
       ? await prisma.centroDistribuicao.update({ where: { id }, data: d })
       : await prisma.centroDistribuicao.create({ data: d });
-    await auditar(prisma, { acao: id ? "EDITAR_CD" : "CRIAR_CD", entidade: "CentroDistribuicao", entidadeId: cd.id, usuarioId: admin.id, detalhes: d });
-    msg = `CD ${cd.codigo} ${id ? "atualizado" : "cadastrado"}.`;
+    const rotulo = d.tipo === "CROSS" ? "Ponto de Cross" : "CD";
+    await auditar(prisma, {
+      acao: `${id ? "EDITAR" : "CRIAR"}_${d.tipo === "CROSS" ? "PONTO_CROSS" : "CD"}`,
+      entidade: "CentroDistribuicao",
+      entidadeId: cd.id,
+      usuarioId: admin.id,
+      detalhes: d,
+    });
+    msg = `${rotulo} ${cd.codigo} ${id ? "atualizado" : "cadastrado"}.`;
+    caminhoCD = d.tipo === "CROSS" ? "/cadastros/cross" : "/cadastros/cds";
   } catch (e) {
     return tratarErro(e);
   }
-  concluir("/cadastros/cds", msg);
+  concluir(caminhoCD, msg);
 }
 
 // ---------------- Usuários (administrador) ----------------
@@ -160,6 +176,14 @@ export async function salvarUsuario(_: Estado, form: FormData): Promise<Estado> 
     const existente = await prisma.usuario.findUnique({ where: { login: d.login } });
     if (existente && existente.id !== id) throw new ErroNegocio(`O login "${d.login}" já está em uso.`);
 
+    // CDs em que o usuário opera (somente CDs existentes do tipo CD).
+    const cdsInformados = [...new Set(form.getAll("cds").map(String).filter(Boolean))];
+    const cds = cdsInformados.length
+      ? await prisma.centroDistribuicao.findMany({ where: { id: { in: cdsInformados }, tipo: "CD" }, select: { id: true, codigo: true } })
+      : [];
+    if (cds.length !== cdsInformados.length) throw new ErroNegocio("CD inválido na lista de CDs do usuário.");
+    if (d.perfil === "OPERADOR" && cds.length === 0) return falha("Vincule ao menos um CD ao operador.");
+
     const dados = {
       nome: d.nome,
       login: d.login,
@@ -167,15 +191,16 @@ export async function salvarUsuario(_: Estado, form: FormData): Promise<Estado> 
       permissoes: d.perfil === "OPERADOR" ? permissoes : [],
       ...(senha ? { senhaHash: await bcrypt.hash(senha, 10) } : {}),
     };
+    const vinculo = cds.map((c) => ({ id: c.id }));
     const u = id
-      ? await prisma.usuario.update({ where: { id }, data: dados })
-      : await prisma.usuario.create({ data: { ...dados, senhaHash: dados.senhaHash! } });
+      ? await prisma.usuario.update({ where: { id }, data: { ...dados, cds: { set: vinculo } } })
+      : await prisma.usuario.create({ data: { ...dados, senhaHash: dados.senhaHash!, cds: { connect: vinculo } } });
     await auditar(prisma, {
       acao: id ? "EDITAR_USUARIO" : "CRIAR_USUARIO",
       entidade: "Usuario",
       entidadeId: u.id,
       usuarioId: admin.id,
-      detalhes: { login: d.login, perfil: d.perfil, permissoes, senhaAlterada: !!senha },
+      detalhes: { login: d.login, perfil: d.perfil, permissoes, cds: cds.map((c) => c.codigo), senhaAlterada: !!senha },
     });
     msg = `Usuário ${u.login} ${id ? "atualizado" : "criado"}.`;
   } catch (e) {
@@ -194,6 +219,7 @@ const entidades = {
 
 export async function alternarAtivo(_: Estado, form: FormData): Promise<Estado> {
   let msg: string;
+  let caminho: string = "/cadastros";
   const tipo = String(form.get("tipo")) as keyof typeof entidades;
   const cfg = entidades[tipo];
   try {
@@ -202,6 +228,7 @@ export async function alternarAtivo(_: Estado, form: FormData): Promise<Estado> 
     const id = String(form.get("id"));
     let nome: string;
     let ativo: boolean;
+    caminho = cfg.caminho;
     switch (tipo) {
       case "transportadora": {
         const r = await prisma.transportadora.findUniqueOrThrow({ where: { id } });
@@ -219,6 +246,7 @@ export async function alternarAtivo(_: Estado, form: FormData): Promise<Estado> 
         const r = await prisma.centroDistribuicao.findUniqueOrThrow({ where: { id } });
         await prisma.centroDistribuicao.update({ where: { id }, data: { ativo: !r.ativo } });
         [nome, ativo] = [r.codigo, r.ativo];
+        if (r.tipo === "CROSS") caminho = "/cadastros/cross";
         break;
       }
       case "usuario": {
@@ -235,5 +263,5 @@ export async function alternarAtivo(_: Estado, form: FormData): Promise<Estado> 
   } catch (e) {
     return tratarErro(e);
   }
-  concluir(cfg.caminho, msg);
+  concluir(caminho, msg);
 }

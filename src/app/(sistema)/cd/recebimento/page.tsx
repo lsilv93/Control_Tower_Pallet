@@ -1,7 +1,6 @@
-import { PaginaCD } from "@/components/PaginaCD";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "Recebimento do CD" };
-
+/** O antigo "Retorno do CD" agora é a conferência de retorno (com Vale-Ocorrência). */
 export default function Page() {
-  return <PaginaCD modo="recebimento" />;
+  redirect("/retorno");
 }

@@ -15,30 +15,33 @@ import {
   lerCodigoVale,
   numeroAgenda,
   numeroVale,
+  parteVale,
   rotuloMotivoCancelamento,
   rotuloStatusVale,
+  rotuloTipoVale,
 } from "@/lib/formatos";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Excluir Vale Pallet" };
 
 export default async function ExcluirValePage({ searchParams }: { searchParams: Promise<{ vale?: string; ok?: string }> }) {
-  await requirePermissao("excluir_vale");
+  const u = await requirePermissao("excluir_vale");
   const { vale: busca = "", ok } = await searchParams;
   const numero = busca ? lerCodigoVale(busca) : null;
-  const vale =
+  const encontrado =
     numero !== null
       ? await prisma.valePallet.findUnique({
           where: { numero },
-          include: { fornecedor: true, criadoPor: { select: { login: true } }, agenda: true, canceladoPor: { select: { login: true } } },
+          include: { fornecedor: true, unidade: true, criadoPor: { select: { login: true } }, agenda: true, canceladoPor: { select: { login: true } } },
         })
       : null;
+  const vale = encontrado && encontrado.cdId === u.cd.id ? encontrado : null;
 
   return (
     <>
       <Cabecalho
         titulo="Excluir Vale Pallet"
-        descricao="Cancelamento de vales emitidos incorretamente. O vale é mantido para auditoria com status Cancelado e a entrada original é estornada do Estoque do CD (CD → Fornecedor)."
+        descricao={`Cancelamento de vales emitidos incorretamente em ${u.cd.codigo}. O vale é mantido para auditoria com status Cancelado e o lançamento é estornado: vale de fornecedor reduz o saldo com o fornecedor; vale de envio, ocorrência ou ajuste reduz o saldo devedor do CD/Cross.`}
       />
       <BannerOk mensagem={ok} />
 
@@ -50,7 +53,7 @@ export default async function ExcluirValePage({ searchParams }: { searchParams: 
               name="vale"
               defaultValue={busca}
               className="input num !pl-12 uppercase tracking-wider placeholder:normal-case placeholder:tracking-normal"
-              placeholder="ID do Vale Pallet (ex.: VP-000123) ou leia o código de barras"
+              placeholder="Nº do vale (ex.: VP-000123, VE-000124) ou leia o código de barras"
               aria-label="ID do Vale Pallet"
               autoComplete="off"
               autoFocus={!vale}
@@ -59,7 +62,7 @@ export default async function ExcluirValePage({ searchParams }: { searchParams: 
           <button className="btn-primary">Buscar</button>
         </form>
         {busca && numero === null && <p className="mt-3 text-[12px] text-erro">&quot;{busca}&quot; não é um ID de vale válido.</p>}
-        {numero !== null && !vale && <p className="mt-3 text-[12px] text-erro">Vale {numeroVale(numero)} não encontrado.</p>}
+        {numero !== null && !vale && <p className="mt-3 text-[12px] text-erro">Vale nº {numero} não encontrado neste CD.</p>}
       </Painel>
 
       {vale && (
@@ -67,15 +70,16 @@ export default async function ExcluirValePage({ searchParams }: { searchParams: 
           className="mb-6"
           titulo={
             <span>
-              <span className="num text-lima">{numeroVale(vale.numero)}</span> <span className="text-t4">·</span> {vale.fornecedor.nome}
+              <span className="num text-lima">{numeroVale(vale.numero, vale.tipo)}</span> <span className="text-t4">·</span> {parteVale(vale)}
             </span>
           }
           acoes={<StatusBadge status={vale.status} rotulo={rotuloStatusVale[vale.status]} />}
         >
           <dl className="poco mb-5 grid gap-4 p-5 text-[12px] sm:grid-cols-4">
-            <div><dt className="label !mb-1">CNPJ</dt><dd className="num text-t2">{formatarCnpj(vale.fornecedor.cnpj)}</dd></div>
-            <div><dt className="label !mb-1">Transportadora</dt><dd className="text-t2">{vale.transportadora} · <span className="num">{formatarPlaca(vale.placa)}</span></dd></div>
-            <div><dt className="label !mb-1">Nota fiscal</dt><dd className="num text-t2">{rotuloNf(vale)}</dd></div>
+            <div><dt className="label !mb-1">Tipo</dt><dd className="text-t2">{rotuloTipoVale[vale.tipo]}</dd></div>
+            {vale.fornecedor && <div><dt className="label !mb-1">CNPJ</dt><dd className="num text-t2">{formatarCnpj(vale.fornecedor.cnpj)}</dd></div>}
+            <div><dt className="label !mb-1">Transportadora</dt><dd className="text-t2">{vale.transportadora ?? "—"}{vale.placa && <> · <span className="num">{formatarPlaca(vale.placa)}</span></>}</dd></div>
+            {vale.tipo === "FORNECEDOR" && <div><dt className="label !mb-1">Nota fiscal</dt><dd className="num text-t2">{rotuloNf(vale)}</dd></div>}
             <div><dt className="label !mb-1">Quantidade</dt><dd className="num text-[22px] font-semibold text-t1">{formatarNumero(vale.quantidade)}</dd></div>
             <div className="sm:col-span-2"><dt className="label !mb-1">Emissão</dt><dd className="text-t2"><span className="num">{formatarDataHora(vale.criadoEm)}</span> · {vale.criadoPor.login}</dd></div>
             <div className="sm:col-span-2"><dt className="label !mb-1">Documento</dt><dd><Link prefetch={false} href={`/imprimir/vale/${vale.id}`} className="text-lima hover:underline">Ver / reimprimir vale</Link></dd></div>
@@ -114,7 +118,7 @@ export default async function ExcluirValePage({ searchParams }: { searchParams: 
             </p>
           )}
           {vale.status === "FINALIZADO" && (
-            <p className="poco-ouro px-4 py-3 text-[12px] text-ouro">Este vale já foi devolvido ao fornecedor (finalizado) e não pode ser excluído.</p>
+            <p className="poco-ouro px-4 py-3 text-[12px] text-ouro">Este vale já foi baixado e não pode ser excluído.</p>
           )}
           {vale.status === "CANCELADO" && (
             <p className="poco-erro px-4 py-3 text-[12px] text-erro-claro">
@@ -126,7 +130,7 @@ export default async function ExcluirValePage({ searchParams }: { searchParams: 
         </Painel>
       )}
 
-      <HistoricoExclusoes limite={100} />
+      <HistoricoExclusoes cdId={u.cd.id} limite={100} />
     </>
   );
 }

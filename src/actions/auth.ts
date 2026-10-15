@@ -7,7 +7,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { auditar } from "@/lib/conta";
 import { requireUsuario } from "@/lib/auth";
-import { SESSION_COOKIE, SESSION_MAX_AGE, signSession, verifySession } from "@/lib/session";
+import { CD_COOKIE, SESSION_COOKIE, SESSION_MAX_AGE, signSession, verifySession } from "@/lib/session";
 import { falha, sucesso, tratarErro, type Estado } from "./estado";
 
 export async function entrar(_: Estado, form: FormData): Promise<Estado> {
@@ -34,6 +34,8 @@ export async function entrar(_: Estado, form: FormData): Promise<Estado> {
     path: "/",
     maxAge: SESSION_MAX_AGE,
   });
+  // A cada acesso o CD de operação é escolhido de novo (modal obrigatório para quem tem mais de um).
+  (await cookies()).delete(CD_COOKIE);
   await auditar(prisma, { acao: "LOGIN", entidade: "Usuario", entidadeId: usuario.id, usuarioId: usuario.id });
   redirect("/");
 }
@@ -63,7 +65,40 @@ export async function sair() {
     path: "/",
     maxAge: 0,
   });
+  jar.delete(CD_COOKIE);
   redirect("/login");
+}
+
+/**
+ * Define o CD de operação da sessão. Só aceita CDs permitidos ao usuário; com um
+ * único CD vinculado a troca não é possível (o CD é fixo).
+ */
+export async function selecionarCD(_: Estado, form: FormData): Promise<Estado> {
+  try {
+    const u = await requireUsuario();
+    const cdId = String(form.get("cdId") ?? "");
+    const cd = u.cds.find((c) => c.id === cdId);
+    if (!cd) return falha("Selecione um CD permitido para o seu usuário.");
+    if (u.cds.length === 1 && u.cd && u.cd.id !== cd.id) return falha("Seu usuário opera somente no CD vinculado.");
+    (await cookies()).set(CD_COOKIE, cd.id, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: SESSION_MAX_AGE,
+    });
+    await auditar(prisma, {
+      acao: "SELECIONAR_CD",
+      entidade: "CentroDistribuicao",
+      entidadeId: cd.id,
+      usuarioId: u.id,
+      cdId: cd.id,
+      detalhes: { cd: `${cd.codigo} - ${cd.nome}` },
+    });
+  } catch (e) {
+    return tratarErro(e);
+  }
+  redirect("/");
 }
 
 const schemaSenha = z

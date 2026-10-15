@@ -1,17 +1,19 @@
 import clsx from "clsx";
-import { ArrowRight, Boxes, Building2, Hammer } from "lucide-react";
+import { ArrowRight, Boxes, Building2, Hammer, Scale } from "lucide-react";
 import type { Conta } from "@prisma/client";
 import { ehEstoque, obterSaldos, ROTULO_CONTA } from "@/lib/conta";
 import { formatarNumero } from "@/lib/formatos";
 
 const CURTO: Record<Conta, string> = {
   VAZIOS: "Vazios",
-  CD: "CD",
+  CD: "CD (legado)",
   QUEBRADOS: "Quebrados",
   FORNECEDOR: "Fornecedor",
   COMPRA: "Compra",
   DESCARTE: "Descarte",
   AJUSTE: "Ajuste",
+  CARGA: "Carga",
+  CUSTODIA: "Saldo devedor",
 };
 
 const COR: Record<Conta, string> = {
@@ -22,6 +24,8 @@ const COR: Record<Conta, string> = {
   COMPRA: "text-t3 bg-t3/10",
   DESCARTE: "text-erro bg-erro/10",
   AJUSTE: "text-erro bg-erro/10",
+  CARGA: "text-t3 bg-t3/10",
+  CUSTODIA: "text-t1 bg-t2/15",
 };
 
 export function ContaTag({ conta }: { conta: Conta }) {
@@ -43,26 +47,29 @@ export function Fluxo({ origem, destino }: { origem: Conta; destino: Conta }) {
   );
 }
 
-/** Saldos atuais dos 3 estoques, para as telas operacionais. */
-export async function SaldosEstoques({ destaque }: { destaque?: Conta[] }) {
-  const s = await obterSaldos();
-  const itens = [
-    { conta: "VAZIOS" as const, valor: s.vazios, icone: Boxes, cor: "text-lima" },
-    { conta: "CD" as const, valor: s.cd, icone: Building2, cor: "text-t1" },
-    { conta: "QUEBRADOS" as const, valor: s.quebrados, icone: Hammer, cor: "text-ouro" },
+type Destaque = "VAZIOS" | "QUEBRADOS" | "FORNECEDOR" | "CUSTODIA";
+
+/** Posição do CD de operação: Vazios, Quebrados, saldo com fornecedores e saldo devedor. */
+export async function SaldosEstoques({ cdId, destaque }: { cdId: string; destaque?: Destaque[] }) {
+  const s = await obterSaldos(cdId);
+  const itens: { chave: Destaque; rotulo: string; valor: number; icone: typeof Boxes; cor: string }[] = [
+    { chave: "VAZIOS", rotulo: "Estoque de Vazios", valor: s.vazios, icone: Boxes, cor: "text-lima" },
+    { chave: "QUEBRADOS", rotulo: "Estoque de Quebrados", valor: s.quebrados, icone: Hammer, cor: "text-ouro" },
+    { chave: "FORNECEDOR", rotulo: "Saldo do CD · fornecedores", valor: s.fornecedores, icone: Building2, cor: "text-t1" },
+    { chave: "CUSTODIA", rotulo: "Saldo devedor CDs / Cross", valor: s.devedor, icone: Scale, cor: "text-t1" },
   ];
   return (
-    <div className="mb-6 grid gap-4 sm:grid-cols-3">
+    <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {itens.map((i) => (
         <div
-          key={i.conta}
-          className={clsx("card-sm flex items-center gap-4 p-5", destaque?.includes(i.conta) && "ring-1 ring-lima/40")}
+          key={i.chave}
+          className={clsx("card-sm flex items-center gap-4 p-5", destaque?.includes(i.chave) && "ring-1 ring-lima/40")}
         >
           <span className={clsx("poco flex h-11 w-11 flex-none items-center justify-center !rounded-2xl", i.cor)}>
             <i.icone className="h-5 w-5" />
           </span>
           <div>
-            <p className="label !mb-0.5">{ROTULO_CONTA[i.conta]}</p>
+            <p className="label !mb-0.5">{i.rotulo}</p>
             <p className="num text-[26px] font-semibold leading-tight text-t1">{formatarNumero(i.valor)}</p>
           </div>
         </div>

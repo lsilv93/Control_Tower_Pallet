@@ -12,12 +12,17 @@ export default async function CadastrosLayout({ children }: { children: React.Re
           { href: "/cadastros/fornecedores", rotulo: "Fornecedores" },
         ]
       : []),
-    ...(tem(usuario, "cds") ? [{ href: "/cadastros/cds", rotulo: "Centros de Distribuição" }] : []),
+    ...(tem(usuario, "cds")
+      ? [
+          { href: "/cadastros/cds", rotulo: "Centros de Distribuição" },
+          { href: "/cadastros/cross", rotulo: "Pontos de Cross" },
+        ]
+      : []),
     ...(ehAdmin(usuario) ? [{ href: "/cadastros/usuarios", rotulo: "Usuários e Permissões" }] : []),
   ];
   return (
     <>
-      <Cabecalho titulo="Cadastros" descricao="Transportadoras, fornecedores, centros de distribuição e usuários. Toda alteração é auditada." />
+      <Cabecalho titulo="Cadastros" descricao="Transportadoras, fornecedores, CDs, Pontos de Cross e usuários (com os CDs em que operam). Toda alteração é auditada." />
       <AbasRota itens={itens} />
       {children}
     </>
