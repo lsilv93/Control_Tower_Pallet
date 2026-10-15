@@ -21,12 +21,19 @@ export async function entrar(_: Estado, form: FormData): Promise<Estado> {
     return falha("Login ou senha inválidos.");
   }
 
-  const token = await signSession({
-    sub: usuario.id,
-    login: usuario.login,
-    nome: usuario.nome,
-    perfil: usuario.perfil,
-  });
+  let token: string;
+  try {
+    token = await signSession({
+      sub: usuario.id,
+      login: usuario.login,
+      nome: usuario.nome,
+      perfil: usuario.perfil,
+    });
+  } catch (e) {
+    // Sem AUTH_SECRET neste ambiente (ex.: variável criada só para Production na Vercel).
+    console.error(e);
+    return falha("Configuração do servidor incompleta: a variável AUTH_SECRET não está definida neste ambiente. Cadastre-a na Vercel (Settings → Environment Variables) para Production e Preview.");
+  }
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
