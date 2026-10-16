@@ -44,6 +44,15 @@
   --viz-entrada: #3987e5;
   --viz-saida: #e66767;
   --viz-grade: rgba(141, 160, 179, 0.18);
+  /* categóricas (ordem fixa, validada no fundo escuro #0a1b29): unidades e fornecedores */
+  --viz-cat-1: #3987e5;
+  --viz-cat-2: #d95926;
+  --viz-cat-3: #199e70;
+  --viz-cat-4: #c98500;
+  --viz-cat-5: #d55181;
+  --viz-cat-6: #008300;
+  --viz-cat-7: #9085e9;
+  --viz-outros: #6b7c8c;
   color-scheme: dark;
 }
 
@@ -83,6 +92,15 @@
   --viz-entrada: #2a78d6;
   --viz-saida: #e34948;
   --viz-grade: rgba(72, 92, 110, 0.18);
+  /* categóricas (mesma ordem, passos do tema claro; abaixo de 3:1 => valores sempre visíveis na legenda) */
+  --viz-cat-1: #2a78d6;
+  --viz-cat-2: #eb6834;
+  --viz-cat-3: #1baf7a;
+  --viz-cat-4: #eda100;
+  --viz-cat-5: #e87ba4;
+  --viz-cat-6: #008300;
+  --viz-cat-7: #6250d6;
+  --viz-outros: #8a96a3;
   color-scheme: light;
 }
 

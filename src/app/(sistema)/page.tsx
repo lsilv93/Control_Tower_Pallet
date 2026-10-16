@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpFromLine, Boxes, Building2, ClipboardCheck, FileX, Hammer, MonitorPlay, PackagePlus, Recycle, Scale, Trash2, TriangleAlert, Truck } from "lucide-react";
+import { ArrowUpFromLine, Building2, ClipboardCheck, FileClock, FileX, Hammer, MonitorPlay, Network, PackagePlus, Recycle, Trash2, TriangleAlert, Truck, Warehouse } from "lucide-react";
 import { AtualizacaoAutomatica } from "@/components/AtualizacaoAutomatica";
 import { FiltroPeriodo } from "@/components/FiltroPeriodo";
 import { HistoricoExclusoes } from "@/components/HistoricoExclusoes";
@@ -7,13 +7,15 @@ import { SaldosDevedores } from "@/components/SaldosDevedores";
 import { UltimasMovimentacoes } from "@/components/UltimasMovimentacoes";
 import { BarraComposicao } from "@/components/graficos/BarraComposicao";
 import { GraficoFluxo } from "@/components/graficos/GraficoFluxo";
-import { GraficoPendencias } from "@/components/graficos/GraficoPendencias";
+import { GraficoBarrasCross } from "@/components/graficos/GraficoBarrasCross";
+import { GraficoRosca, type FatiaRosca } from "@/components/graficos/GraficoRosca";
+import { PainelValesFornecedor } from "@/components/graficos/PainelValesFornecedor";
 import { Cabecalho, FarolBadge, Indicador, LegendaFarol, Painel, Ponto, StatusBadge, Tabela, Vazio } from "@/components/ui";
 import { redirect } from "next/navigation";
 import { requireCD } from "@/lib/auth";
 import { primeiraRota, tem } from "@/lib/permissoes";
 import { obterSaldos, saldosPorConta } from "@/lib/conta";
-import { consolidacaoTransporte, fluxo, granularidadePara, pendenciasPorFornecedor, serieFluxo, totaisPorTipo, valesEmAberto } from "@/lib/consultas";
+import { consolidacaoTransporte, devedoresPorUnidade, fluxo, granularidadePara, pendenciasPorFornecedor, serieFluxo, totaisPorTipo, valesEmAberto } from "@/lib/consultas";
 import { diaLocal, formatarData } from "@/lib/datas";
 import { formatarNumero as n, numeroVale, rotuloStatusVale } from "@/lib/formatos";
 import { filtroData, lerPeriodo } from "@/lib/periodo";
@@ -36,7 +38,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const intervalo = { inicio: periodo.inicio, fim: periodo.fim };
   const granularidade = granularidadePara(periodo.inicio, periodo.fim);
 
-  const [saldos, fluxoPeriodo, porTipo, serie, saldoAntes, pendencias, vales, excluidos, transporte, retornos] = await Promise.all([
+  const [saldos, fluxoPeriodo, porTipo, serie, saldoAntes, pendencias, vales, excluidos, transporte, retornos, devedores, valesTodos] = await Promise.all([
     obterSaldos(cd.id),
     fluxo(cd.id, intervalo, fornecedorId),
     totaisPorTipo(cd.id, intervalo),
@@ -47,11 +49,39 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     prisma.valePallet.count({ where: { cdId: cd.id, status: "CANCELADO", canceladoEm: filtroData(periodo), ...(fornecedorId ? { fornecedorId } : {}) } }),
     consolidacaoTransporte(cd.id, intervalo),
     prisma.retornoConferencia.aggregate({ where: { cdId: cd.id, criadoEm: filtroData(periodo) }, _sum: { falta: true }, _count: true }),
+    devedoresPorUnidade(cd.id),
+    fornecedorId ? valesEmAberto(cd.id) : null,
   ]);
   const saldoInicial = fornecedorId ? null : saldoAntes ? saldoAntes.VAZIOS + saldoAntes.QUEBRADOS : 0;
   const contagem = (f: string) => vales.filter((x) => x.farol === f).length;
   const sufixo = fornecedor ? ` · ${fornecedor.nome}` : "";
   const fisicos = saldos.vazios + saldos.quebrados;
+
+  // ---- posição atual para os KPIs e gráficos gerenciais ----
+  const crosses = devedores.filter((d) => d.unidade.tipo === "CROSS" && d.saldo > 0);
+  const cdsDestino = devedores.filter((d) => d.unidade.tipo === "CD" && d.saldo > 0);
+  const totalCross = crosses.reduce((s, d) => s + d.saldo, 0);
+  const totalCds = cdsDestino.reduce((s, d) => s + d.saldo, 0);
+  const barrasCross = crosses.map((d) => ({
+    id: d.unidade.id,
+    codigo: d.unidade.codigo,
+    nome: d.unidade.nome,
+    saldo: d.saldo,
+    vales: d.vales,
+    maisAntigo: formatarData(d.maisAntigo),
+    idade: d.idade,
+  }));
+  const fatiasCross = paraFatias(crosses.map((d) => ({ id: d.unidade.id, rotulo: d.unidade.codigo, valor: d.saldo, detalhe: `${d.unidade.nome} · ${d.vales} vale(s)` })));
+  const fatiasFornecedor = paraFatias(pendencias.map((p) => ({ id: p.fornecedor.id, rotulo: p.fornecedor.nome, valor: p.total, detalhe: `${p.vales} vale(s)` })), 6);
+  const abertos = valesTodos ?? vales;
+  const faixa = (min: number, max: number) => abertos.filter((v) => v.idade >= min && v.idade <= max);
+  const fatiasIdade: FatiaRosca[] = [
+    { id: "verde", rotulo: "Em dia · até 19 dias", cor: "var(--viz-bom)", lista: faixa(0, 19) },
+    { id: "amarelo", rotulo: "Atenção · 20 a 29 dias", cor: "var(--viz-alerta)", lista: faixa(20, 29) },
+    { id: "vermelho", rotulo: "Crítico · 30 dias ou mais", cor: "var(--viz-critico)", lista: faixa(30, Number.MAX_SAFE_INTEGER) },
+  ]
+    .map((f) => ({ id: f.id, rotulo: f.rotulo, cor: f.cor, valor: f.lista.reduce((s, v) => s + v.quantidade, 0), detalhe: `${f.lista.length} vale(s)` }))
+    .filter((f) => f.valor > 0);
 
   return (
     <>
@@ -76,30 +106,55 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         fornecedor={fornecedorId}
       />
 
-      {/* Cards em destaque (posição atual do CD) */}
-      <div className="entrada grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="cards-saldos">
-        <section className="card-sm relative overflow-hidden p-6">
-          <div className="pointer-events-none absolute -bottom-8 -right-6 text-lima opacity-[0.06]">
-            <Boxes className="h-40 w-40" />
-          </div>
-          <p className="label">Saldo de pallets vazios</p>
-          <p className="num text-[46px] font-semibold leading-none text-lima" data-testid="saldo-vazios">{n(saldos.vazios)}</p>
-          <p className="mb-4 mt-2 text-[11px] text-t3">pulmão de vazios · atual</p>
+      {/* KPIs superiores · posição atual do CD */}
+      <div className="entrada grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5" data-testid="cards-saldos">
+        <Kpi titulo="Vazios" valor={saldos.vazios} legenda="Estoque físico ativo" icone={Warehouse} cor="lima" testid="saldo-vazios">
           <BarraComposicao
             itens={[
               { rotulo: "Vazios", valor: saldos.vazios, cor: "var(--viz-vazios)" },
               { rotulo: "Quebrados", valor: saldos.quebrados, cor: "var(--viz-quebrados)" },
             ]}
           />
-          <p className="mt-2 text-[11px] text-t4">Estoque físico total: <strong className="num text-t2">{n(fisicos)}</strong></p>
-        </section>
-        <Indicador titulo="Saldo do CD · entradas de fornecedores" valor={n(saldos.fornecedores)} detalhe={`${saldos.valesFornecedorEmAberto} vale(s) pendente(s) de devolução/pagamento`} cor="neutro" icone={<Building2 className="h-6 w-6" />} />
-        <Indicador titulo="Saldo de pallets quebrados" valor={n(saldos.quebrados)} detalhe="aguardando conserto ou descarte" cor="ouro" icone={<Hammer className="h-6 w-6" />} />
-        <Indicador titulo="Saldo devedor · CDs e Cross" valor={n(saldos.devedor)} detalhe="pallets enviados ainda não retornados" cor="neutro" icone={<Scale className="h-6 w-6" />} />
+        </Kpi>
+        <Kpi titulo="Quebrados" valor={saldos.quebrados} legenda="Aguardando reparo ou descarte" icone={Hammer} cor="ouro" rodape={`${fisicos ? Math.round((saldos.quebrados / fisicos) * 100) : 0}% do estoque físico`} />
+        <Kpi titulo="Devedor Cross" valor={totalCross} legenda="Custódia externa" icone={Network} cor="neutro" rodape={`${crosses.length} Ponto(s) de Cross devendo`} />
+        <Kpi titulo="Devedor CDs" valor={totalCds} legenda="Transferências pendentes" icone={Building2} cor="neutro" rodape={`${cdsDestino.length} CD(s) devendo`} />
+        <Kpi titulo="Vales pendentes" valor={saldos.fornecedores} legenda="Débito com fornecedores" icone={FileClock} cor="erro" rodape={`${saldos.valesFornecedorEmAberto} vale(s) a pagar`} />
+      </div>
+
+      {/* Gráficos gerenciais */}
+      <div className="mt-6 grid gap-6 xl:grid-cols-5">
+        <Painel
+          className="xl:col-span-3"
+          titulo={<span className="flex items-center gap-2"><Network className="h-4 w-4 text-lima" /> Saldo devedor por Ponto de Cross</span>}
+          acoes={<span className="num text-[12px] font-semibold text-t1">Total {n(totalCross)} pallets</span>}
+        >
+          <GraficoBarrasCross dados={barrasCross} />
+        </Painel>
+        <Painel
+          className="xl:col-span-2"
+          titulo={<span className="flex items-center gap-2"><Network className="h-4 w-4 text-lima" /> Participação de cada Cross</span>}
+          acoes={<span className="text-[11px] text-t3">% do saldo externo</span>}
+        >
+          <GraficoRosca dados={fatiasCross} rotuloTotal="pallets em Cross" vazio="Nenhum saldo devedor em Pontos de Cross." />
+        </Painel>
+      </div>
+      <div className="mt-6 grid gap-6 xl:grid-cols-5">
+        <Painel
+          className="xl:col-span-2"
+          titulo={<span className="flex items-center gap-2"><FileClock className="h-4 w-4 text-lima" /> Vales pendentes de fornecedores</span>}
+          acoes={<span className="num text-[12px] font-semibold text-t1">{n(saldos.fornecedores)} pallets</span>}
+        >
+          <PainelValesFornecedor porFornecedor={fatiasFornecedor} porIdade={fatiasIdade} />
+        </Painel>
+        <div className="xl:col-span-3">
+          <SaldosDevedores cdId={cd.id} titulo="Detalhamento dos saldos devedores (CDs e Cross)" />
+        </div>
       </div>
 
       {/* Indicadores do período */}
-      <div className="entrada mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <h2 className="secao mb-3 mt-8 flex items-center gap-2">Movimentação no período · {periodo.rotulo}</h2>
+      <div className="entrada grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Indicador titulo="Entradas de fornecedor" valor={n(porTipo("RECEBIMENTO_FORNECEDOR"))} detalhe={periodo.rotulo} icone={<PackagePlus className="h-5 w-5" />} />
         <Indicador titulo="Enviados a CDs / Cross" valor={n(porTipo("ENVIO_UNIDADE"))} detalhe={periodo.rotulo} cor="neutro" icone={<ArrowUpFromLine className="h-5 w-5" />} />
         <Indicador
@@ -117,28 +172,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           cor="erro"
           icone={<Trash2 className="h-5 w-5" />}
         />
-      </div>
-
-      {/* Saldos devedores e pendências de fornecedor */}
-      <div className="mt-6 grid gap-6 xl:grid-cols-5">
-        <div className="xl:col-span-3">
-          <SaldosDevedores cdId={cd.id} titulo="Saldos devedores por Ponto de Cross e CD destino" />
-        </div>
-        <Painel className="xl:col-span-2" titulo="Vales pendentes por fornecedor" acoes={<span className="num text-[12px] font-semibold text-t1">Total {n(saldos.fornecedores)}</span>}>
-          <GraficoPendencias
-            selecionado={fornecedorId}
-            dados={pendencias.slice(0, 10).map((p) => ({
-              id: p.fornecedor.id,
-              nome: p.fornecedor.nome,
-              total: p.total,
-              vales: p.vales,
-              farol: p.farol,
-              maisAntigo: formatarData(p.maisAntigo),
-            }))}
-          />
-          {pendencias.length > 10 && <p className="mt-2 text-[11px] text-t3">Exibindo os 10 maiores de {pendencias.length} fornecedores.</p>}
-          <LegendaFarol itens={[["VERMELHO", "acima de 100"], ["AMARELO", "50 a 100"], ["VERDE", "abaixo de 50 pallets"]]} />
-        </Painel>
       </div>
 
       {/* Consolidação por transportadora */}
@@ -238,5 +271,65 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <UltimasMovimentacoes cdId={cd.id} inicio={periodo.inicio} fim={periodo.fim} fornecedorId={fornecedorId} titulo={`Últimas movimentações · ${periodo.rotulo}${sufixo}`} />
       </div>
     </>
+  );
+}
+
+const CORES = ["var(--viz-cat-1)", "var(--viz-cat-2)", "var(--viz-cat-3)", "var(--viz-cat-4)", "var(--viz-cat-5)", "var(--viz-cat-6)", "var(--viz-cat-7)"];
+
+/**
+ * Fatias da rosca: as maiores (até `maximo`) e o restante somado em "Outros". A cor
+ * segue a entidade (ordem alfabética do rótulo entre as exibidas), não a posição no ranking.
+ */
+function paraFatias(itens: { id: string; rotulo: string; valor: number; detalhe?: string }[], maximo = 7): FatiaRosca[] {
+  const ordenados = [...itens].filter((i) => i.valor > 0).sort((a, b) => b.valor - a.valor);
+  const exibidos = ordenados.length > maximo ? ordenados.slice(0, maximo - 1) : ordenados;
+  const resto = ordenados.slice(exibidos.length);
+  const cor = new Map([...exibidos].sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR")).map((i, k) => [i.id, CORES[k]]));
+  const fatias: FatiaRosca[] = exibidos.map((i) => ({ ...i, cor: cor.get(i.id)! }));
+  if (resto.length) {
+    fatias.push({ id: "outros", rotulo: `Outros (${resto.length})`, valor: resto.reduce((s, i) => s + i.valor, 0), cor: "var(--viz-outros)" });
+  }
+  return fatias;
+}
+
+const CORES_KPI = { lima: "text-lima", ouro: "text-ouro", erro: "text-erro", neutro: "text-t1" } as const;
+
+/** KPI compacto: ícone em poço, rótulo, valor em destaque e legenda curta. */
+function Kpi({
+  titulo,
+  valor,
+  legenda,
+  icone: Icone,
+  cor,
+  rodape,
+  testid,
+  children,
+}: {
+  titulo: string;
+  valor: number;
+  legenda: string;
+  icone: typeof Warehouse;
+  cor: keyof typeof CORES_KPI;
+  rodape?: string;
+  testid?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <section className="card-sm relative flex min-w-0 flex-col overflow-hidden p-5">
+      <Icone className={`pointer-events-none absolute -bottom-5 -right-4 h-28 w-28 opacity-[0.06] ${CORES_KPI[cor]}`} aria-hidden />
+      <div className="mb-3 flex items-center gap-3">
+        <span className={`poco flex h-10 w-10 flex-none items-center justify-center !rounded-2xl ${CORES_KPI[cor]}`}>
+          <Icone className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase leading-tight tracking-[0.12em] text-t3">{titulo}</p>
+          <p className="mt-0.5 text-[11px] leading-tight text-t4">{legenda}</p>
+        </div>
+      </div>
+      <p className={`num text-[34px] font-semibold leading-none ${cor === "lima" ? "text-lima" : "text-t1"}`} data-testid={testid}>{n(valor)}</p>
+      <p className="mt-1 text-[11px] text-t3">pallets PBR</p>
+      {children && <div className="mt-3">{children}</div>}
+      {rodape && <p className="mt-auto pt-3 text-[11px] text-t3">{rodape}</p>}
+    </section>
   );
 }
