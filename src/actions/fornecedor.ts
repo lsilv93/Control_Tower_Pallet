@@ -122,10 +122,9 @@ export async function identificarNfRecebimento(leitura: string): Promise<Identif
 
 const operacionais = {
   transportadora: z.string().trim().min(2, "Informe a transportadora.").max(200),
-  placa: z.string().refine(placaValida, "Placa inválida (use ABC1234 ou ABC1D23)."),
+  placa: z.string().refine(placaValida, "Placa inválida (use ABC-1234 ou ABC1D23)."),
   quantidade: z.coerce.number({ message: "Informe a quantidade." }).int("Quantidade deve ser inteira.").positive("Quantidade deve ser maior que zero."),
   conferente: z.string().trim().min(2, "Informe o conferente.").max(120),
-  motorista: z.string().trim().max(120).optional().transform((v) => v || null),
   observacao: z.string().trim().max(500).optional(),
 };
 
@@ -164,7 +163,6 @@ export async function registrarRecebimentoFornecedor(_: Estado, form: FormData):
           chaveNfe: nfe?.chave ?? null,
           semNotaFiscal: !nfe,
           conferente: d.conferente,
-          motorista: d.motorista,
           quantidade: d.quantidade,
           observacao: d.observacao || null,
           criadoPorId: usuario.id,

@@ -5,7 +5,7 @@ import { SaldosEstoques } from "@/components/Contas";
 import { Cabecalho, Painel } from "@/components/ui";
 import { prisma } from "@/lib/prisma";
 
-export const metadata = { title: "Recebimento de Pallets" };
+export const metadata = { title: "Recebimento Pallet Fornecedor" };
 
 export default async function EntradaFornecedorPage() {
   const usuario = await requirePermissao("entrada");
@@ -18,11 +18,11 @@ export default async function EntradaFornecedorPage() {
   return (
     <>
       <Cabecalho
-        titulo="Recebimento de Pallets"
+        titulo="Recebimento Pallet Fornecedor"
         descricao={`Bipe o código de barras da NF-e (ou use a opção Sem Nota Fiscal). Gera o Vale-Pallet de Fornecedor e sobe o saldo de ${usuario.cd.codigo} com o fornecedor (pendente de devolução/pagamento). Os vazios só saem na baixa/pagamento.`}
       />
       <SaldosEstoques cdId={usuario.cd.id} destaque={["FORNECEDOR"]} />
-      <Painel titulo="Recebimento de pallets">
+      <Painel titulo="Recebimento pallet fornecedor">
         <FormRecebimento transportadoras={transportadoras.map((t) => t.nome)} conferentePadrao={usuario.nome} />
       </Painel>
       <div className="mt-6">

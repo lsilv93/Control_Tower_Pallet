@@ -21,7 +21,8 @@ export type ValeDoc = {
   quantidade: number;
   transportadora: string | null;
   placa: string | null;
-  motorista: string | null;
+  rota: string | null;
+  dataFaturamento: Date | null;
   notaFiscal: string | null;
   serieNf: string | null;
   semNotaFiscal: boolean;
@@ -73,9 +74,16 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
             : `Pendente de devolução ao CD ${v.cd.codigo}`;
   const transporte: Celula[] = [
     { rotulo: "Transportadora", valor: v.transportadora ?? "—", colunas: 2 },
-    { rotulo: "Placa do veículo", valor: v.placa ? formatarPlaca(v.placa) : "—", colunas: 1 },
-    { rotulo: "Motorista", valor: v.motorista ?? "—", colunas: 1 },
+    { rotulo: "Placa do veículo", valor: v.placa ? formatarPlaca(v.placa) : "—", colunas: 2 },
   ];
+  // Envio para Ponto de Cross: rota e data de faturamento (opcionais).
+  const envioCross: Celula[] = [
+    { rotulo: "Transportadora", valor: v.transportadora ?? "—", colunas: 1 },
+    { rotulo: "Placa do veículo", valor: v.placa ? formatarPlaca(v.placa) : "—", colunas: 1 },
+    { rotulo: "Rota", valor: v.rota ?? "—", colunas: 1 },
+    { rotulo: "Data de faturamento", valor: v.dataFaturamento ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(v.dataFaturamento) : "—", colunas: 1 },
+  ];
+  const envioCD: Celula[] = [{ rotulo: "Transportadora", valor: v.transportadora ?? "—", colunas: 4 }];
   const emissao: Celula[] = [
     { rotulo: "Data/hora de emissão", valor: formatarDataHora(v.criadoEm), colunas: 2 },
     { rotulo: "Emitido por", valor: v.criadoPor.login, colunas: 1 },
@@ -102,10 +110,7 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
           { rotulo: "Placa do veículo", valor: v.placa ? formatarPlaca(v.placa) : "—", colunas: 1 },
           { rotulo: "Nota fiscal", valor: rotuloNf(v), colunas: 1 },
         ],
-        [
-          { rotulo: "CD recebedor", valor: `${v.cd.codigo} - ${v.cd.nome}`, colunas: 2 },
-          { rotulo: "Motorista", valor: v.motorista ?? "—", colunas: 2 },
-        ],
+        [{ rotulo: "CD recebedor", valor: `${v.cd.codigo} - ${v.cd.nome}`, colunas: 4 }],
         emissao,
         rodape,
       ],
@@ -118,7 +123,7 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
         : null,
       declaracao:
         "Declaramos o recebimento da quantidade de pallets PBR acima, registrada como crédito do fornecedor, a ser devolvida mediante agenda de retirada. Apresente este vale no momento da retirada.",
-      assinaturas: ["Conferente / Recebedor", "Motorista / Transportador"],
+      assinaturas: ["Conferente / Recebedor", "Transportador"],
       nomeAssinatura: v.conferente,
     };
   }
@@ -139,11 +144,11 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
       ...base,
       titulo: "VALE-PALLET DE ENVIO",
       subtitulo: "Pallets PBR enviados para CD / Ponto de Cross",
-      linhas: [partes, transporte, emissao, rodape],
+      linhas: [partes, v.unidade?.tipo === "CROSS" ? envioCross : envioCD, emissao, rodape],
       rotuloQuantidade: "Quantidade de pallets PBR enviados",
       destaque: null,
       declaracao: `Os pallets PBR acima ficam sob custódia do destino e compõem o seu saldo devedor com o CD ${v.cd.codigo} até a conferência de retorno.`,
-      assinaturas: ["Expedição (CD emissor)", "Motorista / Transportador"],
+      assinaturas: ["Expedição (CD emissor)", "Transportador"],
     };
   }
   if (v.tipo === "OCORRENCIA") {
@@ -169,7 +174,7 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
         texto: "A quantidade física recebida foi menor que a soma dos vales devolvidos. A diferença permanece no saldo devedor do remetente.",
       },
       declaracao: `Os pallets em falta continuam devidos ao CD ${v.cd.codigo} e retornam ao saldo devedor do remetente até nova devolução.`,
-      assinaturas: ["Conferente (CD recebedor)", "Motorista / Transportador"],
+      assinaturas: ["Conferente (CD recebedor)", "Transportador"],
     };
   }
   return {

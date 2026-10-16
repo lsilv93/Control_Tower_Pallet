@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { enviarParaUnidade } from "@/actions/unidades";
 import { FormAcao } from "./FormAcao";
+import { InputPlaca } from "./InputPlaca";
 import { SaldosDevedores } from "./SaldosDevedores";
 import { UltimasMovimentacoes } from "./UltimasMovimentacoes";
 import { Abas, Cabecalho, Painel } from "./ui";
@@ -22,7 +23,7 @@ export async function PaginaEnvio({ tipo }: { tipo: "CD" | "CROSS" }) {
   const c = config[tipo];
   const [destinos, transportadoras] = await Promise.all([
     prisma.centroDistribuicao.findMany({ where: { ativo: true, tipo, id: { not: u.cd.id } }, orderBy: { codigo: "asc" } }),
-    prisma.transportadora.findMany({ where: { ativo: true }, select: { nome: true }, orderBy: { nome: "asc" } }),
+    prisma.transportadora.findMany({ where: { ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
   ]);
 
   return (
@@ -48,7 +49,7 @@ export async function PaginaEnvio({ tipo }: { tipo: "CD" | "CROSS" }) {
               <Link href={c.cadastro} className="font-semibold text-lima hover:underline">Cadastrar</Link>
             </p>
           ) : (
-            <FormAcao acao={enviarParaUnidade} botao="Gerar Vale de Envio" classeBotao="btn-primary w-full" limpar={false}>
+            <FormAcao acao={enviarParaUnidade} botao={transportadoras.length ? "Gerar Vale de Envio" : undefined} classeBotao="btn-primary w-full" limpar={false}>
               <input type="hidden" name="tipoDestino" value={tipo} />
               <div>
                 <label className="label" htmlFor="unidadeId">{c.rotulo} *</label>
@@ -66,25 +67,37 @@ export async function PaginaEnvio({ tipo }: { tipo: "CD" | "CROSS" }) {
                 <input id="quantidade" name="quantidade" type="number" min={1} step={1} className="input" required />
               </div>
               <div>
-                <label className="label" htmlFor="transportadora">Transportadora *</label>
-                <input id="transportadora" name="transportadora" className="input" required minLength={2} maxLength={200} list="lista-transportadoras" autoComplete="off" />
-                <datalist id="lista-transportadoras">
-                  {transportadoras.map((t) => <option key={t.nome} value={t.nome} />)}
-                </datalist>
+                <label className="label" htmlFor="transportadoraId">Transportador *</label>
+                {transportadoras.length === 0 ? (
+                  <p className="poco-erro px-4 py-3 text-[12px] text-erro-claro">
+                    Nenhuma transportadora cadastrada.{" "}
+                    <Link href="/cadastros/transportadoras" className="font-semibold underline">Cadastrar transportadora</Link>
+                  </p>
+                ) : (
+                  <select id="transportadoraId" name="transportadoraId" className="input" required defaultValue="">
+                    <option value="" disabled>Selecione...</option>
+                    {transportadoras.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                  </select>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label" htmlFor="placa">Placa *</label>
-                  <input id="placa" name="placa" className="input uppercase" required maxLength={8} placeholder="ABC1D23" />
-                </div>
-                <div>
-                  <label className="label" htmlFor="motorista">Motorista</label>
-                  <input id="motorista" name="motorista" className="input" maxLength={120} />
-                </div>
-              </div>
+              {tipo === "CROSS" && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="label" htmlFor="rota">Rota</label>
+                      <input id="rota" name="rota" className="input" maxLength={60} placeholder="Ex.: R-01/SP, ROTA_102#" autoComplete="off" />
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="dataFaturamento">Data de faturamento</label>
+                      <input id="dataFaturamento" name="dataFaturamento" type="date" className="input" />
+                    </div>
+                  </div>
+                  <InputPlaca rotulo="Placa do veículo" />
+                </>
+              )}
               <div>
                 <label className="label" htmlFor="observacao">Observação</label>
-                <textarea id="observacao" name="observacao" rows={2} className="input" maxLength={500} />
+                <textarea id="observacao" name="observacao" rows={3} className="input" maxLength={500} />
               </div>
             </FormAcao>
           )}

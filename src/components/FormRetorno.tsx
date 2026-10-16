@@ -5,6 +5,7 @@ import clsx from "clsx";
 import { ClipboardCheck, TriangleAlert } from "lucide-react";
 import { registrarRetorno } from "@/actions/unidades";
 import { BotaoEnviar, Mensagem, useAcao } from "./FormAcao";
+import { InputPlaca } from "./InputPlaca";
 
 type Unidade = { id: string; codigo: string; nome: string; tipo: "CD" | "CROSS" };
 type Vale = { id: string; codigo: string; unidadeId: string; quantidade: number; tipoRotulo: string; data: string; transportadora: string | null };
@@ -171,16 +172,7 @@ export function FormRetorno({ unidades, vales, unidadeInicial }: { unidades: Uni
       <input type="hidden" name="confirmarFalta" value={faltaConfirmada && falta > 0 ? "1" : "0"} />
 
       <div className={clsx("space-y-4", faltaConfirmada && falta > 0 && "rounded-2xl ring-1 ring-erro/40 p-3")}>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="label" htmlFor="placa">Placa do veículo{faltaConfirmada && falta > 0 ? " *" : ""}</label>
-            <input id="placa" name="placa" className="input uppercase" maxLength={8} placeholder="ABC1D23" required={faltaConfirmada && falta > 0} />
-          </div>
-          <div>
-            <label className="label" htmlFor="motorista">Motorista</label>
-            <input id="motorista" name="motorista" className="input" maxLength={120} />
-          </div>
-        </div>
+        <InputPlaca key={faltaConfirmada && falta > 0 ? "obrigatoria" : "opcional"} obrigatorio={faltaConfirmada && falta > 0} />
         <div>
           <label className="label" htmlFor="transportadora">Transportadora{faltaConfirmada && falta > 0 ? " *" : ""}</label>
           <input id="transportadora" name="transportadora" className="input" maxLength={200} required={faltaConfirmada && falta > 0} minLength={faltaConfirmada && falta > 0 ? 2 : undefined} />

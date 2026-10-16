@@ -24,9 +24,19 @@ const schemaEnvio = z.object({
   tipoDestino: z.enum(["CD", "CROSS"]),
   unidadeId: z.string().min(1, "Selecione o destino."),
   quantidade: quantidade(),
-  transportadora: z.string().trim().min(2, "Informe a transportadora.").max(200),
-  placa: z.string().refine(placaValida, "Placa inválida (use ABC1234 ou ABC1D23)."),
-  motorista: opcional(120),
+  transportadoraId: z.string().min(1, "Selecione o transportador."),
+  // Somente no envio para Ponto de Cross (opcionais).
+  rota: opcional(60),
+  dataFaturamento: z
+    .string()
+    .optional()
+    .transform((v) => v || null)
+    .refine((v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v), "Data de faturamento inválida."),
+  placa: z
+    .string()
+    .optional()
+    .transform((v) => (v ? normalizarPlaca(v) : null))
+    .refine((v) => !v || placaValida(v), "Placa inválida (use ABC-1234 ou ABC1D23)."),
   observacao: opcional(500),
 });
 
@@ -39,21 +49,28 @@ export async function enviarParaUnidade(_: Estado, form: FormData): Promise<Esta
   try {
     const u = await exigir("cd");
     const d = schemaEnvio.parse(Object.fromEntries(form));
-    const placa = normalizarPlaca(d.placa);
+    const cross = d.tipoDestino === "CROSS";
+    // Rota, faturamento e placa só existem no envio para Ponto de Cross.
+    const placa = cross ? d.placa : null;
+    const rota = cross ? d.rota : null;
+    const dataFaturamento = cross && d.dataFaturamento ? new Date(`${d.dataFaturamento}T00:00:00Z`) : null;
     valeId = await comContaBloqueada(async (tx) => {
       const destino = await tx.centroDistribuicao.findUnique({ where: { id: d.unidadeId } });
       if (!destino || !destino.ativo || destino.tipo !== d.tipoDestino) {
         throw new ErroNegocio(`${rotuloTipoUnidade[d.tipoDestino]} de destino inválido ou inativo.`);
       }
       if (destino.id === u.cd.id) throw new ErroNegocio("O destino não pode ser o próprio CD de operação.");
+      const transportadora = await tx.transportadora.findUnique({ where: { id: d.transportadoraId } });
+      if (!transportadora || !transportadora.ativo) throw new ErroNegocio("Transportador inválido ou inativo. Selecione um transportador cadastrado.");
       const vale = await tx.valePallet.create({
         data: {
           tipo: "ENVIO",
           cdId: u.cd.id,
           unidadeId: destino.id,
-          transportadora: d.transportadora,
+          transportadora: transportadora.nome,
           placa,
-          motorista: d.motorista,
+          rota,
+          dataFaturamento,
           quantidade: d.quantidade,
           observacao: d.observacao,
           criadoPorId: u.id,
@@ -68,7 +85,7 @@ export async function enviarParaUnidade(_: Estado, form: FormData): Promise<Esta
         destino: "CUSTODIA",
         quantidade: d.quantidade,
         observacao: `${numeroVale(vale.numero, "ENVIO")} para ${destino.codigo} - ${destino.nome}`,
-        detalhes: { numero: vale.numero, destino: `${destino.codigo} - ${destino.nome}`, tipoDestino: destino.tipo, transportadora: d.transportadora, placa, motorista: d.motorista },
+        detalhes: { numero: vale.numero, destino: `${destino.codigo} - ${destino.nome}`, tipoDestino: destino.tipo, transportadora: transportadora.nome, placa, rota, dataFaturamento: d.dataFaturamento },
       });
       await lancar(tx, {
         tipo: "ENVIO_UNIDADE",
@@ -77,7 +94,7 @@ export async function enviarParaUnidade(_: Estado, form: FormData): Promise<Esta
         cdId: u.cd.id,
         unidadeId: destino.id,
         valeId: vale.id,
-        observacao: `${numeroVale(vale.numero, "ENVIO")} - ${d.transportadora} - ${placa}${d.observacao ? ` - ${d.observacao}` : ""}`,
+        observacao: [numeroVale(vale.numero, "ENVIO"), transportadora.nome, placa, rota && `Rota ${rota}`, d.observacao].filter(Boolean).join(" - "),
       });
       return vale.id;
     });
@@ -97,7 +114,6 @@ const schemaRetorno = z.object({
   confirmarFalta: z.boolean(),
   placa: z.string().optional(),
   transportadora: opcional(200),
-  motorista: opcional(120),
   observacao: opcional(500),
 });
 
@@ -119,7 +135,6 @@ export async function registrarRetorno(_: Estado, form: FormData): Promise<Estad
       confirmarFalta: form.get("confirmarFalta") === "1",
       placa: form.get("placa") ? String(form.get("placa")) : undefined,
       transportadora: form.get("transportadora") ?? undefined,
-      motorista: form.get("motorista") ?? undefined,
       observacao: form.get("observacao") ?? undefined,
     });
 
@@ -168,7 +183,6 @@ export async function registrarRetorno(_: Estado, form: FormData): Promise<Estad
           falta,
           placa,
           transportadora: d.transportadora,
-          motorista: d.motorista,
           observacao: d.observacao,
           usuarioId: u.id,
         },
@@ -200,7 +214,6 @@ export async function registrarRetorno(_: Estado, form: FormData): Promise<Estad
             quantidade: falta,
             transportadora: d.transportadora,
             placa,
-            motorista: d.motorista,
             retornoOrigemId: retorno.id,
             observacao: `OCORRÊNCIA DE DIVERGÊNCIA FÍSICA na conferência ${numeroRetorno(retorno.numero)}: vales ${codigos} somam ${total}, contagem física ${fisico}, falta de ${falta} pallet(s). ${d.observacao}`,
             criadoPorId: u.id,
@@ -225,7 +238,6 @@ export async function registrarRetorno(_: Estado, form: FormData): Promise<Estad
             falta,
             placa,
             transportadora: d.transportadora,
-            motorista: d.motorista,
           },
         });
       }

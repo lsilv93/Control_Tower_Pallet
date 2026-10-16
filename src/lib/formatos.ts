@@ -39,6 +39,24 @@ export function normalizarPlaca(placa: string): string {
   return placa.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 export const placaValida = (placa: string) => /^[A-Z]{3}\d[A-Z0-9]\d{2}$/.test(normalizarPlaca(placa));
+/**
+ * Máscara de digitação da placa: maiúsculas, só os caracteres válidos em cada posição
+ * (3 letras, 1 número, 1 letra ou número, 2 números) e hífen automático no padrão
+ * antigo (ABC-1234). No padrão Mercosul fica sem hífen (ABC1D23).
+ */
+export function mascaraPlaca(valor: string): string {
+  const entrada = valor.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  let p = "";
+  for (const c of entrada) {
+    const i = p.length;
+    if (i >= 7) break;
+    const letra = /[A-Z]/.test(c);
+    const numero = /\d/.test(c);
+    if (i < 3 ? letra : i === 3 || i >= 5 ? numero : letra || numero) p += c;
+  }
+  return p.length > 4 && /\d/.test(p[4]) ? `${p.slice(0, 3)}-${p.slice(3)}` : p;
+}
+
 export function formatarPlaca(placa: string): string {
   const p = normalizarPlaca(placa);
   return /^[A-Z]{3}\d{4}$/.test(p) ? `${p.slice(0, 3)}-${p.slice(3)}` : p;

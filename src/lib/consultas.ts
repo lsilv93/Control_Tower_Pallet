@@ -165,7 +165,6 @@ export async function valesDevedoresPendentes(cdId: string) {
 
 export type LinhaTransporte = {
   transportadora: string;
-  motorista: string;
   operacoes: number;
   recebidosFornecedor: number;
   enviados: number;
@@ -176,45 +175,44 @@ export type LinhaTransporte = {
 const chaveTransp = (t: string | null) => (t ?? "").trim().replace(/\s+/g, " ");
 
 /**
- * Consolidação das movimentações do CD por transportadora / motorista no período:
+ * Consolidação das movimentações do CD por transportadora no período:
  * recebimentos de fornecedor e envios (vales emitidos) e retornos conferidos (com faltas).
  */
 export async function consolidacaoTransporte(cdId: string, periodo: Intervalo = {}): Promise<LinhaTransporte[]> {
   const criadoEm = periodo.inicio || periodo.fim ? { ...(periodo.inicio ? { gte: periodo.inicio } : {}), ...(periodo.fim ? { lt: periodo.fim } : {}) } : undefined;
   const [vales, retornos] = await Promise.all([
     prisma.valePallet.groupBy({
-      by: ["transportadora", "motorista", "tipo"],
+      by: ["transportadora", "tipo"],
       where: { cdId, tipo: { in: ["FORNECEDOR", "ENVIO"] }, status: { not: "CANCELADO" }, ...(criadoEm ? { criadoEm } : {}) },
       _sum: { quantidade: true },
       _count: true,
     }),
     prisma.retornoConferencia.groupBy({
-      by: ["transportadora", "motorista"],
+      by: ["transportadora"],
       where: { cdId, ...(criadoEm ? { criadoEm } : {}) },
       _sum: { quantidadeFisica: true, falta: true },
       _count: true,
     }),
   ]);
   const mapa = new Map<string, LinhaTransporte>();
-  const linha = (t: string | null, m: string | null) => {
+  const linha = (t: string | null) => {
     const transportadora = chaveTransp(t) || "Não informada";
-    const motorista = chaveTransp(m) || "—";
-    const k = `${transportadora.toUpperCase()}|${motorista.toUpperCase()}`;
+    const k = transportadora.toUpperCase();
     let l = mapa.get(k);
     if (!l) {
-      l = { transportadora, motorista, operacoes: 0, recebidosFornecedor: 0, enviados: 0, retornados: 0, faltas: 0 };
+      l = { transportadora, operacoes: 0, recebidosFornecedor: 0, enviados: 0, retornados: 0, faltas: 0 };
       mapa.set(k, l);
     }
     return l;
   };
   for (const g of vales) {
-    const l = linha(g.transportadora, g.motorista);
+    const l = linha(g.transportadora);
     l.operacoes += g._count;
     if (g.tipo === "FORNECEDOR") l.recebidosFornecedor += g._sum.quantidade ?? 0;
     else l.enviados += g._sum.quantidade ?? 0;
   }
   for (const g of retornos) {
-    const l = linha(g.transportadora, g.motorista);
+    const l = linha(g.transportadora);
     l.operacoes += g._count;
     l.retornados += g._sum.quantidadeFisica ?? 0;
     l.faltas += g._sum.falta ?? 0;

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import clsx from "clsx";
 import { ArrowLeft, Boxes, CalendarClock, ClipboardCheck, Factory, Hammer, Recycle, Scale, Trash2 } from "lucide-react";
 import { AtualizacaoTV } from "@/components/AtualizacaoTV";
+import { BotaoTelaCheia } from "@/components/BotaoTelaCheia";
 import { requireCD } from "@/lib/auth";
 import { formatarNumero as n, numeroAgenda, rotuloStatusAgenda, rotuloTipoUnidade } from "@/lib/formatos";
 import { tem } from "@/lib/permissoes";
@@ -114,7 +115,10 @@ export default async function TelaTV() {
             </h1>
           </div>
         </div>
-        <AtualizacaoTV versaoInicial={versao} />
+        <div className="flex flex-wrap items-center gap-4">
+          <AtualizacaoTV versaoInicial={versao} />
+          <BotaoTelaCheia />
+        </div>
       </header>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

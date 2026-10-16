@@ -141,10 +141,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </Painel>
       </div>
 
-      {/* Consolidação por transportadora / motorista */}
+      {/* Consolidação por transportadora */}
       <div className="mt-6">
         <Painel
-          titulo={<span className="flex items-center gap-2"><Truck className="h-4 w-4 text-lima" /> Consolidação por transportadora / motorista</span>}
+          titulo={<span className="flex items-center gap-2"><Truck className="h-4 w-4 text-lima" /> Consolidação por transportadora</span>}
           acoes={<span className="text-[11px] text-t3">{periodo.rotulo}</span>}
         >
           {transporte.length === 0 ? (
@@ -154,16 +154,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <table className="tabela" data-testid="tabela-transporte">
                 <thead className="sticky top-0">
                   <tr>
-                    <th>Transportadora</th><th>Motorista</th><th className="text-right">Operações</th>
+                    <th>Transportadora</th><th className="text-right">Operações</th>
                     <th className="text-right">Recebidos (fornecedor)</th><th className="text-right">Enviados</th>
                     <th className="text-right">Retornados</th><th className="text-right">Faltas</th>
                   </tr>
                 </thead>
                 <tbody>
                   {transporte.map((t) => (
-                    <tr key={`${t.transportadora}|${t.motorista}`}>
+                    <tr key={t.transportadora}>
                       <td className="font-medium text-t1">{t.transportadora}</td>
-                      <td>{t.motorista}</td>
                       <td className="num text-right">{t.operacoes}</td>
                       <td className="num text-right">{n(t.recebidosFornecedor)}</td>
                       <td className="num text-right">{n(t.enviados)}</td>

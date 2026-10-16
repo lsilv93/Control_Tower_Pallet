@@ -21,11 +21,11 @@ Sistema web para controlar a **conta corrente de pallets PBR**: saldo do pulmão
 
 | Módulo | Rota | O que faz |
 |---|---|---|
-| Dashboard (Control Tower) | `/` | Cards do CD: **Vazios**, **Saldo do CD (entradas de fornecedores)**, **Quebrados**, **Saldo devedor de CDs/Cross**. Indicadores do período (entradas, envios, retornos e faltas, recuperados, descartados), **saldos devedores por Ponto de Cross e CD destino**, **vales pendentes por fornecedor**, **consolidação por transportadora/motorista**, extrato dos estoques físicos, Farol Vale-pallet, cancelados e últimas movimentações. Filtros: Dia, Semana do Ano, Mês, Intervalo, Geral e Fornecedor. |
-| **Tela TV (Control Center)** | `/tv` | Tela cheia para monitores da gerência: Vazios, Quebrados, Recuperados e Descartados (Dia/Mês/Geral), entradas e envios, vales pendentes (total e por fornecedor), saldo devedor por CD/Cross, recebidos no dia por unidade (com faltas) e retiradas agendadas para hoje. **Auto-refresh:** consulta a cada 10 s se houve novo lançamento e recarrega na hora; recarrega também a cada 60 s. |
-| Envio para CD / Ponto de Cross | `/cd/envio`, `/cross/envio` | Gera o **Vale-Pallet de Envio** (VE-). **Não subtrai dos Vazios**: só soma no saldo devedor e nos vales pendentes do destino. |
+| Dashboard (Control Tower) | `/` | Cards do CD: **Vazios**, **Saldo do CD (entradas de fornecedores)**, **Quebrados**, **Saldo devedor de CDs/Cross**. Indicadores do período (entradas, envios, retornos e faltas, recuperados, descartados), **saldos devedores por Ponto de Cross e CD destino**, **vales pendentes por fornecedor**, **consolidação por transportadora**, extrato dos estoques físicos, Farol Vale-pallet, cancelados e últimas movimentações. Filtros: Dia, Semana do Ano, Mês, Intervalo, Geral e Fornecedor. |
+| **Tela TV (Control Center)** | `/tv` | Tela cheia para monitores da gerência: Vazios, Quebrados, Recuperados e Descartados (Dia/Mês/Geral), entradas e envios, vales pendentes (total e por fornecedor), saldo devedor por CD/Cross, recebidos no dia por unidade (com faltas) e retiradas agendadas para hoje. **Botão **Tela cheia** (API Fullscreen do navegador; Esc volta ao normal). **Auto-refresh:** consulta a cada 10 s se houve novo lançamento e recarrega na hora; recarrega também a cada 60 s. |
+| Envio para CD / Ponto de Cross | `/cd/envio`, `/cross/envio` | Gera o **Vale-Pallet de Envio** (VE-). **Não subtrai dos Vazios**: só soma no saldo devedor e nos vales pendentes do destino. **Envio para CD:** CD destino, transportador (lista do cadastro), quantidade e observação. **Envio para Cross:** Ponto de Cross e transportador (listas do cadastro), quantidade e, opcionais, rota (texto livre, ex. `R-01/SP`), data de faturamento, placa e observação. |
 | **Retorno / Conferência** | `/retorno` | Seleciona os vales devolvidos pelo CD/Cross (soma automática) e a **quantidade física contada**. Física menor que os vales: aviso *"Quantidade física (290) menor que o total dos vales (300). Confirmar a falta de 10 pallets?"*; ao confirmar, **placa, transportadora e justificativa são obrigatórias**. Entra nos Vazios só o físico, os vales são baixados e é gerado automaticamente o **Vale-Ocorrência** (VO-) com a diferença, que volta ao saldo devedor do remetente. Física maior que os vales é bloqueada. |
-| Recebimento de Pallets | `/fornecedor/entrada` | Leitura da chave da NF-e (ou *Sem Nota Fiscal*), com motorista opcional. Gera o **Vale-Pallet de Fornecedor** (VP-) e **sobe o saldo do CD com o fornecedor**; os Vazios não mudam. |
+| Recebimento Pallet Fornecedor | `/fornecedor/entrada` | Leitura da chave da NF-e (ou *Sem Nota Fiscal*). Gera o **Vale-Pallet de Fornecedor** (VP-) e **sobe o saldo do CD com o fornecedor**; os Vazios não mudam. |
 | Agendar Retirada / Baixa de Pagamento | `/vales`, `/agendas` | Agenda a retirada dos vales de fornecedor; a baixa **subtrai dos Vazios** e reduz a dívida com o fornecedor. |
 | Consulta de Vales | `/vales/consulta`, `/vales/[id]` | Todos os tipos (VP, VE, VO, VA), com filtros por tipo, fornecedor, CD/Cross, status e período. PDF e impressão A4 em 2 vias com código de barras. |
 | Excluir Vale | `/vales/excluir` | Cancela qualquer tipo de vale pendente com motivo. Fornecedor: estorna o saldo com o fornecedor. Envio, ocorrência ou ajuste: reduz o saldo devedor. |
@@ -154,6 +154,10 @@ O botão **Sair** fica fixo no topo do menu lateral (ao lado do tema) e no cabe�
 ## Tema claro / escuro
 
 O botão de sol/lua no menu (ou no cabeçalho, no celular, e na tela de login) alterna o tema. A escolha fica salva no navegador (cookie) e é aplicada já na renderização do servidor, sem piscar.
+
+## Placa do veículo
+
+Em todos os campos de placa (recebimento, envio para Cross e conferência de retorno) a digitação é formatada automaticamente em maiúsculas e aceita os dois padrões: **antigo** `ABC-1234` (ou `ABC1234`) e **Mercosul** `ABC1D23`. O servidor valida de novo. O campo *Motorista* foi removido do sistema.
 
 ## Leitores de código de barras
 

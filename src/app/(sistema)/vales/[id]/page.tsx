@@ -71,7 +71,8 @@ export default async function DetalheValePage({ params }: { params: Promise<{ id
             {vale.chaveNfe && dado("Chave de acesso NF-e", <span className="num break-all text-[11px]">{vale.chaveNfe}</span>)}
             {dado("Transportadora", vale.transportadora ?? "—")}
             {dado("Placa", <span className="num">{vale.placa ? formatarPlaca(vale.placa) : "—"}</span>)}
-            {dado("Motorista", vale.motorista ?? "—")}
+            {vale.rota && dado("Rota", vale.rota)}
+            {vale.dataFaturamento && dado("Data de faturamento", new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(vale.dataFaturamento))}
             {vale.retornoOrigem && dado("Ocorrência da conferência", <span className="num font-semibold text-erro">{numeroRetorno(vale.retornoOrigem.numero)} · vales {vale.retornoOrigem.totalVales} × físico {vale.retornoOrigem.quantidadeFisica}</span>)}
             {dado("Quantidade / tipo", <span><span className="num text-[20px] font-semibold">{formatarNumero(vale.quantidade)}</span> pallets PBR</span>)}
             {dado("Emissão", <span className="num">{formatarDataHora(vale.criadoEm)} · {vale.criadoPor.login}</span>)}

@@ -209,7 +209,10 @@ model ValePallet {
   unidadeId      String?
   transportadora String?
   placa          String?
-  motorista      String?
+  /// Rota do envio para Ponto de Cross (texto livre, ex.: R-01/SP).
+  rota           String?
+  /// Data de faturamento informada no envio para Ponto de Cross.
+  dataFaturamento DateTime? @db.Date
   /// Número da NF (sem zeros à esquerda). Nulo quando o recebimento é "Sem Nota Fiscal".
   notaFiscal     String?
   serieNf        String?
@@ -262,7 +265,6 @@ model RetornoConferencia {
   falta            Int      @default(0)
   placa            String?
   transportadora   String?
-  motorista        String?
   observacao       String?
   criadoEm         DateTime @default(now())
   usuarioId        String

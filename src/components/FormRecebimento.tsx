@@ -7,6 +7,7 @@ import { identificarNfRecebimento, registrarRecebimentoFornecedor, type Identifi
 import { normalizarChave } from "@/lib/nfe";
 import { CamposFornecedor } from "./CamposFornecedor";
 import { BotaoEnviar, Mensagem, useAcao } from "./FormAcao";
+import { InputPlaca } from "./InputPlaca";
 import { ModalFornecedor } from "./ModalFornecedor";
 
 type NfOk = Extract<IdentificacaoNf, { ok: true }>;
@@ -203,24 +204,8 @@ export function FormRecebimento({ transportadoras, conferentePadrao }: { transpo
               ))}
             </datalist>
           </div>
-          <div>
-            <label className="label" htmlFor="placa">Placa do veículo *</label>
-            <input
-              id="placa"
-              name="placa"
-              className="input uppercase placeholder:normal-case"
-              required
-              placeholder="ABC1D23"
-              maxLength={8}
-              pattern="[A-Za-z]{3}-?[0-9][A-Za-z0-9][0-9]{2}"
-              title="Placa no formato ABC1234 ou ABC1D23"
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="motorista">Motorista</label>
-            <input id="motorista" name="motorista" className="input" maxLength={120} />
-          </div>
-          <div className="md:col-span-2 xl:col-span-3">
+          <InputPlaca obrigatorio />
+          <div className="md:col-span-2 xl:col-span-4">
             <label className="label" htmlFor="observacao">Observações</label>
             <textarea id="observacao" name="observacao" rows={2} className="input" maxLength={500} />
           </div>

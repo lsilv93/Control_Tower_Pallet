@@ -469,3 +469,9 @@
     transition: none !important;
   }
 }
+
+/* Tela TV em tela cheia: mantém o fundo do tema (sem faixas pretas do navegador). */
+html:fullscreen,
+html:fullscreen body {
+  background: rgb(var(--c-fundo));
+}
