@@ -1,4 +1,4 @@
-// Sistema de Gestão de Pallets PBR
+// Sistema de Gestão de Pallets PBR — Torre de Controle Nível Brasil
 // Banco relacional PostgreSQL (Neon / Vercel Postgres em produção)
 
 generator client {
@@ -11,82 +11,91 @@ datasource db {
   directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
-/// MASTER: tudo, inclusive ajuste manual de saldos. ADMIN: tudo, exceto ajuste manual.
-/// OPERADOR: somente as telas/funcionalidades marcadas em `permissoes`.
+/// MASTER: tudo (inclusive configurações). ADMIN: tudo, exceto configurações exclusivas do Master.
+/// OPERADOR: somente as telas marcadas em `permissoes`, na sua unidade.
 enum Perfil {
   MASTER
   ADMIN
   OPERADOR
 }
 
-/// Contas da conta corrente de pallets (partida dobrada), sempre dentro de um CD
-/// (Movimentacao.cdId). Toda movimentação tem conta de origem e de destino.
-/// Estoques físicos (não ficam negativos): VAZIOS e QUEBRADOS.
-/// CUSTODIA: saldo devedor de cada CD destino / Ponto de Cross (Movimentacao.unidadeId),
-/// também não fica negativo. As demais são contrapartidas externas.
-enum Conta {
-  VAZIOS     // estoque de pallets vazios (pulmão) do CD
-  CD         // LEGADO: antigo "Estoque do CD" (antes do multi-CD); não recebe novos lançamentos
-  QUEBRADOS  // estoque de pallets quebrados do CD
-  FORNECEDOR // fornecedores: saldo negativo = pallets devidos (vales de fornecedor em aberto)
-  COMPRA     // aquisição de pallets novos
-  DESCARTE   // baixa definitiva (destruídos/descartados, inclusive os usados em reparo)
-  AJUSTE     // lançamentos manuais de administrador
-  CARGA      // pallets carregados em operação (entram de fornecedores, saem para CDs/Cross)
-  CUSTODIA   // saldo devedor (custódia) de um CD destino ou Ponto de Cross
-}
-
-/// CD (opera o sistema e também pode ser destino) ou Ponto de Cross-Docking (só destino).
+/// CD (inclusive o Hub CDJC) ou Ponto de Cross-Docking. Todos têm estoque próprio.
 enum TipoUnidade {
   CD
   CROSS
 }
 
-/// Tipos de vale-pallet.
-enum TipoVale {
-  FORNECEDOR // recebimento de fornecedor (CD deve devolver ao fornecedor)
-  ENVIO      // envio para CD / Ponto de Cross (destino deve devolver ao CD)
-  OCORRENCIA // falta apurada na conferência de retorno (volta ao saldo devedor do remetente)
-  AJUSTE     // inclusão manual de saldo devedor (administrador) ou saldo migrado
+/// Contas da conta corrente (partida dobrada), sempre no livro de uma unidade.
+/// Estoques físicos (nunca negativos): VAZIOS (pallets bons) e QUEBRADOS.
+/// TRANSITO: enviados pela unidade e ainda não conferidos no destino.
+/// OCORRENCIA: faltas apuradas na conferência, pendentes de devolução à unidade remetente.
+/// As demais são contrapartidas externas.
+enum Conta {
+  VAZIOS
+  QUEBRADOS
+  TRANSITO
+  OCORRENCIA
+  ENVIADO    // transferido a outra unidade (baixa do trânsito na conferência)
+  RECEBIDO   // recebido de outra unidade
+  SOBRA      // recebido a mais que o declarado no vale
+  PERDA      // falta baixada como perda
+  DESCARTE   // descartados/destruídos (inclusive os usados no reparo)
+  AJUSTE     // inclusões e remoções manuais de administrador
+  COMPRA     // compra de pallets novos (NF-e)
+  FORNECEDOR // fornecedores (módulo Recebimento Pallet Fornecedor)
+  CARGA      // pallets carregados recebidos de fornecedores
 }
 
-/// Tipos de movimentação da conta corrente de pallets.
 enum TipoMovimentacao {
-  ENVIO_CD               // LEGADO: Vazios → CD (antes do multi-CD)
-  RECEBIMENTO_CD         // LEGADO: CD → Vazios (antes do multi-CD)
-  RECEBIMENTO_FORNECEDOR // vale de fornecedor: Fornecedor → Carga (sobe o saldo devido ao fornecedor)
-  DEVOLUCAO_FORNECEDOR   // baixa/pagamento ao fornecedor: Vazios → Fornecedor
+  ENVIO                  // unidade origem: Vazios/Quebrados → Trânsito
+  BAIXA_TRANSITO         // unidade origem: Trânsito → Enviado (conferido no destino)
+  RECEBIMENTO            // unidade destino: Recebido → Vazios/Quebrados
+  FALTA                  // unidade origem: Trânsito → Ocorrência
+  SOBRA                  // unidade destino: Sobra → Vazios/Quebrados
+  OCORRENCIA_LOCALIZADA  // unidade origem: Ocorrência → Vazios/Quebrados
+  OCORRENCIA_PERDA       // unidade origem: Ocorrência → Perda
+  ESTORNO_ENVIO          // unidade origem: Trânsito → Vazios/Quebrados (vale excluído antes da conferência)
   QUEBRA                 // Vazios → Quebrados
-  RECUPERADO             // conserto/reparo: Quebrados → Vazios
-  DESCARTE               // Vazios ou Quebrados → Descarte
-  AJUSTE_ENTRADA         // correção de inventário MASTER (Ajuste → estoque)
-  AJUSTE_SAIDA           // correção de inventário MASTER (estoque → Ajuste)
-  COMPRA                 // compra de pallets novos (NF-e): Compra → Vazios
-  ESTORNO_VALE           // exclusão de vale de fornecedor: Carga → Fornecedor
-  ENVIO_UNIDADE          // envio para CD/Cross: Carga → Custódia (não mexe nos Vazios)
-  RETORNO_UNIDADE        // retorno de CD/Cross: Custódia → Vazios
-  ESTORNO_ENVIO          // exclusão de vale de envio/ajuste/ocorrência: Custódia → Carga/Ajuste
-  INCLUSAO_VAZIOS        // inclusão manual de vazios (admin, com motivo): Ajuste → Vazios
-  INCLUSAO_DEVEDOR       // inclusão manual de saldo devedor (admin): Ajuste → Custódia
-  CANIBALIZACAO          // pallets quebrados usados/desmontados no reparo: Quebrados → Descarte
-  MIGRACAO_CUSTODIA      // migração: transferências antigas ainda não retornadas viram saldo devedor
+  RECUPERADO             // Quebrados → Vazios (reparo no Hub)
+  CANIBALIZACAO          // Quebrados → Descarte (usados no reparo)
+  DESCARTE               // Vazios/Quebrados → Descarte
+  INCLUSAO_MANUAL        // Ajuste → Vazios/Quebrados (motivo)
+  REMOCAO_MANUAL         // Vazios/Quebrados → Ajuste
+  COMPRA                 // Compra → Vazios
+  RECEBIMENTO_FORNECEDOR // Fornecedor → Carga
+  DEVOLUCAO_FORNECEDOR   // Vazios → Fornecedor
+  ESTORNO_VALE           // Carga → Fornecedor
+}
+
+enum TipoVale {
+  ENVIO      // transferência entre unidades (bons e/ou quebrados)
+  OCORRENCIA // falta ou sobra apurada na conferência
+  FORNECEDOR // recebimento de fornecedor
+}
+
+enum TipoOcorrencia {
+  FALTA
+  SOBRA
+}
+
+enum ResolucaoOcorrencia {
+  LOCALIZADA // pallets localizados e devolvidos à unidade remetente
+  PERDA      // baixada como perda
 }
 
 enum StatusVale {
-  PENDENTE
-  AGENDADO
-  FINALIZADO
+  PENDENTE   // envio: em trânsito; ocorrência de falta: aberta; fornecedor: a devolver
+  AGENDADO   // fornecedor: retirada agendada
+  FINALIZADO // envio: conferido; ocorrência: resolvida/registrada; fornecedor: baixado
   CANCELADO
 }
 
-/// Motivos aceitos para exclusão (cancelamento) de um vale emitido incorretamente.
 enum MotivoCancelamento {
   FORNECEDOR_INCORRETO
   TRANSPORTADORA_INCORRETA
   QUANTIDADE_INCORRETA
   DOCUMENTO_ERRADO
   DESTINO_INCORRETO
-  DIVERGENCIA_ABONADA
 }
 
 enum StatusAgenda {
@@ -101,42 +110,56 @@ model Usuario {
   login        String   @unique
   senhaHash    String
   perfil       Perfil   @default(OPERADOR)
-  /// Permissões granulares por tela/funcionalidade (usadas pelo perfil OPERADOR).
+  /// Permissões granulares por tela/funcionalidade (perfil OPERADOR).
   permissoes   String[] @default([])
+  /// Unidade (CD ou Ponto de Cross) à qual o usuário pertence.
+  unidadeId    String
   ativo        Boolean  @default(true)
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  /// CDs em que o usuário pode operar. Sem vínculo: MASTER/ADMIN operam qualquer CD; operador nenhum.
-  cds              CentroDistribuicao[] @relation("UsuarioCDs")
+  unidade          CentroDistribuicao @relation("UsuarioUnidade", fields: [unidadeId], references: [id])
   movimentacoes    Movimentacao[]
-  retornos         RetornoConferencia[]
+  conferencias     Conferencia[]
   valesCriados     ValePallet[]      @relation("ValeCriadoPor")
   valesCancelados  ValePallet[]      @relation("ValeCanceladoPor")
+  valesResolvidos  ValePallet[]      @relation("ValeResolvidoPor")
   agendasCriadas   AgendaDevolucao[] @relation("AgendaCriadaPor")
   agendasValidadas AgendaDevolucao[] @relation("AgendaValidadaPor")
   auditorias       Auditoria[]
   compras          Compra[]
+
+  @@index([unidadeId])
 }
 
-/// Unidade: CD (opera o sistema; seus estoques são isolados) ou Ponto de Cross-Docking.
+/// Unidade: CD (o Hub CDJC tem `hub = true`) ou Ponto de Cross (vinculado a um CD regional).
 model CentroDistribuicao {
-  id          String      @id @default(cuid())
-  codigo      String      @unique
-  nome        String
-  tipo        TipoUnidade @default(CD)
-  cidade      String? // localização
-  responsavel String?
-  ativo       Boolean     @default(true)
-  criadoEm    DateTime    @default(now())
+  id       String      @id @default(cuid())
+  codigo   String      @unique
+  nome     String
+  tipo     TipoUnidade @default(CD)
+  /// CD Hub principal (CDJC): visão Nível Brasil, recebe quebrados das filiais e faz o conserto.
+  hub      Boolean     @default(false)
+  cnpj     String?     @unique
+  contato  String?
+  telefone String?
+  email    String?
+  /// Pontos de Cross: CD da região a que o Cross pertence.
+  cdRegionalId String?
+  /// Módulo "Recebimento Pallet Fornecedor" liberado para este CD (configuração do Master).
+  recebimentoFornecedor Boolean @default(false)
+  ativo    Boolean     @default(true)
+  criadoEm DateTime    @default(now())
 
-  usuarios             Usuario[]            @relation("UsuarioCDs")
-  movimentacoes        Movimentacao[]       @relation("MovimentacaoCD")
-  movimentacoesUnidade Movimentacao[]       @relation("MovimentacaoUnidade")
-  vales                ValePallet[]         @relation("ValeCD")
-  valesDestino         ValePallet[]         @relation("ValeUnidade")
-  retornos             RetornoConferencia[] @relation("RetornoCD")
-  retornosRemetente    RetornoConferencia[] @relation("RetornoUnidade")
+  cdRegional    CentroDistribuicao?  @relation("CrossRegional", fields: [cdRegionalId], references: [id])
+  crosses       CentroDistribuicao[] @relation("CrossRegional")
+  usuarios      Usuario[]            @relation("UsuarioUnidade")
+  movimentacoes        Movimentacao[]  @relation("MovimentacaoCD")
+  movimentacoesUnidade Movimentacao[]  @relation("MovimentacaoUnidade")
+  vales                ValePallet[]    @relation("ValeCD")
+  valesDestino         ValePallet[]    @relation("ValeUnidade")
+  conferencias         Conferencia[]   @relation("ConferenciaCD")
+  conferenciasRemetente Conferencia[]  @relation("ConferenciaRemetente")
   agendas              AgendaDevolucao[]
   compras              Compra[]
   auditorias           Auditoria[]
@@ -148,9 +171,6 @@ model Fornecedor {
   id       String   @id @default(cuid())
   nome     String
   cnpj     String   @unique // normalizado: 14 caracteres (numérico ou alfanumérico)
-  endereco String?
-  cidade   String?
-  uf       String?
   contato  String?
   telefone String?
   email    String?
@@ -174,8 +194,7 @@ model Transportadora {
   criadoEm DateTime @default(now())
 }
 
-/// Compra de pallets novos, identificada pela chave de acesso da NF-e
-/// (código de barras do DANFE).
+/// Compra de pallets novos, identificada pela chave de acesso da NF-e.
 model Compra {
   id           String   @id @default(cuid())
   cdId         String
@@ -194,94 +213,99 @@ model Compra {
   movimentacoes Movimentacao[]
 }
 
-/// Vale-pallet. FORNECEDOR: pallets que o CD deve devolver ao fornecedor.
-/// ENVIO / OCORRENCIA / AJUSTE: pallets que o CD destino ou Ponto de Cross (unidade)
-/// deve devolver ao CD emissor. Numeração única para todos os tipos.
+/// Vale-pallet. ENVIO: transferência da unidade emissora (cdId) para a unidade destino
+/// (unidadeId), em trânsito até a conferência. OCORRENCIA: falta/sobra apurada na
+/// conferência (cdId = remetente, unidadeId = recebedor). FORNECEDOR: módulo de fornecedores.
 model ValePallet {
-  id             String     @id @default(cuid())
-  numero         Int        @unique @default(autoincrement())
-  tipo           TipoVale   @default(FORNECEDOR)
-  /// CD emissor (CD ativo na sessão de quem emitiu).
-  cdId           String
-  /// Fornecedor (somente vales de fornecedor).
-  fornecedorId   String?
-  /// CD destino / Ponto de Cross (vales de envio, ocorrência e ajuste).
-  unidadeId      String?
-  transportadora String?
-  placa          String?
-  /// Rota do envio para Ponto de Cross (texto livre, ex.: R-01/SP).
-  rota           String?
-  /// Data de faturamento informada no envio para Ponto de Cross.
-  dataFaturamento DateTime? @db.Date
-  /// Número da NF (sem zeros à esquerda). Nulo quando o recebimento é "Sem Nota Fiscal".
-  notaFiscal     String?
-  serieNf        String?
-  /// Chave de acesso da NF-e lida no código de barras (impede lançar a mesma NF duas vezes).
-  chaveNfe       String?    @unique
-  semNotaFiscal  Boolean    @default(false)
-  conferente     String?
-  quantidade     Int
-  status         StatusVale @default(PENDENTE)
-  observacao     String?
-  criadoEm       DateTime   @default(now())
-  criadoPorId    String
-  agendaId       String?
-  finalizadoEm   DateTime?
-  /// Conferência de retorno em que o vale (envio/ocorrência/ajuste) foi baixado.
-  retornoId      String?
-  /// Vale-Ocorrência: conferência de retorno que gerou a falta.
-  retornoOrigemId String?   @unique
-  // Exclusão lógica: o vale é mantido para auditoria com status CANCELADO.
+  id                  String     @id @default(cuid())
+  numero              Int        @unique @default(autoincrement())
+  tipo                TipoVale
+  ocorrencia          TipoOcorrencia?
+  /// Unidade emissora (envio) ou remetente (ocorrência) ou recebedora (fornecedor).
+  cdId                String
+  /// Unidade destino (envio) ou recebedora (ocorrência).
+  unidadeId           String?
+  fornecedorId        String?
+  quantidadeBons      Int        @default(0)
+  quantidadeQuebrados Int        @default(0)
+  /// Total do vale (bons + quebrados).
+  quantidade          Int
+  transportadora      String?
+  placa               String?
+  rota                String?
+  dataFaturamento     DateTime?  @db.Date
+  notaFiscal          String?
+  serieNf             String?
+  chaveNfe            String?    @unique
+  semNotaFiscal       Boolean    @default(false)
+  conferente          String?
+  status              StatusVale @default(PENDENTE)
+  observacao          String?
+  criadoEm            DateTime   @default(now())
+  criadoPorId         String
+  agendaId            String?
+  finalizadoEm        DateTime?
+  /// Conferência em que o vale de envio foi recebido.
+  conferenciaId       String?
+  /// Conferência que gerou o vale de ocorrência.
+  conferenciaOrigemId String?
+  resolucao           ResolucaoOcorrencia?
+  resolvidoEm         DateTime?
+  resolvidoPorId      String?
+  observacaoResolucao String?
   canceladoEm            DateTime?
   canceladoPorId         String?
   motivoCancelamento     MotivoCancelamento?
   observacaoCancelamento String?
 
-  cd            CentroDistribuicao  @relation("ValeCD", fields: [cdId], references: [id])
-  unidade       CentroDistribuicao? @relation("ValeUnidade", fields: [unidadeId], references: [id])
-  fornecedor    Fornecedor?      @relation(fields: [fornecedorId], references: [id])
-  criadoPor     Usuario          @relation("ValeCriadoPor", fields: [criadoPorId], references: [id])
-  canceladoPor  Usuario?         @relation("ValeCanceladoPor", fields: [canceladoPorId], references: [id])
-  agenda        AgendaDevolucao? @relation(fields: [agendaId], references: [id])
-  retorno       RetornoConferencia? @relation("ValesRetorno", fields: [retornoId], references: [id])
-  retornoOrigem RetornoConferencia? @relation("OcorrenciaRetorno", fields: [retornoOrigemId], references: [id])
-  movimentacoes Movimentacao[]
+  cd                CentroDistribuicao  @relation("ValeCD", fields: [cdId], references: [id])
+  unidade           CentroDistribuicao? @relation("ValeUnidade", fields: [unidadeId], references: [id])
+  fornecedor        Fornecedor?      @relation(fields: [fornecedorId], references: [id])
+  criadoPor         Usuario          @relation("ValeCriadoPor", fields: [criadoPorId], references: [id])
+  canceladoPor      Usuario?         @relation("ValeCanceladoPor", fields: [canceladoPorId], references: [id])
+  resolvidoPor      Usuario?         @relation("ValeResolvidoPor", fields: [resolvidoPorId], references: [id])
+  agenda            AgendaDevolucao? @relation(fields: [agendaId], references: [id])
+  conferencia       Conferencia?     @relation("ValesConferencia", fields: [conferenciaId], references: [id])
+  conferenciaOrigem Conferencia?     @relation("OcorrenciasConferencia", fields: [conferenciaOrigemId], references: [id])
+  movimentacoes     Movimentacao[]
 
   @@index([status])
-  @@index([fornecedorId, status])
   @@index([cdId, tipo, status])
-  @@index([unidadeId, status])
+  @@index([unidadeId, tipo, status])
+  @@index([fornecedorId, status])
 }
 
-/// Conferência de retorno de um CD destino / Ponto de Cross: vales selecionados x
-/// quantidade física contada. Falta gera automaticamente um Vale-Ocorrência.
-model RetornoConferencia {
-  id               String   @id @default(cuid())
-  numero           Int      @unique @default(autoincrement())
-  cdId             String
-  unidadeId        String
-  totalVales       Int
-  quantidadeFisica Int
-  falta            Int      @default(0)
-  placa            String?
-  transportadora   String?
-  observacao       String?
-  criadoEm         DateTime @default(now())
-  usuarioId        String
+/// Conferência de recebimento: vales de um remetente x contagem física (bons e quebrados).
+model Conferencia {
+  id                String   @id @default(cuid())
+  numero            Int      @unique @default(autoincrement())
+  /// Unidade que recebeu e conferiu.
+  cdId              String
+  /// Unidade que enviou.
+  remetenteId       String
+  totalDeclarado    Int
+  recebidoBons      Int
+  recebidoQuebrados Int
+  /// Recebido − declarado (negativo = falta, positivo = sobra).
+  diferenca         Int      @default(0)
+  placa             String?
+  transportadora    String?
+  observacao        String?
+  criadoEm          DateTime @default(now())
+  usuarioId         String
 
-  cd         CentroDistribuicao @relation("RetornoCD", fields: [cdId], references: [id])
-  unidade    CentroDistribuicao @relation("RetornoUnidade", fields: [unidadeId], references: [id])
-  usuario    Usuario            @relation(fields: [usuarioId], references: [id])
-  vales      ValePallet[]       @relation("ValesRetorno")
-  ocorrencia ValePallet?        @relation("OcorrenciaRetorno")
+  cd          CentroDistribuicao @relation("ConferenciaCD", fields: [cdId], references: [id])
+  remetente   CentroDistribuicao @relation("ConferenciaRemetente", fields: [remetenteId], references: [id])
+  usuario     Usuario            @relation(fields: [usuarioId], references: [id])
+  vales       ValePallet[]       @relation("ValesConferencia")
+  ocorrencias ValePallet[]       @relation("OcorrenciasConferencia")
   movimentacoes Movimentacao[]
 
   @@index([cdId, criadoEm])
+  @@index([remetenteId, criadoEm])
 }
 
-/// Agenda de devolução: agrupa vales de um fornecedor para devolução.
-/// Ao ser validada (baixa de pagamento), os vales são finalizados e os
-/// pallets saem oficialmente da conta corrente.
+/// Agenda de devolução a fornecedor (módulo Recebimento Pallet Fornecedor).
 model AgendaDevolucao {
   id              String       @id @default(cuid())
   numero          Int          @unique @default(autoincrement())
@@ -307,49 +331,44 @@ model AgendaDevolucao {
   @@index([cdId, dataPrevista])
 }
 
-/// Livro-razão da conta corrente, por CD (cdId). Cada linha debita a conta de
-/// origem e credita a de destino na mesma quantidade, com data/hora e usuário.
+/// Livro-razão por unidade (cdId). Imutável (gatilhos no banco).
 model Movimentacao {
-  id           String           @id @default(cuid())
-  tipo         TipoMovimentacao
-  quantidade   Int
-  origem       Conta
-  destino      Conta
-  observacao   String?
-  /// Motivo informado na inclusão manual de vazios (COMPRA, ESTORNO, DEVOLUCAO).
-  motivo       String?
-  criadoEm     DateTime         @default(now())
-  usuarioId    String
-  /// CD da operação (CD ativo na sessão).
-  cdId         String
-  /// CD destino / Ponto de Cross envolvido (envio, retorno, saldo devedor).
-  unidadeId    String?
-  fornecedorId String?
-  valeId       String?
-  agendaId     String?
-  compraId     String?
-  retornoId    String?
+  id            String           @id @default(cuid())
+  tipo          TipoMovimentacao
+  quantidade    Int
+  origem        Conta
+  destino       Conta
+  observacao    String?
+  motivo        String?
+  criadoEm      DateTime         @default(now())
+  usuarioId     String
+  /// Unidade dona do lançamento.
+  cdId          String
+  /// Outra unidade envolvida (destino do envio, remetente do recebimento).
+  unidadeId     String?
+  fornecedorId  String?
+  valeId        String?
+  agendaId      String?
+  compraId      String?
+  conferenciaId String?
 
-  usuario    Usuario             @relation(fields: [usuarioId], references: [id])
-  cd         CentroDistribuicao  @relation("MovimentacaoCD", fields: [cdId], references: [id])
-  unidade    CentroDistribuicao? @relation("MovimentacaoUnidade", fields: [unidadeId], references: [id])
-  compra     Compra?             @relation(fields: [compraId], references: [id])
-  fornecedor Fornecedor?         @relation(fields: [fornecedorId], references: [id])
-  vale       ValePallet?         @relation(fields: [valeId], references: [id])
-  agenda     AgendaDevolucao?    @relation(fields: [agendaId], references: [id])
-  retorno    RetornoConferencia? @relation(fields: [retornoId], references: [id])
+  usuario     Usuario             @relation(fields: [usuarioId], references: [id])
+  cd          CentroDistribuicao  @relation("MovimentacaoCD", fields: [cdId], references: [id])
+  unidade     CentroDistribuicao? @relation("MovimentacaoUnidade", fields: [unidadeId], references: [id])
+  compra      Compra?             @relation(fields: [compraId], references: [id])
+  fornecedor  Fornecedor?         @relation(fields: [fornecedorId], references: [id])
+  vale        ValePallet?         @relation(fields: [valeId], references: [id])
+  agenda      AgendaDevolucao?    @relation(fields: [agendaId], references: [id])
+  conferencia Conferencia?        @relation(fields: [conferenciaId], references: [id])
 
   @@index([criadoEm])
   @@index([tipo, criadoEm])
-  @@index([origem])
-  @@index([destino])
   @@index([cdId, criadoEm])
-  @@index([cdId, unidadeId])
+  @@index([cdId, origem])
+  @@index([cdId, destino])
 }
 
-/// Trilha de auditoria de todas as ações do sistema (movimentações,
-/// cadastros, agendas, login etc.).
-/// Log imutável (triggers no banco bloqueiam UPDATE/DELETE).
+/// Trilha de auditoria imutável (gatilhos no banco bloqueiam UPDATE/DELETE).
 model Auditoria {
   id         String   @id @default(cuid())
   acao       String
@@ -362,20 +381,18 @@ model Auditoria {
   detalhes   Json?
   criadoEm   DateTime @default(now())
   usuarioId  String?
-  /// CD da operação (nulo em eventos sem CD, como login, e nos registros anteriores ao multi-CD).
   cdId       String?
 
   usuario Usuario?            @relation(fields: [usuarioId], references: [id])
   cd      CentroDistribuicao? @relation(fields: [cdId], references: [id])
 
   @@index([criadoEm])
-  @@index([cdId, criadoEm])
   @@index([acao])
   @@index([usuarioId])
+  @@index([cdId, criadoEm])
 }
 
-/// Tokens de sessão encerrados pelo botão Sair. Mesmo que alguém tenha uma cópia
-/// do cookie, o token deixa de valer. Registros expirados são limpos no logout.
+/// Tokens de sessão encerrados pelo botão Sair.
 model SessaoRevogada {
   jti       String   @id
   usuarioId String

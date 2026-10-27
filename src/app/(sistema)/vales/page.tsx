@@ -1,4 +1,4 @@
-import { requirePermissao } from "@/lib/auth";
+import { requireModuloFornecedor } from "@/lib/auth";
 import Link from "next/link";
 import { PackagePlus } from "lucide-react";
 import { SelecaoVales, type LinhaVale } from "@/components/SelecaoVales";
@@ -11,7 +11,7 @@ import { formatarCnpj, formatarPlaca, normalizarCnpj, numeroAgenda, numeroVale, 
 export const metadata = { title: "Vales Pendentes" };
 
 export default async function ValesPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
-  const u = await requirePermissao("agendas");
+  const u = await requireModuloFornecedor();
   const { q = "", status = "" } = await searchParams;
   const vales = await valesEmAberto(u.cd.id, {
     ...(status === "PENDENTE" || status === "AGENDADO" ? { status } : {}),

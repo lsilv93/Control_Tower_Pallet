@@ -2,22 +2,23 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import clsx from "clsx";
-import { ArrowLeft, Boxes, CalendarClock, ClipboardCheck, Factory, Hammer, Recycle, Scale, Trash2 } from "lucide-react";
+import { ArrowLeft, Boxes, Building2, ClipboardCheck, Gauge, Hammer, Network, Target, TriangleAlert, Truck } from "lucide-react";
 import { AtualizacaoTV } from "@/components/AtualizacaoTV";
 import { BotaoTelaCheia } from "@/components/BotaoTelaCheia";
-import { requireCD } from "@/lib/auth";
-import { formatarNumero as n, numeroAgenda, rotuloStatusAgenda, rotuloTipoUnidade } from "@/lib/formatos";
+import { requireUsuario } from "@/lib/auth";
+import { formatarNumero as n } from "@/lib/formatos";
 import { tem } from "@/lib/permissoes";
 import { dadosTV, versaoTV } from "@/lib/tv";
 
-export const metadata: Metadata = { title: "Tela TV · Control Center" };
+export const metadata: Metadata = { title: "Torre de Controle · Nível Brasil" };
 export const dynamic = "force-dynamic";
 
-const hora = (d: Date) => d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
+const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`);
+const corAcur = (v: number | null) => (v === null ? "text-t4" : v >= 0.98 ? "text-lima" : v >= 0.95 ? "text-ouro" : "text-erro");
 
 function Kpi({ rotulo, valor, detalhe, cor, icone: Icone, grande }: {
   rotulo: string;
-  valor: number;
+  valor: number | string;
   detalhe?: string;
   cor: string;
   icone: typeof Boxes;
@@ -27,52 +28,9 @@ function Kpi({ rotulo, valor, detalhe, cor, icone: Icone, grande }: {
     <section className="card relative overflow-hidden p-5">
       <Icone className={clsx("pointer-events-none absolute -bottom-6 -right-4 h-32 w-32 opacity-[0.07]", cor)} />
       <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-t3">{rotulo}</p>
-      <p className={clsx("num mt-2 font-semibold leading-none", cor, grande ? "text-[clamp(52px,5.2vw,96px)]" : "text-[clamp(40px,3.8vw,68px)]")}>{n(valor)}</p>
+      <p className={clsx("num mt-2 font-semibold leading-none", cor, grande ? "text-[clamp(52px,5.2vw,96px)]" : "text-[clamp(40px,3.8vw,68px)]")}>{typeof valor === "number" ? n(valor) : valor}</p>
       {detalhe && <p className="mt-2 text-[13px] text-t3">{detalhe}</p>}
     </section>
-  );
-}
-
-function Periodos({ rotulo, valores, cor, icone: Icone }: { rotulo: string; valores: { dia: number; mes: number; geral: number }; cor: string; icone: typeof Boxes }) {
-  return (
-    <section className="card p-5">
-      <p className="mb-3 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-t3">
-        <Icone className={clsx("h-4 w-4", cor)} /> {rotulo}
-      </p>
-      <div className="grid grid-cols-3 gap-3">
-        {([["Dia", valores.dia], ["Mês", valores.mes], ["Geral", valores.geral]] as const).map(([r, v]) => (
-          <div key={r} className="poco px-3 py-3 text-center">
-            <p className="text-[11px] uppercase tracking-[0.12em] text-t4">{r}</p>
-            <p className={clsx("num text-[clamp(24px,2.6vw,38px)] font-semibold leading-tight", r === "Dia" ? cor : "text-t1")}>{n(v)}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Barras({ itens, cor, vazio }: { itens: { chave: string; rotulo: string; sub?: string; valor: number; alerta?: string }[]; cor: string; vazio: string }) {
-  const max = Math.max(1, ...itens.map((i) => i.valor));
-  if (!itens.length) return <p className="poco px-4 py-6 text-center text-[13px] text-t3">{vazio}</p>;
-  return (
-    <ul className="space-y-3">
-      {itens.map((i) => (
-        <li key={i.chave}>
-          <div className="mb-1 flex items-baseline justify-between gap-3">
-            <span className="min-w-0 truncate text-[14px] font-medium text-t1" title={i.rotulo}>
-              {i.rotulo} {i.sub && <span className="text-[11px] text-t4">· {i.sub}</span>}
-            </span>
-            <span className="num flex-none text-[20px] font-semibold text-t1">
-              {n(i.valor)}
-              {i.alerta && <span className="ml-2 text-[12px] font-semibold text-erro">{i.alerta}</span>}
-            </span>
-          </div>
-          <div className="poco h-3 overflow-hidden !rounded-full">
-            <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.max(3, (i.valor / max) * 100)}%`, background: cor }} />
-          </div>
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -91,16 +49,16 @@ function Quadro({ titulo, icone: Icone, total, children, className }: { titulo: 
 }
 
 /**
- * Tela TV (Control Center) para monitores da gerência: indicadores do CD em tempo real,
- * com auto-refresh assim que houver um novo lançamento (e a cada minuto, por garantia).
+ * Torre de Controle Nível Brasil (TV da gerência): posição de bons e quebrados em cada CD e
+ * Ponto de Cross, ativos fora do Hub, quebrados em trânsito para o CDJC e acuracidade das
+ * remessas. Sem dados de fornecedores. Recarrega a cada nova transação em qualquer unidade.
  */
 export default async function TelaTV() {
-  const u = await requireCD();
-  if (!tem(u, "tv") && !tem(u, "dashboard")) redirect("/sem-acesso");
-  const [d, versao] = await Promise.all([dadosTV(u.cd.id), versaoTV(u.cd.id)]);
-  const recebidosHoje = d.recebidosHoje.reduce((s, r) => s + r.quantidade, 0);
-  const faltasHoje = d.recebidosHoje.reduce((s, r) => s + r.falta, 0);
-  const retiradaHoje = d.agendas.reduce((s, a) => s + a.quantidade, 0);
+  const u = await requireUsuario();
+  if (!u.global || (!tem(u, "tv") && !tem(u, "dashboard"))) redirect("/sem-acesso?modulo=tv");
+  const [d, versao] = await Promise.all([dadosTV(), versaoTV()]);
+  const t = d.totais;
+  const altura = "xl:h-[max(20rem,calc(100vh-24rem))]";
 
   return (
     <main className="min-h-screen p-[14px] lg:p-5" data-testid="tela-tv">
@@ -109,9 +67,10 @@ export default async function TelaTV() {
           <Link href="/" className="btn-icone" title="Voltar ao sistema" aria-label="Voltar ao sistema"><ArrowLeft className="h-5 w-5" /></Link>
           <span className="fill-lima flex h-12 w-12 items-center justify-center rounded-2xl"><Boxes className="h-6 w-6" /></span>
           <div>
-            <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-t3">Control Center · Pallets PBR</p>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-t3">Torre de Controle · Pallets PBR</p>
             <h1 className="text-[clamp(22px,2.4vw,34px)] font-semibold leading-tight text-t1">
-              CD <span className="num text-lima">{u.cd.codigo}</span> · {u.cd.nome}
+              Nível <span className="text-lima">Brasil</span>
+              <span className="ml-3 text-[clamp(13px,1.1vw,16px)] font-medium text-t3">{t.unidades} unidade(s) · {t.crosses} Ponto(s) de Cross{d.hub ? ` · Hub ${d.hub.unidade.codigo}` : ""}</span>
             </h1>
           </div>
         </div>
@@ -121,70 +80,82 @@ export default async function TelaTV() {
         </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Kpi rotulo="Pallets vazios" valor={d.saldos.vazios} detalhe="saldo atual do pulmão" cor="text-lima" icone={Boxes} grande />
-        <Kpi rotulo="Pallets quebrados" valor={d.saldos.quebrados} detalhe="aguardando reparo ou descarte" cor="text-ouro" icone={Hammer} grande />
-        <Kpi rotulo="Vales pendentes · fornecedores" valor={d.saldos.fornecedores} detalhe={`${d.saldos.valesFornecedorEmAberto} vale(s) a pagar`} cor="text-t1" icone={Factory} />
-        <Kpi rotulo="Saldo devedor · CDs e Cross" valor={d.saldos.devedor} detalhe={`${d.devedores.length} unidade(s) devendo`} cor="text-t1" icone={Scale} />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <Kpi rotulo="Pallets bons · Brasil" valor={t.bons} detalhe="todos os CDs e Cross" cor="text-lima" icone={Boxes} grande />
+        <Kpi rotulo="Pallets quebrados · Brasil" valor={t.quebrados} detalhe={d.hub ? `${n(d.hub.quebrados)} no Hub ${d.hub.unidade.codigo}` : "sem Hub cadastrado"} cor="text-ouro" icone={Hammer} grande />
+        <Kpi rotulo="Quebrados em trânsito ao Hub" valor={t.transitoHubQuebrados} detalhe={`${t.valesHub} vale(s) a conferir no CDJC`} cor="text-t1" icone={Truck} />
+        <Kpi rotulo="Faltas em aberto" valor={t.ocorrenciasAbertas} detalhe={`${t.valesOcorrencia} ocorrência(s) · conferidos hoje ${n(t.recebidosHoje)}`} cor={t.ocorrenciasAbertas ? "text-erro" : "text-t1"} icone={TriangleAlert} />
+        <Kpi rotulo="Acuracidade" valor={pct(t.acuracidade)} detalhe={`recebidos ${n(t.recebidosConferidos)} x enviados ${n(t.enviadosConferidos)}`} cor={corAcur(t.acuracidade)} icone={Target} />
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Periodos rotulo="Recuperados (reparo)" valores={d.recuperados} cor="text-lima" icone={Recycle} />
-        <Periodos rotulo="Descartados / destruídos" valores={d.descartados} cor="text-erro" icone={Trash2} />
-        <Periodos rotulo="Entradas de fornecedores" valores={d.entradas} cor="text-lima" icone={Factory} />
-        <Periodos rotulo="Enviados a CDs / Cross" valores={d.enviados} cor="text-lima" icone={Scale} />
-      </div>
-
-      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Quadro titulo="Saldo devedor por unidade" icone={Scale} total={n(d.saldos.devedor)} className="xl:h-[max(18rem,calc(100vh-31rem))]">
-          <Barras
-            cor="var(--viz-vazios)"
-            vazio="Nenhum saldo devedor em aberto."
-            itens={d.devedores.map((x) => ({
-              chave: x.unidade.id,
-              rotulo: `${x.unidade.codigo} · ${x.unidade.nome}`,
-              sub: `${rotuloTipoUnidade[x.unidade.tipo]}${x.idade !== null ? ` · ${x.idade}d` : ""}`,
-              valor: x.saldo,
-            }))}
-          />
-        </Quadro>
-        <Quadro titulo="Vales pendentes por fornecedor" icone={Factory} total={n(d.saldos.fornecedores)} className="xl:h-[max(18rem,calc(100vh-31rem))]">
-          <Barras
-            cor="var(--viz-quebrados)"
-            vazio="Nenhum vale de fornecedor pendente."
-            itens={d.pendencias.map((p) => ({ chave: p.fornecedor.id, rotulo: p.fornecedor.nome, sub: `${p.vales} vale(s)`, valor: p.total }))}
-          />
-        </Quadro>
-        <Quadro titulo="Recebidos hoje" icone={ClipboardCheck} total={`${n(recebidosHoje)}${faltasHoje ? ` · falta ${n(faltasHoje)}` : ""}`} className="xl:h-[max(18rem,calc(100vh-31rem))]">
-          <Barras
-            cor="var(--viz-entrada)"
-            vazio="Nenhum retorno recebido hoje."
-            itens={d.recebidosHoje.map((r) => ({
-              chave: r.unidade.id,
-              rotulo: `${r.unidade.codigo} · ${r.unidade.nome}`,
-              sub: `${rotuloTipoUnidade[r.unidade.tipo]} · ${r.conferencias} conferência(s)`,
-              valor: r.quantidade,
-              alerta: r.falta ? `falta ${n(r.falta)}` : undefined,
-            }))}
-          />
-        </Quadro>
-        <Quadro titulo="Retiradas de hoje" icone={CalendarClock} total={n(retiradaHoje)} className="xl:h-[max(18rem,calc(100vh-31rem))]">
-          {d.agendas.length === 0 ? (
-            <p className="poco px-4 py-6 text-center text-[13px] text-t3">Nenhuma retirada agendada para hoje.</p>
-          ) : (
-            <ul className="space-y-2">
-              {d.agendas.map((a) => (
-                <li key={a.id} className="poco flex items-center gap-4 px-4 py-3">
-                  <span className="num text-[22px] font-semibold text-lima">{hora(a.dataPrevista)}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] font-medium text-t1">{a.fornecedor}</span>
-                    <span className="text-[11px] text-t4">{numeroAgenda(a.numero)} · {rotuloStatusAgenda[a.status]}</span>
-                  </span>
-                  <span className="num text-[20px] font-semibold text-t1">{n(a.quantidade)}</span>
-                </li>
+      <div className="mt-4 grid gap-4 xl:grid-cols-5">
+        <Quadro titulo="Posição por unidade" icone={Building2} total={`${n(t.bons)} bons · ${n(t.quebrados)} queb.`} className={clsx("xl:col-span-2", altura)}>
+          <table className="w-full text-[14px]" data-testid="tv-unidades">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-t4">
+                <th className="pb-2 font-semibold">Unidade</th>
+                <th className="pb-2 text-right font-semibold">Bons</th>
+                <th className="pb-2 text-right font-semibold">Quebrados</th>
+                <th className="pb-2 text-right font-semibold">Trânsito</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.posicao.map((p) => (
+                <tr key={p.unidade.id} className="border-t border-[var(--groove)]">
+                  <td className="py-2 pr-2">
+                    <span className="flex items-center gap-2">
+                      {p.unidade.tipo === "CROSS" ? <Network className="h-3.5 w-3.5 flex-none text-t3" /> : <Building2 className={clsx("h-3.5 w-3.5 flex-none", p.unidade.hub ? "text-lima" : "text-t3")} />}
+                      <span className="num font-semibold text-t1">{p.unidade.codigo}</span>
+                      <span className="truncate text-[11px] text-t4">{p.unidade.hub ? "Hub" : p.unidade.tipo === "CROSS" ? "Cross" : "CD"}</span>
+                    </span>
+                  </td>
+                  <td className="num py-2 text-right text-[18px] font-semibold text-lima">{n(p.vazios)}</td>
+                  <td className="num py-2 text-right text-[18px] font-semibold text-ouro">{n(p.quebrados)}</td>
+                  <td className="num py-2 text-right text-t2">{n(p.transito)}</td>
+                </tr>
               ))}
-            </ul>
+            </tbody>
+          </table>
+        </Quadro>
+
+        <Quadro titulo="Ativos fora do Hub" icone={Gauge} total={`${n(t.foraHubBons)} bons · ${n(t.foraHubQuebrados)} queb.`} className={clsx("xl:col-span-3", altura)}>
+          {d.filiais.length === 0 ? (
+            <p className="poco px-4 py-6 text-center text-[13px] text-t3">Nenhuma filial ou Ponto de Cross cadastrado.</p>
+          ) : (
+            <table className="w-full text-[14px]" data-testid="tv-fora-hub">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-t4">
+                  <th className="pb-2 font-semibold">Filial</th>
+                  <th className="pb-2 text-right font-semibold">Bons</th>
+                  <th className="pb-2 text-right font-semibold">Quebrados</th>
+                  <th className="pb-2 text-right font-semibold">Em trânsito ao CDJC</th>
+                  <th className="pb-2 text-right font-semibold">Recebidos x enviados</th>
+                  <th className="pb-2 text-right font-semibold">Acuracidade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.filiais.map((f) => (
+                  <tr key={f.unidade.id} className="border-t border-[var(--groove)]">
+                    <td className="py-2 pr-2">
+                      <span className="num font-semibold text-t1">{f.unidade.codigo}</span>{" "}
+                      <span className="text-[11px] text-t4">{f.unidade.tipo === "CROSS" ? "Cross" : "CD"}</span>
+                    </td>
+                    <td className="num py-2 text-right text-[18px] font-semibold text-lima">{n(f.vazios)}</td>
+                    <td className="num py-2 text-right text-[18px] font-semibold text-ouro">{n(f.quebrados)}</td>
+                    <td className="num py-2 text-right text-t1">
+                      {n(f.transitoHubQuebrados + f.transitoHubBons)}
+                      {f.valesHub > 0 && <span className="block text-[10px] text-t4">{f.valesHub} vale(s)</span>}
+                    </td>
+                    <td className="num py-2 text-right text-t2">{n(f.recebidosConferidos)} / {n(f.enviadosConferidos)}</td>
+                    <td className={clsx("num py-2 text-right text-[18px] font-semibold", corAcur(f.acuracidade))}>{pct(f.acuracidade)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
+          <p className="mt-3 flex items-center gap-2 text-[11px] text-t4">
+            <ClipboardCheck className="h-3.5 w-3.5" /> Acuracidade = 1 − divergências (faltas + sobras) ÷ enviados, nas conferências em que a unidade foi remetente.
+          </p>
         </Quadro>
       </div>
     </main>

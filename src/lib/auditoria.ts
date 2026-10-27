@@ -11,14 +11,19 @@ const ACOES: Record<string, string> = {
   ALTERAR_SENHA: "Alteração de senha",
   REDEFINIR_SENHA: "Senha redefinida",
   SEED_ADMIN: "Criação do usuário inicial",
+  SEED_HUB: "Criação do CD Hub inicial",
   GERAR_VALE: "Vale-pallet de fornecedor emitido",
   GERAR_VALE_ENVIO: "Vale-pallet de envio emitido",
-  GERAR_VALE_OCORRENCIA: "Vale-Ocorrência (falta) gerado",
-  CONFERENCIA_RETORNO: "Conferência de retorno",
+  GERAR_VALE_QUEBRADOS: "Vale de pallets quebrados (para o CDJC) emitido",
+  GERAR_OCORRENCIA_FALTA: "Vale de Ocorrência de falta gerado",
+  GERAR_OCORRENCIA_SOBRA: "Vale de Ocorrência de sobra gerado",
+  CONFERENCIA_RECEBIMENTO: "Conferência de recebimento",
+  RESOLVER_OCORRENCIA: "Ocorrência resolvida",
   REPARO_QUEBRADOS: "Reparo de quebrados",
-  INCLUIR_SALDO_DEVEDOR: "Inclusão manual de saldo devedor",
-  SELECIONAR_CD: "Seleção do CD de operação",
-  MIGRACAO_MULTI_CD: "Migração para multi-CD",
+  INCLUIR_SALDO: "Inclusão manual de saldo",
+  REMOVER_SALDO: "Remoção manual de saldo",
+  CONFIGURAR_UNIDADE: "Configuração da unidade (Master)",
+  SELECIONAR_CD: "Seleção da unidade de operação",
   EXCLUIR_VALE: "Vale-pallet excluído (cancelado)",
   GERAR_AGENDA: "Retirada agendada",
   VALIDAR_AGENDA: "Baixa de pagamento",
@@ -50,8 +55,8 @@ export type FiltrosAuditoria = { de: string; ate: string; usuario: string; acao:
 type Acesso = { cd: { id: string; codigo: string } | null; cds: { id: string; codigo: string }[]; admin: boolean };
 
 /**
- * Filtros da tela de auditoria (padrão: últimos 30 dias, CD de operação). Usados pela
- * tela e pela exportação. "TODOS" (somente administradores) inclui todos os CDs e os
+ * Filtros da tela de auditoria (padrão: últimos 30 dias, unidade de operação). Usados pela
+ * tela e pela exportação. "TODOS" (visão global) inclui todas as unidades e os
  * eventos sem CD (login, cadastros).
  */
 export function lerFiltrosAuditoria(p: Partial<Record<keyof FiltrosAuditoria, string | null>>, acesso: Acesso) {
@@ -62,7 +67,7 @@ export function lerFiltrosAuditoria(p: Partial<Record<keyof FiltrosAuditoria, st
   const acao = p.acao ?? "";
   const escolhido = acesso.cds.find((c) => c.id === p.cd);
   const cd = p.cd === "TODOS" && acesso.admin ? "TODOS" : (escolhido?.id ?? acesso.cd?.id ?? "");
-  const cdCodigo = cd === "TODOS" ? "Todos os CDs" : (acesso.cds.find((c) => c.id === cd)?.codigo ?? "");
+  const cdCodigo = cd === "TODOS" ? "Todas as unidades" : (acesso.cds.find((c) => c.id === cd)?.codigo ?? "");
   const where: Prisma.AuditoriaWhereInput = {
     criadoEm: { gte: inicioDoDia(de < ate ? de : ate), lt: fimDoDia(de < ate ? ate : de) },
     ...(cd && cd !== "TODOS" ? { cdId: cd } : {}),
@@ -70,6 +75,6 @@ export function lerFiltrosAuditoria(p: Partial<Record<keyof FiltrosAuditoria, st
     // "MOVIMENTACAO" sozinho = todas as movimentações de estoque
     ...(acao === "MOVIMENTACAO" ? { acao: { startsWith: "MOVIMENTACAO_" } } : acao ? { acao } : {}),
   };
-  const descricao = `${cdCodigo ? `CD ${cdCodigo} · ` : ""}Período ${formatarData(inicioDoDia(de))} a ${formatarData(inicioDoDia(ate))}${acao ? ` · ${acao === "MOVIMENTACAO" ? "Todas as movimentações" : rotuloAcao(acao)}` : ""}`;
+  const descricao = `${cdCodigo ? `${cdCodigo} · ` : ""}Período ${formatarData(inicioDoDia(de))} a ${formatarData(inicioDoDia(ate))}${acao ? ` · ${acao === "MOVIMENTACAO" ? "Todas as movimentações" : rotuloAcao(acao)}` : ""}`;
   return { filtros: { de, ate, usuario, acao, cd } as FiltrosAuditoria, where, descricao };
 }

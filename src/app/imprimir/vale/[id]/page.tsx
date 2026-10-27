@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Scissors } from "lucide-react";
 import clsx from "clsx";
 import { ImpressaoAutomatica } from "@/components/ImpressaoAutomatica";
-import { requireAlguma } from "@/lib/auth";
+import { podeVerVale, requireUsuario } from "@/lib/auth";
 import { codigo128Svg } from "@/lib/codigoBarras";
 import { documentoVale, INCLUDE_VALE_DOC, type DocumentoVale } from "@/lib/documentoVale";
 import { EMISSOR } from "@/lib/emissor";
@@ -40,7 +40,7 @@ function Via({ doc, via, barras, quantidade, cancelado, observacao, cd }: {
           <h1 className="text-xl font-extrabold tracking-tight">{doc.titulo}</h1>
           <p className="text-[10px] text-slate-600">{doc.subtitulo}</p>
           <div className="mt-1.5 text-[9.5px] leading-snug">
-            <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Remetente (emissor) · CD {cd}</p>
+            <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Emissor do documento · {cd}</p>
             <p>
               <strong>{EMISSOR.razaoSocial}</strong> · {EMISSOR.nomeFantasia} · CNPJ {EMISSOR.cnpj}
             </p>
@@ -98,13 +98,13 @@ export default async function ImprimirValePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ auto?: string }>;
 }) {
-  const u = await requireAlguma("vales", "entrada", "agendas", "excluir_vale", "cd");
+  const u = await requireUsuario();
   const [{ id }, { auto }] = await Promise.all([params, searchParams]);
   const vale = await prisma.valePallet.findUnique({ where: { id }, include: INCLUDE_VALE_DOC });
-  if (!vale || vale.cdId !== u.cd.id) notFound();
+  if (!vale || !podeVerVale(u, vale)) notFound();
   const doc = documentoVale(vale);
   const barras = codigo128Svg(doc.codigo);
-  const voltar = vale.tipo === "FORNECEDOR" ? "/fornecedor/entrada" : vale.tipo === "ENVIO" ? (vale.unidade?.tipo === "CROSS" ? "/cross/envio" : "/cd/envio") : "/retorno";
+  const voltar = vale.tipo === "FORNECEDOR" ? "/fornecedor/entrada" : vale.tipo === "ENVIO" ? (vale.cdId === u.cd?.id ? "/envio" : "/recebimento") : "/ocorrencias";
   const comum = { doc, barras, quantidade: vale.quantidade, cancelado: vale.status === "CANCELADO", observacao: vale.observacao, cd: vale.cd.codigo };
 
   return (

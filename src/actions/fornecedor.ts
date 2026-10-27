@@ -4,12 +4,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUsuario } from "@/lib/auth";
-import { exigir, exigirGlobal } from "./guarda";
+import { exigirGlobal, exigirModuloFornecedor } from "./guarda";
 import { auditar, comContaBloqueada, ErroNegocio, lancar } from "@/lib/conta";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { formatarDataHora } from "@/lib/datas";
-import { cnpjValido, formatarCnpj, normalizarCnpj, normalizarPlaca, numeroVale, placaValida, rotuloStatusVale } from "@/lib/formatos";
+import { cnpjValido, emailValido, formatarCnpj, normalizarCnpj, telefoneValido, normalizarPlaca, numeroVale, placaValida, rotuloStatusVale } from "@/lib/formatos";
 import { lerChaveNFe } from "@/lib/nfe";
 import { sucesso, tratarErro, type Estado } from "./estado";
 
@@ -29,24 +29,14 @@ export async function buscarFornecedorPorCnpj(valor: string): Promise<BuscaForne
   return { status: f.ativo ? "ok" : "inativo", cnpj, nome: f.nome };
 }
 
-const opcional = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .transform((v) => v || null);
-
 const schemaCadastro = z.object({
   cnpj: z.string().refine(cnpjValido, "CNPJ inválido."),
   nome: z.string().trim().min(2, "Informe o nome do fornecedor.").max(200),
-  endereco: opcional(200),
-  cidade: opcional(120),
-  uf: opcional(2).transform((v) => (v ? v.toUpperCase() : null)),
-  contato: opcional(120),
-  telefone: opcional(40),
-  email: opcional(160).refine((v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), "E-mail inválido."),
+  contato: z.string().trim().min(2, "Informe o contato responsável.").max(120),
+  telefone: z.string().trim().refine(telefoneValido, "Telefone inválido (informe DDD + número)."),
+  email: z.string().trim().max(160).refine(emailValido, "E-mail inválido."),
 });
+
 
 /**
  * Cadastro de fornecedor aberto automaticamente quando o CNPJ digitado (entrada)
@@ -54,7 +44,7 @@ const schemaCadastro = z.object({
  */
 export async function cadastrarFornecedorRapido(_: Estado, form: FormData): Promise<Estado> {
   try {
-    const u = await exigirGlobal("entrada", "compras", "cadastros");
+    const u = await exigirGlobal("fornecedor", "compras", "cadastros");
     const d = schemaCadastro.parse(Object.fromEntries(form));
     const cnpj = normalizarCnpj(d.cnpj);
     if (await prisma.fornecedor.findUnique({ where: { cnpj } })) throw new ErroNegocio("Fornecedor já cadastrado.");
@@ -93,7 +83,7 @@ export type IdentificacaoNf =
  */
 export async function identificarNfRecebimento(leitura: string): Promise<IdentificacaoNf> {
   try {
-    await exigir("entrada");
+    await exigirModuloFornecedor();
     const nfe = lerChaveNFe(leitura);
     const existente = await prisma.valePallet.findUnique({
       where: { chaveNfe: nfe.chave },
@@ -137,7 +127,7 @@ const schema = z.discriminatedUnion("modo", [
 export async function registrarRecebimentoFornecedor(_: Estado, form: FormData): Promise<Estado> {
   let valeId: string;
   try {
-    const usuario = await exigir("entrada");
+    const usuario = await exigirModuloFornecedor();
     const d = schema.parse(Object.fromEntries(form));
     const nfe = d.modo === "NF" ? lerChaveNFe(d.chave) : null;
     const cnpj = nfe ? nfe.cnpj : normalizarCnpj(d.modo === "SEM_NF" ? d.cnpj : "");

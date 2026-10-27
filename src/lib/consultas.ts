@@ -1,6 +1,6 @@
 import "server-only";
 import { Prisma, type TipoMovimentacao } from "@prisma/client";
-import { saldosDevedores, STATUS_ABERTOS, TIPOS_VALE_DEVEDOR } from "./conta";
+import { estoquesPorUnidade, STATUS_ABERTOS } from "./conta";
 import { prisma } from "./prisma";
 import { idadeEmDias } from "./datas";
 import { compararFarol, farolPorFornecedor, farolPorIdade } from "./farol";
@@ -24,10 +24,10 @@ export async function totaisPorTipo(cdId: string, periodo: Intervalo = {}) {
 const ESTOQUES_SQL = ["VAZIOS", "QUEBRADOS"] as const;
 
 /**
- * Fluxo dos estoques físicos do CD (Vazios + Quebrados) no período. Entradas: de conta
- * externa (retorno de CD/Cross, compra, inclusão) para um estoque. Saídas: de um estoque
- * para conta externa (pagamento a fornecedor, descarte, correção). Transferências
- * internas (quebra, conserto) não mudam o total e são somadas à parte.
+ * Fluxo dos estoques físicos da unidade (bons + quebrados) no período. Entradas: de conta
+ * externa (recebimento, sobra, compra, inclusão) para um estoque. Saídas: de um estoque
+ * para conta externa (envio, descarte, remoção). Transferências internas (quebra,
+ * conserto) não mudam o total e são somadas à parte.
  */
 export async function fluxo(cdId: string, periodo: Intervalo = {}, fornecedorId?: string) {
   const w: Prisma.MovimentacaoWhereInput = { cdId, ...periodoWhere(periodo), ...(fornecedorId ? { fornecedorId } : {}) };
@@ -116,49 +116,59 @@ export async function pendenciasPorFornecedor(cdId: string) {
     .sort((a, b) => compararFarol(a.farol, b.farol) || b.total - a.total);
 }
 
-export type LinhaDevedor = {
-  unidade: { id: string; codigo: string; nome: string; tipo: "CD" | "CROSS"; cidade: string | null };
-  saldo: number;
-  vales: number;
-  maisAntigo: Date | null;
-  idade: number | null;
+export type LinhaUnidade = {
+  unidade: { id: string; codigo: string; nome: string; tipo: "CD" | "CROSS"; hub: boolean; cdRegionalId: string | null };
+  vazios: number;
+  quebrados: number;
+  /** Enviados pela unidade, aguardando conferência no destino. */
+  transito: number;
+  /** Faltas em aberto (ocorrências) da unidade remetente. */
+  ocorrencias: number;
+  /** Vales de envio destinados à unidade, ainda não conferidos. */
+  aReceber: number;
+  valesAReceber: number;
 };
 
 /**
- * Saldo devedor (custódia) de cada CD destino / Ponto de Cross no CD informado, com
- * a quantidade de vales pendentes e o mais antigo. Ordenado do maior saldo para o menor.
+ * Posição (bons, quebrados, trânsito, ocorrências e a receber) de cada unidade ativa —
+ * ou só das informadas. Base do painel, da TV Nível Brasil e das exportações.
  */
-export async function devedoresPorUnidade(cdId: string): Promise<LinhaDevedor[]> {
-  const [saldos, grupos] = await Promise.all([
-    saldosDevedores(prisma, cdId),
+export async function posicaoUnidades(ids?: string[]): Promise<LinhaUnidade[]> {
+  const [unidades, estoques, aReceber] = await Promise.all([
+    prisma.centroDistribuicao.findMany({
+      where: { ativo: true, ...(ids ? { id: { in: ids } } : {}) },
+      select: { id: true, codigo: true, nome: true, tipo: true, hub: true, cdRegionalId: true },
+      orderBy: [{ hub: "desc" }, { tipo: "asc" }, { codigo: "asc" }],
+    }),
+    estoquesPorUnidade(prisma, ids),
     prisma.valePallet.groupBy({
       by: ["unidadeId"],
-      where: { cdId, tipo: { in: [...TIPOS_VALE_DEVEDOR] }, status: "PENDENTE" },
+      where: { tipo: "ENVIO", status: "PENDENTE", ...(ids ? { unidadeId: { in: ids } } : {}) },
+      _sum: { quantidade: true },
       _count: true,
-      _min: { criadoEm: true },
     }),
   ]);
-  const ids = new Set<string>([...saldos.keys(), ...grupos.map((g) => g.unidadeId!).filter(Boolean)]);
-  const unidades = await prisma.centroDistribuicao.findMany({
-    where: { id: { in: [...ids] } },
-    select: { id: true, codigo: true, nome: true, tipo: true, cidade: true },
+  const receber = new Map(aReceber.map((g) => [g.unidadeId, g]));
+  return unidades.map((u) => {
+    const e = estoques.get(u.id);
+    const r = receber.get(u.id);
+    return {
+      unidade: u,
+      vazios: e?.vazios ?? 0,
+      quebrados: e?.quebrados ?? 0,
+      transito: e?.transito ?? 0,
+      ocorrencias: e?.ocorrencias ?? 0,
+      aReceber: r?._sum.quantidade ?? 0,
+      valesAReceber: r?._count ?? 0,
+    };
   });
-  const porId = new Map(grupos.map((g) => [g.unidadeId, g]));
-  return unidades
-    .map((u) => {
-      const g = porId.get(u.id);
-      const maisAntigo = g?._min.criadoEm ?? null;
-      return { unidade: u, saldo: saldos.get(u.id) ?? 0, vales: g?._count ?? 0, maisAntigo, idade: maisAntigo ? idadeEmDias(maisAntigo) : null };
-    })
-    .filter((l) => l.saldo !== 0 || l.vales > 0)
-    .sort((a, b) => b.saldo - a.saldo);
 }
 
-/** Vales pendentes (envio, ocorrência e ajuste) de cada CD destino / Ponto de Cross do CD. */
-export async function valesDevedoresPendentes(cdId: string) {
+/** Vales de envio em trânsito (pendentes de conferência) com origem e destino. */
+export async function enviosEmTransito(filtro: Prisma.ValePalletWhereInput = {}) {
   return prisma.valePallet.findMany({
-    where: { cdId, tipo: { in: [...TIPOS_VALE_DEVEDOR] }, status: "PENDENTE" },
-    include: { unidade: { select: { id: true, codigo: true, nome: true, tipo: true } } },
+    where: { tipo: "ENVIO", status: "PENDENTE", ...filtro },
+    include: { cd: { select: { codigo: true, tipo: true, hub: true } }, unidade: { select: { codigo: true, tipo: true, hub: true } } },
     orderBy: { criadoEm: "asc" },
   });
 }
@@ -168,7 +178,7 @@ export type LinhaTransporte = {
   operacoes: number;
   recebidosFornecedor: number;
   enviados: number;
-  retornados: number;
+  conferidos: number;
   faltas: number;
 };
 
@@ -176,22 +186,20 @@ const chaveTransp = (t: string | null) => (t ?? "").trim().replace(/\s+/g, " ");
 
 /**
  * Consolidação das movimentações do CD por transportadora no período:
- * recebimentos de fornecedor e envios (vales emitidos) e retornos conferidos (com faltas).
+ * recebimentos de fornecedor, envios (vales emitidos) e recebimentos conferidos (com faltas).
  */
 export async function consolidacaoTransporte(cdId: string, periodo: Intervalo = {}): Promise<LinhaTransporte[]> {
   const criadoEm = periodo.inicio || periodo.fim ? { ...(periodo.inicio ? { gte: periodo.inicio } : {}), ...(periodo.fim ? { lt: periodo.fim } : {}) } : undefined;
-  const [vales, retornos] = await Promise.all([
+  const [vales, conferencias] = await Promise.all([
     prisma.valePallet.groupBy({
       by: ["transportadora", "tipo"],
       where: { cdId, tipo: { in: ["FORNECEDOR", "ENVIO"] }, status: { not: "CANCELADO" }, ...(criadoEm ? { criadoEm } : {}) },
       _sum: { quantidade: true },
       _count: true,
     }),
-    prisma.retornoConferencia.groupBy({
-      by: ["transportadora"],
+    prisma.conferencia.findMany({
       where: { cdId, ...(criadoEm ? { criadoEm } : {}) },
-      _sum: { quantidadeFisica: true, falta: true },
-      _count: true,
+      select: { transportadora: true, recebidoBons: true, recebidoQuebrados: true, diferenca: true },
     }),
   ]);
   const mapa = new Map<string, LinhaTransporte>();
@@ -200,7 +208,7 @@ export async function consolidacaoTransporte(cdId: string, periodo: Intervalo = 
     const k = transportadora.toUpperCase();
     let l = mapa.get(k);
     if (!l) {
-      l = { transportadora, operacoes: 0, recebidosFornecedor: 0, enviados: 0, retornados: 0, faltas: 0 };
+      l = { transportadora, operacoes: 0, recebidosFornecedor: 0, enviados: 0, conferidos: 0, faltas: 0 };
       mapa.set(k, l);
     }
     return l;
@@ -211,11 +219,11 @@ export async function consolidacaoTransporte(cdId: string, periodo: Intervalo = 
     if (g.tipo === "FORNECEDOR") l.recebidosFornecedor += g._sum.quantidade ?? 0;
     else l.enviados += g._sum.quantidade ?? 0;
   }
-  for (const g of retornos) {
-    const l = linha(g.transportadora);
-    l.operacoes += g._count;
-    l.retornados += g._sum.quantidadeFisica ?? 0;
-    l.faltas += g._sum.falta ?? 0;
+  for (const c of conferencias) {
+    const l = linha(c.transportadora);
+    l.operacoes += 1;
+    l.conferidos += c.recebidoBons + c.recebidoQuebrados;
+    l.faltas += Math.max(0, -c.diferenca);
   }
-  return [...mapa.values()].sort((a, b) => b.recebidosFornecedor + b.enviados + b.retornados - (a.recebidosFornecedor + a.enviados + a.retornados));
+  return [...mapa.values()].sort((a, b) => b.recebidosFornecedor + b.enviados + b.conferidos - (a.recebidosFornecedor + a.enviados + a.conferidos));
 }

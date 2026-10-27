@@ -3,7 +3,7 @@ import { Ban, CircleCheck } from "lucide-react";
 import { cancelarAgenda, validarAgenda } from "@/actions/vales";
 import { Fluxo } from "@/components/Contas";
 import { FormAcao } from "@/components/FormAcao";
-import { requirePermissao } from "@/lib/auth";
+import { requireModuloFornecedor } from "@/lib/auth";
 import { LeitorVale } from "@/components/LeitorVale";
 import { Cabecalho, Painel, StatusBadge, Vazio } from "@/components/ui";
 import { obterSaldos } from "@/lib/conta";
@@ -15,7 +15,7 @@ import { formatarCnpj, formatarNumero, numeroAgenda, numeroVale, rotuloStatusAge
 export const metadata = { title: "Baixa de Pagamento" };
 
 export default async function AgendasPage({ searchParams }: { searchParams: Promise<{ ok?: string }> }) {
-  const u = await requirePermissao("agendas");
+  const u = await requireModuloFornecedor();
   const { ok } = await searchParams;
   const [abertas, historico, saldos] = await Promise.all([
     prisma.agendaDevolucao.findMany({

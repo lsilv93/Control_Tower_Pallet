@@ -5,9 +5,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { CHAVES_PERMISSAO, ehMaster } from "@/lib/permissoes";
-import { exigirAdmin, exigirGlobal as exigir } from "./guarda";
+import { exigirAdmin, exigirGlobal as exigir, exigirMaster } from "./guarda";
 import { auditar, ErroNegocio } from "@/lib/conta";
-import { cnpjValido, normalizarCnpj } from "@/lib/formatos";
+import { cnpjValido, emailValido, normalizarCnpj, telefoneValido } from "@/lib/formatos";
 import { prisma } from "@/lib/prisma";
 import { falha, tratarErro, type Estado } from "./estado";
 
@@ -30,6 +30,15 @@ const cnpj = z
   .string()
   .refine(cnpjValido, "CNPJ inválido.")
   .transform((v) => normalizarCnpj(v));
+
+/** Campos padronizados (obrigatórios) dos cadastros de Fornecedor, CD e Ponto de Cross. */
+const camposPadrao = {
+  nome: z.string().trim().min(2, "Informe o nome.").max(200),
+  cnpj,
+  contato: z.string().trim().min(2, "Informe o contato responsável.").max(120),
+  telefone: z.string().trim().refine(telefoneValido, "Telefone inválido (informe DDD + número)."),
+  email: z.string().trim().max(160).refine(emailValido, "E-mail inválido."),
+};
 
 /** Após salvar, volta para a listagem com a mensagem de confirmação no topo. */
 function concluir(caminho: string, mensagem: string): never {
@@ -71,16 +80,8 @@ export async function salvarTransportadora(_: Estado, form: FormData): Promise<E
 }
 
 // ---------------- Fornecedores (todos os usuários) ----------------
-const schemaFornecedor = z.object({
-  nome: z.string().trim().min(2, "Informe o nome do fornecedor.").max(200),
-  cnpj,
-  endereco: opcional(200),
-  cidade: opcional(120),
-  uf: opcional(2).transform((v) => (v ? v.toUpperCase() : null)),
-  contato: opcional(120),
-  telefone: opcional(40),
-  email,
-});
+const schemaFornecedor = z.object(camposPadrao);
+
 
 export async function salvarFornecedor(_: Estado, form: FormData): Promise<Estado> {
   let msg: string;
@@ -102,10 +103,17 @@ export async function salvarFornecedor(_: Estado, form: FormData): Promise<Estad
 // ---------------- CDs e Pontos de Cross ----------------
 const schemaCD = z.object({
   tipo: z.enum(["CD", "CROSS"]).default("CD"),
-  codigo: z.string().trim().min(1, "Informe o código.").max(20).transform((v) => v.toUpperCase()),
-  nome: z.string().trim().min(2, "Informe o nome.").max(120),
-  cidade: opcional(120),
-  responsavel: opcional(120),
+  codigo: z
+    .string()
+    .trim()
+    .min(2, "Informe a sigla (ex.: CDJC, CDFT).")
+    .max(20)
+    .transform((v) => v.toUpperCase().replace(/\s+/g, "")),
+  ...camposPadrao,
+  cdRegionalId: z
+    .string()
+    .optional()
+    .transform((v) => v || null),
 });
 
 export async function salvarCD(_: Estado, form: FormData): Promise<Estado> {
@@ -115,31 +123,80 @@ export async function salvarCD(_: Estado, form: FormData): Promise<Estado> {
     const admin = await exigir("cds");
     const id = lerId(form);
     const d = schemaCD.parse(Object.fromEntries(form));
+    caminhoCD = d.tipo === "CROSS" ? "/cadastros/cross" : "/cadastros/cds";
     const duplicado = await prisma.centroDistribuicao.findUnique({ where: { codigo: d.codigo } });
-    if (duplicado && duplicado.id !== id) throw new ErroNegocio(`Já existe uma unidade com o código ${d.codigo}.`);
+    if (duplicado && duplicado.id !== id) throw new ErroNegocio(`Já existe uma unidade com a sigla ${d.codigo}.`);
+    const cnpjDup = await prisma.centroDistribuicao.findUnique({ where: { cnpj: d.cnpj } });
+    if (cnpjDup && cnpjDup.id !== id) throw new ErroNegocio(`CNPJ já cadastrado para ${cnpjDup.codigo}.`);
+    if (d.tipo === "CROSS") {
+      const regional = d.cdRegionalId ? await prisma.centroDistribuicao.findUnique({ where: { id: d.cdRegionalId } }) : null;
+      if (!regional || regional.tipo !== "CD") throw new ErroNegocio("Selecione o CD regional ao qual o Ponto de Cross pertence.");
+    }
     if (id) {
       // O tipo (CD / Cross) não muda depois do cadastro: o histórico depende dele.
       const atual = await prisma.centroDistribuicao.findUnique({ where: { id } });
       if (!atual) throw new ErroNegocio("Cadastro não encontrado.");
       if (atual.tipo !== d.tipo) throw new ErroNegocio("Não é possível transformar um CD em Ponto de Cross (ou o contrário).");
     }
-    const cd = id
-      ? await prisma.centroDistribuicao.update({ where: { id }, data: d })
-      : await prisma.centroDistribuicao.create({ data: d });
+    const dados = {
+      tipo: d.tipo,
+      codigo: d.codigo,
+      nome: d.nome,
+      cnpj: d.cnpj,
+      contato: d.contato,
+      telefone: d.telefone,
+      email: d.email,
+      cdRegionalId: d.tipo === "CROSS" ? d.cdRegionalId : null,
+    };
+    const cd = id ? await prisma.centroDistribuicao.update({ where: { id }, data: dados }) : await prisma.centroDistribuicao.create({ data: dados });
     const rotulo = d.tipo === "CROSS" ? "Ponto de Cross" : "CD";
     await auditar(prisma, {
       acao: `${id ? "EDITAR" : "CRIAR"}_${d.tipo === "CROSS" ? "PONTO_CROSS" : "CD"}`,
       entidade: "CentroDistribuicao",
       entidadeId: cd.id,
       usuarioId: admin.id,
-      detalhes: d,
+      cdId: cd.id,
+      detalhes: dados,
     });
     msg = `${rotulo} ${cd.codigo} ${id ? "atualizado" : "cadastrado"}.`;
-    caminhoCD = d.tipo === "CROSS" ? "/cadastros/cross" : "/cadastros/cds";
   } catch (e) {
     return tratarErro(e);
   }
   concluir(caminhoCD, msg);
+}
+
+/**
+ * Configurações exclusivas do MASTER na unidade: CD Hub principal (somente um) e
+ * liberação do módulo "Recebimento Pallet Fornecedor" (desligado por padrão).
+ */
+export async function configurarUnidade(_: Estado, form: FormData): Promise<Estado> {
+  let msg: string;
+  try {
+    const master = await exigirMaster();
+    const id = String(form.get("id") ?? "");
+    const unidade = await prisma.centroDistribuicao.findUnique({ where: { id } });
+    if (!unidade || unidade.tipo !== "CD") throw new ErroNegocio("Configuração disponível somente para CDs.");
+    const recebimentoFornecedor = form.get("recebimentoFornecedor") === "on";
+    const hub = form.get("hub") === "on";
+    await prisma.$transaction(async (tx) => {
+      // Um único Hub: ao marcar este CD, os demais deixam de ser Hub.
+      if (hub && !unidade.hub) await tx.centroDistribuicao.updateMany({ where: { hub: true }, data: { hub: false } });
+      if (!hub && unidade.hub) throw new ErroNegocio("Deve existir um CD Hub. Para trocar, marque o novo Hub em outro CD.");
+      await tx.centroDistribuicao.update({ where: { id }, data: { recebimentoFornecedor, hub } });
+      await auditar(tx, {
+        acao: "CONFIGURAR_UNIDADE",
+        entidade: "CentroDistribuicao",
+        entidadeId: id,
+        usuarioId: master.id,
+        cdId: id,
+        detalhes: { recebimentoFornecedor, hub },
+      });
+    });
+    msg = `${unidade.codigo}: módulo Recebimento Pallet Fornecedor ${recebimentoFornecedor ? "ATIVADO" : "desativado"}${hub ? " · CD Hub (Nível Brasil)" : ""}.`;
+  } catch (e) {
+    return tratarErro(e);
+  }
+  concluir("/cadastros/cds", msg);
 }
 
 // ---------------- Usuários (administrador) ----------------
@@ -176,31 +233,28 @@ export async function salvarUsuario(_: Estado, form: FormData): Promise<Estado> 
     const existente = await prisma.usuario.findUnique({ where: { login: d.login } });
     if (existente && existente.id !== id) throw new ErroNegocio(`O login "${d.login}" já está em uso.`);
 
-    // CDs em que o usuário opera (somente CDs existentes do tipo CD).
-    const cdsInformados = [...new Set(form.getAll("cds").map(String).filter(Boolean))];
-    const cds = cdsInformados.length
-      ? await prisma.centroDistribuicao.findMany({ where: { id: { in: cdsInformados }, tipo: "CD" }, select: { id: true, codigo: true } })
-      : [];
-    if (cds.length !== cdsInformados.length) throw new ErroNegocio("CD inválido na lista de CDs do usuário.");
-    if (d.perfil === "OPERADOR" && cds.length === 0) return falha("Vincule ao menos um CD ao operador.");
+    // Unidade (CD ou Ponto de Cross) obrigatória para todos os usuários.
+    const unidadeId = String(form.get("unidadeId") ?? "");
+    const unidade = unidadeId ? await prisma.centroDistribuicao.findUnique({ where: { id: unidadeId }, select: { id: true, codigo: true } }) : null;
+    if (!unidade) return falha("Vincule o usuário a um CD ou Ponto de Cross.");
 
     const dados = {
       nome: d.nome,
       login: d.login,
       perfil: d.perfil,
       permissoes: d.perfil === "OPERADOR" ? permissoes : [],
+      unidadeId: unidade.id,
       ...(senha ? { senhaHash: await bcrypt.hash(senha, 10) } : {}),
     };
-    const vinculo = cds.map((c) => ({ id: c.id }));
     const u = id
-      ? await prisma.usuario.update({ where: { id }, data: { ...dados, cds: { set: vinculo } } })
-      : await prisma.usuario.create({ data: { ...dados, senhaHash: dados.senhaHash!, cds: { connect: vinculo } } });
+      ? await prisma.usuario.update({ where: { id }, data: dados })
+      : await prisma.usuario.create({ data: { ...dados, senhaHash: dados.senhaHash! } });
     await auditar(prisma, {
       acao: id ? "EDITAR_USUARIO" : "CRIAR_USUARIO",
       entidade: "Usuario",
       entidadeId: u.id,
       usuarioId: admin.id,
-      detalhes: { login: d.login, perfil: d.perfil, permissoes, cds: cds.map((c) => c.codigo), senhaAlterada: !!senha },
+      detalhes: { login: d.login, perfil: d.perfil, permissoes, unidade: unidade.codigo, senhaAlterada: !!senha },
     });
     msg = `Usuário ${u.login} ${id ? "atualizado" : "criado"}.`;
   } catch (e) {

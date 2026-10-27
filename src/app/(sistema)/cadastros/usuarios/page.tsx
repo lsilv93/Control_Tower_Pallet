@@ -15,9 +15,9 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
   const admin = await requireAdmin();
   const { editar, ok } = await searchParams;
   const [lista, editando, cds] = await Promise.all([
-    prisma.usuario.findMany({ include: { cds: { select: { codigo: true } } }, orderBy: [{ ativo: "desc" }, { nome: "asc" }] }),
-    editar ? prisma.usuario.findUnique({ where: { id: editar }, include: { cds: { select: { id: true } } } }) : null,
-    prisma.centroDistribuicao.findMany({ where: { tipo: "CD" }, select: { id: true, codigo: true, nome: true, ativo: true }, orderBy: { codigo: "asc" } }),
+    prisma.usuario.findMany({ include: { unidade: { select: { codigo: true, tipo: true, hub: true } } }, orderBy: [{ ativo: "desc" }, { nome: "asc" }] }),
+    editar ? prisma.usuario.findUnique({ where: { id: editar } }) : null,
+    prisma.centroDistribuicao.findMany({ select: { id: true, codigo: true, nome: true, ativo: true, tipo: true, hub: true }, orderBy: [{ hub: "desc" }, { tipo: "asc" }, { codigo: "asc" }] }),
   ]);
 
   return (
@@ -34,25 +34,21 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
               permissoesIniciais={editando?.permissoes ?? ["dashboard"]}
               podeMaster={ehMaster(admin)}
             />
-            <fieldset className="poco p-4">
-              <legend className="label !mb-2">CDs em que opera</legend>
-              {cds.length === 0 ? (
-                <p className="text-[11px] text-t3">Nenhum CD cadastrado. Cadastre em Centros de Distribuição.</p>
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {cds.map((cd) => (
-                    <label key={cd.id} className={`flex cursor-pointer items-center gap-2 text-[12px] ${cd.ativo ? "text-t2" : "text-t4"}`}>
-                      <input type="checkbox" name="cds" value={cd.id} defaultChecked={editando?.cds.some((c) => c.id === cd.id) ?? false} />
-                      <span><span className="num font-semibold">{cd.codigo}</span> · {cd.nome}{cd.ativo ? "" : " (inativo)"}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-              <p className="mt-3 text-[11px] text-t4">
-                1 CD: selecionado automaticamente no acesso, sem troca. Mais de 1: o usuário escolhe o CD ao entrar. Operador precisa de ao menos 1 CD;
-                administrador sem CD marcado opera em todos.
+            <div>
+              <label className="label" htmlFor="unidadeId">Unidade (CD ou Ponto de Cross) *</label>
+              <select id="unidadeId" name="unidadeId" className="input" required defaultValue={editando?.unidadeId ?? ""}>
+                <option value="" disabled>Selecione...</option>
+                {cds.map((cd) => (
+                  <option key={cd.id} value={cd.id}>
+                    {cd.tipo === "CROSS" ? "Cross" : cd.hub ? "Hub" : "CD"} · {cd.codigo} - {cd.nome}{cd.ativo ? "" : " (inativa)"}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[11px] text-t4">
+                Usuários regionais veem e operam somente a própria unidade. Administradores e usuários do Hub (CDJC) têm visão Nível Brasil.
+                Usuários de Ponto de Cross ficam limitados a painel, envio, recebimento/conferência e lançar quebrado.
               </p>
-            </fieldset>
+            </div>
             <Campo
               nome="senha"
               rotulo={editando ? "Nova senha (deixe em branco para manter)" : "Senha inicial"}
@@ -68,7 +64,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
           <Tabela>
             <table className="tabela">
               <thead>
-                <tr><th>Nome</th><th>Login</th><th>Perfil</th><th>CDs</th><th>Acessos</th><th>Situação</th><th>Criado em</th><th /></tr>
+                <tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Unidade</th><th>Acessos</th><th>Situação</th><th>Criado em</th><th /></tr>
               </thead>
               <tbody>
                 {lista.map((u) => (
@@ -76,8 +72,10 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
                     <td className="font-medium text-t1">{u.nome}</td>
                     <td className="num">{u.login}</td>
                     <td className={u.perfil === "MASTER" ? "font-semibold text-lima" : undefined}>{ROTULO_PERFIL[u.perfil]}</td>
-                    <td className="num max-w-[10rem] whitespace-normal text-[11px]">
-                      {u.cds.length ? u.cds.map((c) => c.codigo).join(", ") : u.perfil === "OPERADOR" ? <span className="text-erro">Nenhum</span> : <span className="text-t3">Todos</span>}
+                    <td className="num whitespace-nowrap text-[11px]">
+                      <span className="font-semibold text-t1">{u.unidade.codigo}</span>{" "}
+                      <span className="text-t4">{u.unidade.tipo === "CROSS" ? "Cross" : u.unidade.hub ? "Hub" : "CD"}</span>
+                      {(u.perfil !== "OPERADOR" || u.unidade.hub) && <span className="block text-lima">Nível Brasil</span>}
                     </td>
                     <td className="max-w-[16rem] whitespace-normal text-[11px] text-t3">
                       {u.perfil === "OPERADOR"
@@ -85,7 +83,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
                           ? PERMISSOES.filter((p) => u.permissoes.includes(p.chave)).map((p) => p.rotulo.split(" (")[0]).join(" · ")
                           : "Nenhuma tela liberada"
                         : u.perfil === "MASTER"
-                          ? "Total + correção de inventário"
+                          ? "Total + configurações"
                           : "Total"}
                     </td>
                     <td><Situacao ativo={u.ativo} /></td>

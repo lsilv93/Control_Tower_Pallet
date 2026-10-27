@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { obterSaldos } from "@/lib/conta";
 import { formatarDataHora } from "@/lib/datas";
 import { lerFiltros } from "@/lib/filtros";
-import { formatarNumero, numeroAgenda, numeroRetorno, numeroVale, rotuloTipo } from "@/lib/formatos";
+import { formatarNumero, numeroAgenda, numeroConferencia, numeroVale, rotuloTipo } from "@/lib/formatos";
 
 export const metadata = { title: "Relatórios" };
 
@@ -23,7 +23,7 @@ export default async function RelatoriosPage({
   const [movs, total, porTipo, saldos, fluxoPeriodo] = await Promise.all([
     prisma.movimentacao.findMany({
       where,
-      include: { usuario: true, unidade: true, fornecedor: true, vale: true, agenda: true, retorno: true },
+      include: { usuario: true, unidade: true, fornecedor: true, vale: true, agenda: true, conferencia: true },
       orderBy: { criadoEm: "desc" },
       take: LIMITE,
     }),
@@ -68,9 +68,9 @@ export default async function RelatoriosPage({
       </form>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Indicador titulo="Estoque de Vazios (atual)" valor={formatarNumero(saldos.vazios)} />
-        <Indicador titulo="Estoque de Quebrados (atual)" valor={formatarNumero(saldos.quebrados)} cor="ouro" />
-        <Indicador titulo="Saldo devedor CDs/Cross (atual)" valor={formatarNumero(saldos.devedor)} detalhe={`fornecedores: ${formatarNumero(saldos.fornecedores)} pendentes`} cor="neutro" />
+        <Indicador titulo="Pallets bons (atual)" valor={formatarNumero(saldos.vazios)} />
+        <Indicador titulo="Pallets quebrados (atual)" valor={formatarNumero(saldos.quebrados)} cor="ouro" />
+        <Indicador titulo="Em trânsito (atual)" valor={formatarNumero(saldos.transito)} detalhe={`a receber: ${formatarNumero(saldos.aReceber)} · faltas em aberto: ${formatarNumero(saldos.ocorrencias)}`} cor="neutro" />
         <Indicador
           titulo="Variação líquida no período"
           valor={liquido > 0 ? `+${liquido}` : liquido}
@@ -121,7 +121,7 @@ export default async function RelatoriosPage({
                     <td className="text-right font-semibold tabular-nums text-t1">{m.quantidade}</td>
                     <td>{m.unidade ? `${m.unidade.codigo} - ${m.unidade.nome}` : m.fornecedor?.nome ?? "—"}</td>
                     <td className="font-mono text-[11px]">
-                      {[m.vale && numeroVale(m.vale.numero, m.vale.tipo), m.agenda && numeroAgenda(m.agenda.numero), m.retorno && numeroRetorno(m.retorno.numero)].filter(Boolean).join(" / ") || "—"}
+                      {[m.vale && numeroVale(m.vale.numero, m.vale.tipo), m.agenda && numeroAgenda(m.agenda.numero), m.conferencia && numeroConferencia(m.conferencia.numero)].filter(Boolean).join(" / ") || "—"}
                     </td>
                     <td>{m.usuario.login}</td>
                     <td className="max-w-xs truncate text-t3" title={m.observacao ?? ""}>{m.observacao ?? "—"}</td>

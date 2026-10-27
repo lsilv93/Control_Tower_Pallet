@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { exigir } from "./guarda";
+import { exigir, exigirUnidade } from "./guarda";
 import { auditar, comContaBloqueada, ErroNegocio, lancar, saldosPorConta } from "@/lib/conta";
 import { formatarNumero } from "@/lib/formatos";
 import { travaReparo } from "@/lib/reparo";
@@ -15,16 +15,16 @@ const quantidade = z.coerce
 
 const observacaoObrigatoria = z.string().trim().min(5, "A observação é obrigatória (mínimo 5 caracteres).").max(500);
 
-/** Quebra: Estoque de Vazios → Estoque de Quebrados. */
+/** Lançar quebrado: pallets bons → quebrados na unidade ativa (sem deixar saldo negativo). */
 export async function registrarQuebra(_: Estado, form: FormData): Promise<Estado> {
   try {
-    const u = await exigir("avarias");
+    const u = await exigir("quebras");
     const d = z.object({ quantidade, observacao: observacaoObrigatoria }).parse(Object.fromEntries(form));
     await comContaBloqueada((tx) =>
-      lancar(tx, { tipo: "QUEBRA", quantidade: d.quantidade, observacao: d.observacao, usuarioId: u.id, cdId: u.cd.id }),
+      lancar(tx, { tipo: "QUEBRA", quantidade: d.quantidade, observacao: d.observacao, usuarioId: u.id, cdId: u.cd.id }, u.cd.codigo),
     );
     revalidatePath("/", "layout");
-    return sucesso(`${formatarNumero(d.quantidade)} pallet(s) quebrados: Estoque de Vazios → Estoque de Quebrados.`);
+    return sucesso(`${formatarNumero(d.quantidade)} pallet(s) lançados como quebrados em ${u.cd.codigo}: bons → quebrados.`);
   } catch (e) {
     return tratarErro(e);
   }
@@ -48,7 +48,8 @@ const schemaReparo = z
  */
 export async function registrarReparo(_: Estado, form: FormData): Promise<Estado> {
   try {
-    const u = await exigir("avarias");
+    const u = await exigir("reparo");
+    if (!u.cd.hub) throw new ErroNegocio("O conserto/reparo de pallets é feito no CD Hub (CDJC).");
     const d = schemaReparo.parse(Object.fromEntries(form));
     const utilizados = d.usouOutros === "SIM" ? (d.utilizados ?? 0) : 0;
     const observacao = d.observacao || null;
@@ -94,20 +95,23 @@ export async function registrarReparo(_: Estado, form: FormData): Promise<Estado
   }
 }
 
-/** Descarte / destruição: o usuário escolhe no modal de qual pulmão os pallets saem. */
+/**
+ * Descarte / destruição (todos os usuários): o usuário escolhe no pop-up de qual estoque
+ * os pallets saem. Registro definitivo: não pode ser removido nem estornado.
+ */
 export async function registrarDescarte(_: Estado, form: FormData): Promise<Estado> {
   try {
-    const u = await exigir("avarias");
+    const u = await exigirUnidade();
     const d = z.object({ quantidade, observacao: observacaoObrigatoria }).parse(Object.fromEntries(form));
     const origem = z
       .enum(["VAZIOS", "QUEBRADOS"], { message: "Selecione de qual pulmão o pallet será descartado." })
       .parse(form.get("origem"));
     await comContaBloqueada((tx) =>
-      lancar(tx, { tipo: "DESCARTE", quantidade: d.quantidade, observacao: d.observacao, usuarioId: u.id, cdId: u.cd.id, origem }),
+      lancar(tx, { tipo: "DESCARTE", quantidade: d.quantidade, observacao: d.observacao, usuarioId: u.id, cdId: u.cd.id, origem }, u.cd.codigo),
     );
     revalidatePath("/", "layout");
     return sucesso(
-      `${formatarNumero(d.quantidade)} pallet(s) descartados/destruídos do ${origem === "VAZIOS" ? "Pulmão de Vazios" : "Pulmão de Quebrados"}.`,
+      `${formatarNumero(d.quantidade)} pallet(s) ${origem === "VAZIOS" ? "bons" : "quebrados"} descartados em ${u.cd.codigo}. Registro definitivo (consulte em Pallets Descartados).`,
     );
   } catch (e) {
     return tratarErro(e);

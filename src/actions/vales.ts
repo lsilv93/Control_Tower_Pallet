@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { StatusVale } from "@prisma/client";
 import { z } from "zod";
-import { exigir } from "./guarda";
-import { auditar, comContaBloqueada, ErroNegocio, lancar, TIPOS_VALE_DEVEDOR } from "@/lib/conta";
+import { exigir, exigirModuloFornecedor } from "./guarda";
+import { auditar, comContaBloqueada, ErroNegocio, lancar } from "@/lib/conta";
 import { prisma } from "@/lib/prisma";
 import { lerCodigoVale, numeroAgenda, numeroVale, rotuloMotivoCancelamento, rotuloTipoVale } from "@/lib/formatos";
 import { formatarDataHora, inicioDoDia } from "@/lib/datas";
@@ -21,7 +21,7 @@ const schemaAgenda = z.object({
 /** Gera agenda(s) de devolução a partir dos vales selecionados (uma por fornecedor). */
 export async function gerarAgenda(_: Estado, form: FormData): Promise<Estado> {
   try {
-    const usuario = await exigir("agendas");
+    const usuario = await exigirModuloFornecedor();
     const d = schemaAgenda.parse({
       valeIds: form.getAll("valeIds").map(String),
       dataHora: form.get("dataHora"),
@@ -84,7 +84,7 @@ export async function gerarAgenda(_: Estado, form: FormData): Promise<Estado> {
 export async function validarAgenda(_: Estado, form: FormData): Promise<Estado> {
   let mensagem: string;
   try {
-    const usuario = await exigir("agendas");
+    const usuario = await exigirModuloFornecedor();
     const agendaId = String(form.get("agendaId") ?? "");
     const observacao = String(form.get("observacao") ?? "").trim() || null;
 
@@ -147,7 +147,7 @@ export async function validarAgenda(_: Estado, form: FormData): Promise<Estado> 
 export async function cancelarAgenda(_: Estado, form: FormData): Promise<Estado> {
   let mensagem: string;
   try {
-    const usuario = await exigir("agendas");
+    const usuario = await exigirModuloFornecedor();
     const agendaId = String(form.get("agendaId") ?? "");
     const agenda = await prisma.$transaction(async (tx) => {
       const { count } = await tx.agendaDevolucao.updateMany({
@@ -175,7 +175,7 @@ export type ResultadoLeituraVale =
 export async function consultarVale(leitura: string): Promise<ResultadoLeituraVale> {
   let cdId: string;
   try {
-    cdId = (await exigir("vales", "agendas")).cd.id;
+    cdId = (await exigir("vales", "fornecedor")).cd.id;
   } catch (e) {
     return { ok: false, erro: e instanceof Error ? e.message : "Você não tem permissão para consultar vales." };
   }
@@ -205,18 +205,17 @@ export async function consultarVale(leitura: string): Promise<ResultadoLeituraVa
 
 const schemaExclusao = z.object({
   valeId: z.string().min(1, "Busque o vale a ser excluído."),
-  motivo: z.enum(["FORNECEDOR_INCORRETO", "TRANSPORTADORA_INCORRETA", "QUANTIDADE_INCORRETA", "DOCUMENTO_ERRADO", "DESTINO_INCORRETO", "DIVERGENCIA_ABONADA"], {
+  motivo: z.enum(["FORNECEDOR_INCORRETO", "TRANSPORTADORA_INCORRETA", "QUANTIDADE_INCORRETA", "DOCUMENTO_ERRADO", "DESTINO_INCORRETO"], {
     message: "Selecione o motivo do cancelamento.",
   }),
   observacao: z.string().trim().max(500).optional(),
 });
 
 /**
- * Exclusão (cancelamento) de vale emitido incorretamente, de qualquer tipo, no CD ativo.
- * Exclusão lógica: o vale fica CANCELADO e o lançamento é estornado — vale de fornecedor
- * reduz o saldo devido ao fornecedor (Carga → Fornecedor); vale de envio, ocorrência ou
- * ajuste reduz o saldo devedor do destino (Custódia → Carga/Ajuste). Registra na auditoria
- * vale, usuário, data/hora, motivo e observação.
+ * Exclusão (cancelamento) de vale emitido incorretamente pela unidade ativa. Exclusão
+ * lógica: o vale fica CANCELADO e o lançamento é estornado — vale de envio ainda não
+ * conferido volta do trânsito para o estoque da origem; vale de fornecedor reduz o saldo
+ * devido ao fornecedor. Registra na auditoria vale, usuário, data/hora, motivo e observação.
  */
 export async function excluirVale(_: Estado, form: FormData): Promise<Estado> {
   let mensagem: string;
@@ -227,11 +226,13 @@ export async function excluirVale(_: Estado, form: FormData): Promise<Estado> {
 
     const vale = await comContaBloqueada(async (tx) => {
       const vale = await tx.valePallet.findUnique({ where: { id: d.valeId }, include: { fornecedor: true, unidade: true, agenda: true } });
-      if (!vale || vale.cdId !== usuario.cd.id) throw new ErroNegocio("Vale não encontrado neste CD.");
+      if (!vale || vale.cdId !== usuario.cd.id) throw new ErroNegocio("Vale não encontrado entre os emitidos por esta unidade.");
       const codigo = numeroVale(vale.numero, vale.tipo);
+      if (vale.tipo === "OCORRENCIA") throw new ErroNegocio(`${codigo} é um vale de ocorrência: ela é resolvida pelo administrador em Ocorrências.`);
+      if (vale.tipo === "FORNECEDOR" && !usuario.cd.recebimentoFornecedor) throw new ErroNegocio("O módulo Recebimento Pallet Fornecedor não está liberado para esta unidade.");
       if (vale.status === "CANCELADO") throw new ErroNegocio(`${codigo} já foi excluído.`);
       if (vale.status === "FINALIZADO") {
-        throw new ErroNegocio(`${codigo} já foi baixado e não pode ser excluído.`);
+        throw new ErroNegocio(vale.tipo === "ENVIO" ? `${codigo} já foi conferido no destino e não pode ser excluído.` : `${codigo} já foi baixado e não pode ser excluído.`);
       }
       if (vale.status === "AGENDADO") {
         throw new ErroNegocio(
@@ -262,17 +263,14 @@ export async function excluirVale(_: Estado, form: FormData): Promise<Estado> {
           valeId: vale.id,
           observacao: texto,
         });
-      } else if ((TIPOS_VALE_DEVEDOR as readonly string[]).includes(vale.tipo)) {
-        await lancar(tx, {
-          tipo: "ESTORNO_ENVIO",
-          quantidade: vale.quantidade,
-          usuarioId: usuario.id,
-          cdId: usuario.cd.id,
-          unidadeId: vale.unidadeId,
-          destino: vale.tipo === "ENVIO" ? "CARGA" : "AJUSTE",
-          valeId: vale.id,
-          observacao: texto,
-        });
+      } else {
+        // Envio ainda não conferido: os pallets voltam do trânsito para o estoque da origem.
+        if (vale.quantidadeBons > 0) {
+          await lancar(tx, { tipo: "ESTORNO_ENVIO", destino: "VAZIOS", quantidade: vale.quantidadeBons, usuarioId: usuario.id, cdId: usuario.cd.id, unidadeId: vale.unidadeId, valeId: vale.id, observacao: texto });
+        }
+        if (vale.quantidadeQuebrados > 0) {
+          await lancar(tx, { tipo: "ESTORNO_ENVIO", destino: "QUEBRADOS", quantidade: vale.quantidadeQuebrados, usuarioId: usuario.id, cdId: usuario.cd.id, unidadeId: vale.unidadeId, valeId: vale.id, observacao: texto });
+        }
       }
       await auditar(tx, {
         acao: "EXCLUIR_VALE",
@@ -298,7 +296,7 @@ export async function excluirVale(_: Estado, form: FormData): Promise<Estado> {
     mensagem =
       vale.tipo === "FORNECEDOR"
         ? `${codigo} excluído (${rotuloMotivoCancelamento[d.motivo]}). ${vale.quantidade} pallet(s) estornados do saldo com o fornecedor.`
-        : `${codigo} excluído (${rotuloMotivoCancelamento[d.motivo]}). Saldo devedor de ${vale.unidade?.codigo ?? "destino"} −${vale.quantidade}.`;
+        : `${codigo} excluído (${rotuloMotivoCancelamento[d.motivo]}). ${vale.quantidade} pallet(s) voltaram do trânsito para o estoque de ${usuario.cd.codigo}.`;
   } catch (e) {
     return tratarErro(e);
   }

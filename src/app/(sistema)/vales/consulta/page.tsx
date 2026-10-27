@@ -14,7 +14,7 @@ export const metadata = { title: "Consulta de Vales" };
 const LIMITE = 200;
 const reData = /^\d{4}-\d{2}-\d{2}$/;
 const STATUS: StatusVale[] = ["PENDENTE", "AGENDADO", "FINALIZADO", "CANCELADO"];
-const TIPOS: TipoVale[] = ["FORNECEDOR", "ENVIO", "OCORRENCIA", "AJUSTE"];
+const TIPOS: TipoVale[] = ["ENVIO", "OCORRENCIA", "FORNECEDOR"];
 
 type Busca = { numero?: string; fornecedor?: string; unidade?: string; tipo?: string; status?: string; de?: string; ate?: string };
 
@@ -27,19 +27,22 @@ export default async function ConsultaValesPage({ searchParams }: { searchParams
   const de = f.de && reData.test(f.de) ? f.de : undefined;
   const ate = f.ate && reData.test(f.ate) ? f.ate : undefined;
 
+  // Escopo: visão global vê todos os vales; regional, os emitidos ou destinados à sua unidade.
+  const escopo: Prisma.ValePalletWhereInput[] = [];
+  if (!u.global) escopo.push({ OR: [{ cdId: u.cd.id }, { unidadeId: u.cd.id }] });
+  if (f.unidade) escopo.push({ OR: [{ cdId: f.unidade }, { unidadeId: f.unidade }] });
   const where: Prisma.ValePalletWhereInput = {
-    cdId: u.cd.id,
+    ...(escopo.length ? { AND: escopo } : {}),
     ...(numero !== null ? { numero } : {}),
     ...(tipo ? { tipo } : {}),
     ...(f.fornecedor ? { fornecedorId: f.fornecedor } : {}),
-    ...(f.unidade ? { unidadeId: f.unidade } : {}),
     ...(status ? { status } : {}),
     ...(de || ate ? { criadoEm: { ...(de ? { gte: inicioDoDia(de) } : {}), ...(ate ? { lt: fimDoDia(ate) } : {}) } } : {}),
   };
   const [fornecedores, unidades, vales, total, soma] = await Promise.all([
     prisma.fornecedor.findMany({ select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
-    prisma.centroDistribuicao.findMany({ where: { id: { not: u.cd.id } }, select: { id: true, codigo: true, nome: true, tipo: true }, orderBy: [{ tipo: "asc" }, { codigo: "asc" }] }),
-    prisma.valePallet.findMany({ where, include: { fornecedor: true, unidade: true }, orderBy: { numero: "desc" }, take: LIMITE }),
+    prisma.centroDistribuicao.findMany({ select: { id: true, codigo: true, nome: true, tipo: true }, orderBy: [{ tipo: "asc" }, { codigo: "asc" }] }),
+    prisma.valePallet.findMany({ where, include: { fornecedor: true, unidade: true, cd: { select: { codigo: true } } }, orderBy: { numero: "desc" }, take: LIMITE }),
     prisma.valePallet.count({ where }),
     prisma.valePallet.aggregate({ where, _sum: { quantidade: true } }),
   ]);
@@ -47,13 +50,13 @@ export default async function ConsultaValesPage({ searchParams }: { searchParams
 
   return (
     <>
-      <Cabecalho titulo="Consulta de Vales-Pallet" descricao={`Vales emitidos por ${u.cd.codigo}: fornecedor (VP), envio (VE), ocorrência (VO) e ajuste (VA). Busque por número, tipo, fornecedor, CD/Cross, status ou período. Cada vale pode ser baixado em PDF ou impresso.`} />
+      <Cabecalho titulo="Consulta de Vales-Pallet" descricao={`${u.global ? "Visão Nível Brasil: todos os vales." : `Vales emitidos ou destinados a ${u.cd.codigo}.`} Envio (VE), ocorrência (VO) e fornecedor (VP). Busque por número, tipo, unidade, status ou período. Cada vale pode ser baixado em PDF ou impresso.`} />
 
       <Painel className="mb-6">
         <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:items-end" action="/vales/consulta">
           <div>
             <label className="label" htmlFor="numero">Número do vale</label>
-            <input id="numero" name="numero" defaultValue={f.numero ?? ""} className="input num uppercase placeholder:normal-case" placeholder="VP-000123" autoComplete="off" />
+            <input id="numero" name="numero" defaultValue={f.numero ?? ""} className="input num uppercase placeholder:normal-case" placeholder="VE-000123" autoComplete="off" />
           </div>
           <div>
             <label className="label" htmlFor="tipo">Tipo</label>
@@ -117,7 +120,7 @@ export default async function ConsultaValesPage({ searchParams }: { searchParams
           <Tabela>
             <table className="tabela">
               <thead>
-                <tr><th>Vale</th><th>Emissão</th><th>Fornecedor / Destino</th><th>Transportadora</th><th className="text-right">Qtd.</th><th>Status</th><th className="text-right">Documento</th></tr>
+                <tr><th>Vale</th><th>Emissão</th><th>Origem → destino / fornecedor</th><th>Transportadora</th><th className="text-right">Qtd.</th><th>Status</th><th className="text-right">Documento</th></tr>
               </thead>
               <tbody>
                 {vales.map((v) => (
@@ -127,7 +130,7 @@ export default async function ConsultaValesPage({ searchParams }: { searchParams
                       {v.tipo === "FORNECEDOR" ? (
                         <p className={v.semNotaFiscal ? "text-[11px] font-semibold text-ouro" : "text-[11px] text-t4"}>{v.semNotaFiscal ? rotuloNf(v) : `NF ${rotuloNf(v)}`}</p>
                       ) : (
-                        <p className="text-[11px] text-t4">{rotuloTipoVale[v.tipo]}</p>
+                        <p className="text-[11px] text-t4">{rotuloTipoVale[v.tipo]}{v.ocorrencia ? ` · ${v.ocorrencia === "FALTA" ? "falta" : "sobra"}` : ""}</p>
                       )}
                     </td>
                     <td className="num">{formatarDataHora(v.criadoEm)}</td>
@@ -138,7 +141,7 @@ export default async function ConsultaValesPage({ searchParams }: { searchParams
                           <p className="num text-[11px] text-t4">{formatarCnpj(v.fornecedor.cnpj)}</p>
                         </>
                       ) : (
-                        <p className="max-w-[14rem] truncate font-medium text-t1">{v.unidade ? `${v.unidade.tipo === "CROSS" ? "Cross" : "CD"} ${v.unidade.codigo} - ${v.unidade.nome}` : "—"}</p>
+                        <p className="num max-w-[14rem] truncate font-medium text-t1">{v.cd.codigo} → {v.unidade?.codigo ?? "—"}</p>
                       )}
                     </td>
                     <td className="max-w-[10rem] truncate">{v.transportadora ?? "—"}</td>

@@ -1,4 +1,4 @@
-import type { MotivoCancelamento, StatusAgenda, StatusVale, TipoMovimentacao, TipoUnidade, TipoVale } from "@prisma/client";
+import type { MotivoCancelamento, ResolucaoOcorrencia, StatusAgenda, StatusVale, TipoMovimentacao, TipoOcorrencia, TipoUnidade, TipoVale } from "@prisma/client";
 
 export const somenteDigitos = (v: string) => v.replace(/\D/g, "");
 
@@ -13,6 +13,37 @@ export function formatarCnpj(cnpj: string): string {
   if (d.length !== 14) return cnpj;
   return d.replace(/^(.{2})(.{3})(.{3})(.{4})(.{2})$/, "$1.$2.$3/$4-$5");
 }
+
+/**
+ * Máscara de digitação do CNPJ (00.000.000/0000-00), em maiúsculas: 12 posições
+ * alfanuméricas (CNPJ alfanumérico) + 2 dígitos verificadores numéricos.
+ */
+export function mascaraCnpj(valor: string): string {
+  const entrada = valor.toUpperCase().replace(/[^0-9A-Z]/g, "");
+  let c = "";
+  for (const ch of entrada) {
+    if (c.length >= 14) break;
+    if (c.length < 12 ? /[0-9A-Z]/.test(ch) : /\d/.test(ch)) c += ch;
+  }
+  const partes = [c.slice(0, 2), c.slice(2, 5), c.slice(5, 8), c.slice(8, 12), c.slice(12, 14)];
+  let r = partes[0];
+  if (partes[1]) r += `.${partes[1]}`;
+  if (partes[2]) r += `.${partes[2]}`;
+  if (partes[3]) r += `/${partes[3]}`;
+  if (partes[4]) r += `-${partes[4]}`;
+  return r;
+}
+
+/** Telefone: (00) 0000-0000 ou (00) 00000-0000. */
+export function mascaraTelefone(valor: string): string {
+  const d = valor.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 2) return d ? `(${d}` : "";
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+export const telefoneValido = (v: string) => /^\d{10,11}$/.test(v.replace(/\D/g, ""));
+export const emailValido = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 
 /** Dígitos verificadores do CNPJ (válido para o formato numérico e o alfanumérico). */
 export function dvCnpj(base12: string): string {
@@ -63,9 +94,9 @@ export function formatarPlaca(placa: string): string {
 }
 
 /** Prefixo do número do vale por tipo (numeração única para todos os tipos). */
-export const PREFIXO_VALE: Record<TipoVale, string> = { FORNECEDOR: "VP", ENVIO: "VE", OCORRENCIA: "VO", AJUSTE: "VA" };
+export const PREFIXO_VALE: Record<TipoVale, string> = { FORNECEDOR: "VP", ENVIO: "VE", OCORRENCIA: "VO" };
 
-/** Número do vale: VP-000123 (fornecedor), VE- (envio), VO- (ocorrência), VA- (ajuste). */
+/** Número do vale: VE-000123 (envio entre unidades), VO- (ocorrência), VP- (fornecedor). */
 export const numeroVale = (n: number, tipo: TipoVale = "FORNECEDOR") => `${PREFIXO_VALE[tipo]}-${String(n).padStart(6, "0")}`;
 
 /**
@@ -73,53 +104,62 @@ export const numeroVale = (n: number, tipo: TipoVale = "FORNECEDOR") => `${PREFI
  * "vo 123" ou só "123") e devolve o número do vale.
  */
 export function lerCodigoVale(codigo: string): number | null {
-  const m = codigo.trim().toUpperCase().match(/^(?:V[PEOA][\s-]*)?0*(\d{1,9})$/);
+  const m = codigo.trim().toUpperCase().match(/^(?:V[PEO][\s-]*)?0*(\d{1,9})$/);
   return m ? Number(m[1]) : null;
 }
 
-export const numeroRetorno = (n: number) => `RC-${String(n).padStart(5, "0")}`;
+/** Número da conferência de recebimento. */
+export const numeroConferencia = (n: number) => `RC-${String(n).padStart(5, "0")}`;
+/** @deprecated use numeroConferencia */
+export const numeroRetorno = numeroConferencia;
 
 export const rotuloTipoVale: Record<TipoVale, string> = {
-  FORNECEDOR: "Vale-Pallet de Fornecedor",
   ENVIO: "Vale-Pallet de Envio",
-  OCORRENCIA: "Vale-Ocorrência (falta)",
-  AJUSTE: "Vale de Ajuste de Saldo Devedor",
+  OCORRENCIA: "Vale de Ocorrência",
+  FORNECEDOR: "Vale-Pallet de Fornecedor",
 };
+
+export const rotuloOcorrencia: Record<TipoOcorrencia, string> = { FALTA: "Falta (enviado a menos)", SOBRA: "Sobra (enviado a mais)" };
+export const rotuloResolucao: Record<ResolucaoOcorrencia, string> = { LOCALIZADA: "Localizada e devolvida ao remetente", PERDA: "Baixada como perda" };
 
 export const rotuloTipoUnidade: Record<TipoUnidade, string> = { CD: "CD", CROSS: "Ponto de Cross" };
 
-/** Motivos da inclusão manual de vazios (administrador). */
-export const MOTIVOS_INCLUSAO = { COMPRA: "Compra", ESTORNO: "Estorno", DEVOLUCAO: "Devolução" } as const;
+/** Nome da unidade com o papel: "CDJC (Hub)", "CX01 (Cross)". */
+export const rotuloUnidade = (u: { codigo: string; tipo: TipoUnidade; hub?: boolean }) =>
+  `${u.codigo}${u.hub ? " (Hub)" : u.tipo === "CROSS" ? " (Cross)" : ""}`;
+
+/** Motivos da inclusão manual de saldo (administrador). */
+export const MOTIVOS_INCLUSAO = { COMPRA: "Compra", DEVOLUCAO: "Devolução", AJUSTE_ESTOQUE: "Ajuste Estoque", INVENTARIO: "Inventário" } as const;
 export type MotivoInclusao = keyof typeof MOTIVOS_INCLUSAO;
 export const numeroAgenda = (n: number) => `AG-${String(n).padStart(5, "0")}`;
 
 export const formatarNumero = (n: number) => new Intl.NumberFormat("pt-BR").format(n);
 
 export const rotuloTipo: Record<TipoMovimentacao, string> = {
-  ENVIO_CD: "Transferência para o CD (legado)",
-  RECEBIMENTO_CD: "Retorno do CD (legado)",
-  RECEBIMENTO_FORNECEDOR: "Recebimento de Fornecedor",
-  DEVOLUCAO_FORNECEDOR: "Baixa / pagamento ao Fornecedor",
-  QUEBRA: "Quebra",
+  ENVIO: "Envio a outra unidade",
+  BAIXA_TRANSITO: "Envio conferido no destino",
+  RECEBIMENTO: "Recebimento de outra unidade",
+  FALTA: "Falta na conferência (ocorrência)",
+  SOBRA: "Sobra na conferência",
+  OCORRENCIA_LOCALIZADA: "Ocorrência localizada (devolvida)",
+  OCORRENCIA_PERDA: "Ocorrência baixada como perda",
+  ESTORNO_ENVIO: "Estorno de envio (vale excluído)",
+  QUEBRA: "Lançamento de quebrado",
   RECUPERADO: "Conserto / Reparo",
-  DESCARTE: "Descarte",
-  AJUSTE_ENTRADA: "Correção de inventário (inclusão)",
-  AJUSTE_SAIDA: "Correção de inventário (remoção)",
-  COMPRA: "Compra de pallets",
-  ESTORNO_VALE: "Estorno de vale de fornecedor",
-  ENVIO_UNIDADE: "Envio para CD / Cross",
-  RETORNO_UNIDADE: "Retorno de CD / Cross",
-  ESTORNO_ENVIO: "Estorno de vale de envio",
-  INCLUSAO_VAZIOS: "Inclusão manual de vazios",
-  INCLUSAO_DEVEDOR: "Inclusão manual de saldo devedor",
   CANIBALIZACAO: "Pallets utilizados no reparo",
-  MIGRACAO_CUSTODIA: "Saldo devedor migrado",
+  DESCARTE: "Descarte",
+  INCLUSAO_MANUAL: "Inclusão manual de saldo",
+  REMOCAO_MANUAL: "Remoção manual de saldo",
+  COMPRA: "Compra de pallets",
+  RECEBIMENTO_FORNECEDOR: "Recebimento de fornecedor",
+  DEVOLUCAO_FORNECEDOR: "Baixa / pagamento ao fornecedor",
+  ESTORNO_VALE: "Estorno de vale de fornecedor",
 };
 
 export const rotuloStatusVale: Record<StatusVale, string> = {
   PENDENTE: "Pendente",
   AGENDADO: "Agendado",
-  FINALIZADO: "Baixado",
+  FINALIZADO: "Concluído",
   CANCELADO: "Cancelado",
 };
 
@@ -128,8 +168,7 @@ export const rotuloMotivoCancelamento: Record<MotivoCancelamento, string> = {
   TRANSPORTADORA_INCORRETA: "Transportadora Incorreta",
   QUANTIDADE_INCORRETA: "Quantidade Incorreta",
   DOCUMENTO_ERRADO: "Documento Errado",
-  DESTINO_INCORRETO: "CD / Cross de destino incorreto",
-  DIVERGENCIA_ABONADA: "Divergência abonada",
+  DESTINO_INCORRETO: "Unidade de destino incorreta",
 };
 
 export const rotuloStatusAgenda: Record<StatusAgenda, string> = {

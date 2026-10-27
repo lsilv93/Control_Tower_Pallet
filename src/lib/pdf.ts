@@ -145,9 +145,9 @@ function via(doc: PDFKit.PDFDocument, vale: ValePdf, d: DocumentoVale, topo: num
 }
 
 /** PDF do vale (qualquer tipo): A4 com duas vias e linha de recorte. Só vales do CD informado. */
-export async function gerarPdfVale(id: string, cdId: string): Promise<{ arquivo: Buffer; nome: string } | null> {
+export async function gerarPdfVale(id: string, pode: (v: { cdId: string; unidadeId: string | null }) => boolean): Promise<{ arquivo: Buffer; nome: string } | null> {
   const vale = await buscarVale(id);
-  if (!vale || vale.cdId !== cdId) return null;
+  if (!vale || !pode(vale)) return null;
   const d = documentoVale(vale);
   const codigo = d.codigo;
   const barras = await bwipjs.toBuffer({ bcid: "code128", text: codigo, scale: 4, height: 12, includetext: false, paddingwidth: 12, paddingheight: 2, backgroundcolor: "FFFFFF" });

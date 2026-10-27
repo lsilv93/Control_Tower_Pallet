@@ -7,12 +7,12 @@ export const dynamic = "force-dynamic";
 
 export default async function SistemaLayout({ children }: { children: React.ReactNode }) {
   const [usuario, tema] = await Promise.all([requireUsuario(), temaAtual()]);
-  // Mais de um CD e nenhum escolhido: modal obrigatório de seleção do CD de operação.
+  // Visão global sem unidade escolhida: modal obrigatório de seleção da unidade de operação.
   if (!usuario.cd && usuario.cds.length > 0) redirect("/selecionar-cd");
   return (
     <div className="min-h-screen">
       <Menu
-        usuario={{ nome: usuario.nome, login: usuario.login, perfil: usuario.perfil, permissoes: usuario.permissoes }}
+        usuario={{ nome: usuario.nome, login: usuario.login, perfil: usuario.perfil, permissoes: usuario.permissoes, unidade: usuario.unidade, global: usuario.global }}
         cd={usuario.cd}
         podeTrocarCD={usuario.cds.length > 1}
         tema={tema}

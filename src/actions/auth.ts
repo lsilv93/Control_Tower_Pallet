@@ -85,8 +85,8 @@ export async function selecionarCD(_: Estado, form: FormData): Promise<Estado> {
     const u = await requireUsuario();
     const cdId = String(form.get("cdId") ?? "");
     const cd = u.cds.find((c) => c.id === cdId);
-    if (!cd) return falha("Selecione um CD permitido para o seu usuário.");
-    if (u.cds.length === 1 && u.cd && u.cd.id !== cd.id) return falha("Seu usuário opera somente no CD vinculado.");
+    if (!cd) return falha("Selecione uma unidade permitida para o seu usuário.");
+    if (u.cds.length === 1 && u.cd && u.cd.id !== cd.id) return falha("Seu usuário opera somente na unidade vinculada.");
     (await cookies()).set(CD_COOKIE, cd.id, {
       httpOnly: true,
       sameSite: "lax",

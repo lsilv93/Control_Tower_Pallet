@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { barra, Dica, escalaLimpa, fmt, useLargura } from "./base";
 
-export type BarraCross = { id: string; codigo: string; nome: string; saldo: number; vales: number; maisAntigo: string; idade: number | null };
+export type BarraCross = { id: string; codigo: string; nome: string; saldo: number; bons: number; quebrados: number; aReceber: number };
 
 /**
- * Saldo devedor por Ponto de Cross: barras horizontais (série única, uma cor), maior
+ * Estoque (bons + quebrados) por Ponto de Cross: barras horizontais (série única, uma cor), maior
  * primeiro, valor na ponta da barra, eixo com grade discreta e tooltip por barra.
  */
 export function GraficoBarrasCross({ dados }: { dados: BarraCross[] }) {
@@ -14,7 +14,7 @@ export function GraficoBarrasCross({ dados }: { dados: BarraCross[] }) {
   const [foco, setFoco] = useState<number | null>(null);
 
   if (dados.length === 0) {
-    return <p className="poco px-5 py-10 text-center text-[12px] text-t3">Nenhum saldo devedor em Pontos de Cross.</p>;
+    return <p className="poco px-5 py-10 text-center text-[12px] text-t3">Nenhum pallet em estoque nos Pontos de Cross.</p>;
   }
 
   const total = dados.reduce((s, d) => s + d.saldo, 0);
@@ -34,7 +34,7 @@ export function GraficoBarrasCross({ dados }: { dados: BarraCross[] }) {
   return (
     <div ref={ref} className="relative" data-testid="grafico-barras-cross">
       {largura > 0 && (
-        <svg width={W} height={H} role="img" aria-label="Saldo devedor por Ponto de Cross">
+        <svg width={W} height={H} role="img" aria-label="Estoque por Ponto de Cross">
           {ticks.map((t) => (
             <g key={t} pointerEvents="none">
               <line x1={NOME + x(t)} x2={NOME + x(t)} y1={2} y2={H - EIXO} stroke="var(--viz-grade)" strokeWidth={1} />
@@ -51,7 +51,7 @@ export function GraficoBarrasCross({ dados }: { dados: BarraCross[] }) {
                 onMouseLeave={() => setFoco(null)}
                 onFocus={() => setFoco(i)}
                 onBlur={() => setFoco(null)}
-                aria-label={`${b.codigo} ${b.nome}: ${b.saldo} pallets devidos, ${b.vales} vale(s) pendente(s)`}
+                aria-label={`${b.codigo} ${b.nome}: ${b.saldo} pallets em estoque (${b.bons} bons, ${b.quebrados} quebrados)`}
                 className="cursor-pointer outline-none"
               >
                 <rect x={0} y={y - 8} width={W} height={linha} rx={10} fill={foco === i ? "var(--viz-grade)" : "transparent"} />
@@ -73,10 +73,11 @@ export function GraficoBarrasCross({ dados }: { dados: BarraCross[] }) {
       {d && foco !== null && (
         <Dica x={NOME + x(d.saldo)} y={foco * linha} largura={W}>
           <p className="mb-1 font-semibold text-t1">{d.codigo} · {d.nome}</p>
-          <div className="flex justify-between gap-4"><span>Saldo devedor</span><strong className="num text-t1">{fmt(d.saldo)} pallets</strong></div>
+          <div className="flex justify-between gap-4"><span>Estoque total</span><strong className="num text-t1">{fmt(d.saldo)} pallets</strong></div>
           <div className="flex justify-between gap-4"><span>Participação no total</span><strong className="num text-t1">{total ? ((d.saldo / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : 0}%</strong></div>
-          <div className="flex justify-between gap-4"><span>Vales pendentes</span><strong className="num text-t1">{d.vales}</strong></div>
-          <div className="flex justify-between gap-4"><span>Mais antigo</span><strong className="num whitespace-nowrap text-t1">{d.maisAntigo}{d.idade !== null ? ` (${d.idade}d)` : ""}</strong></div>
+          <div className="flex justify-between gap-4"><span>Bons</span><strong className="num text-lima">{fmt(d.bons)}</strong></div>
+          <div className="flex justify-between gap-4"><span>Quebrados</span><strong className="num text-ouro">{fmt(d.quebrados)}</strong></div>
+          <div className="flex justify-between gap-4"><span>A receber</span><strong className="num text-t1">{fmt(d.aReceber)}</strong></div>
         </Dica>
       )}
     </div>

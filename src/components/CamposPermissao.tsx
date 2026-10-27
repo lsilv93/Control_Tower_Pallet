@@ -35,8 +35,8 @@ export function CamposPermissao({
         <label className="label" htmlFor="perfil">Perfil de acesso *</label>
         <select id="perfil" name="perfil" className="input" value={perfil} onChange={(e) => setPerfil(e.target.value as Perfil)}>
           <option value="OPERADOR">Operador (permissões por tela)</option>
-          <option value="ADMIN">Administrador (todas as telas, sem ajuste manual)</option>
-          {(podeMaster || perfilInicial === "MASTER") && <option value="MASTER">Master (tudo + ajuste manual de saldos)</option>}
+          <option value="ADMIN">Administrador (todas as telas, visão Nível Brasil)</option>
+          {(podeMaster || perfilInicial === "MASTER") && <option value="MASTER">Master (tudo + configurações das unidades)</option>}
         </select>
       </div>
       <fieldset className="poco p-4">
@@ -56,7 +56,7 @@ export function CamposPermissao({
         {total && (
           <p className="mb-3 text-[11px] text-t3">
             {perfil === "MASTER" ? "Master" : "Administrador"} tem acesso a todas as telas
-            {perfil === "MASTER" ? ", inclusive o ajuste manual de saldos." : ". Ajuste manual de saldos é exclusivo do Master."}
+            {perfil === "MASTER" ? ", inclusive as configurações das unidades (Hub e módulo de fornecedores)." : ", inclusive inclusão e remoção manual de saldo."}
           </p>
         )}
         <div className="grid gap-2">

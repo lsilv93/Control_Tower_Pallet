@@ -6,7 +6,6 @@ import { requirePermissao } from "@/lib/auth";
 import { lerFiltrosAuditoria, rotuloAcao } from "@/lib/auditoria";
 import { formatarDataHora } from "@/lib/datas";
 import { formatarNumero } from "@/lib/formatos";
-import { ehAdmin } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Auditoria" };
@@ -16,7 +15,7 @@ type Busca = { de?: string; ate?: string; usuario?: string; acao?: string; cd?: 
 
 export default async function AuditoriaPage({ searchParams }: { searchParams: Promise<Busca> }) {
   const u = await requirePermissao("auditoria");
-  const admin = ehAdmin(u);
+  const admin = u.global;
   const { filtros, where, descricao } = lerFiltrosAuditoria(await searchParams, { cd: u.cd, cds: u.cds, admin });
   const [registros, total, usuarios, acoes, movimentado] = await Promise.all([
     prisma.auditoria.findMany({ where, include: { usuario: { select: { login: true, nome: true } }, cd: { select: { codigo: true } } }, orderBy: { criadoEm: "desc" }, take: LIMITE }),
@@ -45,7 +44,7 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Pr
               {u.cds.map((c) => (
                 <option key={c.id} value={c.id}>{c.codigo}{c.id === u.cd.id ? " (atual)" : ""}</option>
               ))}
-              {admin && <option value="TODOS">Todos os CDs (inclui login e cadastros)</option>}
+              {admin && <option value="TODOS">Todas as unidades (inclui login e cadastros)</option>}
             </select>
           </div>
           <div>

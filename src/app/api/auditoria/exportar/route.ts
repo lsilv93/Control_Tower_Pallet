@@ -5,7 +5,7 @@ import { lerFiltrosAuditoria, rotuloAcao } from "@/lib/auditoria";
 import { auditar, ROTULO_CONTA } from "@/lib/conta";
 import { formatarDataHora } from "@/lib/datas";
 import { gerarPdfAuditoria, type LinhaAuditoriaPdf } from "@/lib/pdf";
-import { ehAdmin, tem } from "@/lib/permissoes";
+import { tem } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   const formato = sp.get("formato") === "pdf" ? "pdf" : "xlsx";
   const { filtros, where, descricao } = lerFiltrosAuditoria(
     { de: sp.get("de"), ate: sp.get("ate"), usuario: sp.get("usuario"), acao: sp.get("acao"), cd: sp.get("cd") },
-    { cd: usuario.cd, cds: usuario.cds, admin: ehAdmin(usuario) },
+    { cd: usuario.cd, cds: usuario.cds, admin: usuario.global },
   );
   if (!filtros.cd) return NextResponse.json({ erro: "Selecione o CD de operação" }, { status: 409 });
 

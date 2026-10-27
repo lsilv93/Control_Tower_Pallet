@@ -1,31 +1,39 @@
 import clsx from "clsx";
-import { ArrowRight, Boxes, Building2, Hammer, Scale } from "lucide-react";
+import { ArrowRight, Boxes, Hammer, PackageOpen, Truck } from "lucide-react";
 import type { Conta } from "@prisma/client";
 import { ehEstoque, obterSaldos, ROTULO_CONTA } from "@/lib/conta";
 import { formatarNumero } from "@/lib/formatos";
 
 const CURTO: Record<Conta, string> = {
-  VAZIOS: "Vazios",
-  CD: "CD (legado)",
+  VAZIOS: "Bons",
   QUEBRADOS: "Quebrados",
-  FORNECEDOR: "Fornecedor",
-  COMPRA: "Compra",
+  TRANSITO: "Trânsito",
+  OCORRENCIA: "Ocorrência",
+  ENVIADO: "Enviado",
+  RECEBIDO: "Recebido",
+  SOBRA: "Sobra",
+  PERDA: "Perda",
   DESCARTE: "Descarte",
   AJUSTE: "Ajuste",
+  COMPRA: "Compra",
+  FORNECEDOR: "Fornecedor",
   CARGA: "Carga",
-  CUSTODIA: "Saldo devedor",
 };
 
 const COR: Record<Conta, string> = {
   VAZIOS: "text-lima bg-lima/10",
-  CD: "text-t1 bg-t2/15",
   QUEBRADOS: "text-ouro bg-ouro/10",
-  FORNECEDOR: "text-t3 bg-t3/10",
-  COMPRA: "text-t3 bg-t3/10",
+  TRANSITO: "text-t1 bg-t2/15",
+  OCORRENCIA: "text-erro bg-erro/10",
+  ENVIADO: "text-t3 bg-t3/10",
+  RECEBIDO: "text-t3 bg-t3/10",
+  SOBRA: "text-t3 bg-t3/10",
+  PERDA: "text-erro bg-erro/10",
   DESCARTE: "text-erro bg-erro/10",
   AJUSTE: "text-erro bg-erro/10",
+  COMPRA: "text-t3 bg-t3/10",
+  FORNECEDOR: "text-t3 bg-t3/10",
   CARGA: "text-t3 bg-t3/10",
-  CUSTODIA: "text-t1 bg-t2/15",
 };
 
 export function ContaTag({ conta }: { conta: Conta }) {
@@ -47,30 +55,28 @@ export function Fluxo({ origem, destino }: { origem: Conta; destino: Conta }) {
   );
 }
 
-type Destaque = "VAZIOS" | "QUEBRADOS" | "FORNECEDOR" | "CUSTODIA";
+type Destaque = "VAZIOS" | "QUEBRADOS" | "TRANSITO" | "A_RECEBER";
 
-/** Posição do CD de operação: Vazios, Quebrados, saldo com fornecedores e saldo devedor. */
+/** Posição da unidade de operação: pallets bons, quebrados, em trânsito e a receber. */
 export async function SaldosEstoques({ cdId, destaque }: { cdId: string; destaque?: Destaque[] }) {
   const s = await obterSaldos(cdId);
-  const itens: { chave: Destaque; rotulo: string; valor: number; icone: typeof Boxes; cor: string }[] = [
-    { chave: "VAZIOS", rotulo: "Estoque de Vazios", valor: s.vazios, icone: Boxes, cor: "text-lima" },
-    { chave: "QUEBRADOS", rotulo: "Estoque de Quebrados", valor: s.quebrados, icone: Hammer, cor: "text-ouro" },
-    { chave: "FORNECEDOR", rotulo: "Saldo do CD · fornecedores", valor: s.fornecedores, icone: Building2, cor: "text-t1" },
-    { chave: "CUSTODIA", rotulo: "Saldo devedor CDs / Cross", valor: s.devedor, icone: Scale, cor: "text-t1" },
+  const itens: { chave: Destaque; rotulo: string; valor: number; detalhe?: string; icone: typeof Boxes; cor: string }[] = [
+    { chave: "VAZIOS", rotulo: "Pallets bons (vazios)", valor: s.vazios, icone: Boxes, cor: "text-lima" },
+    { chave: "QUEBRADOS", rotulo: "Pallets quebrados", valor: s.quebrados, icone: Hammer, cor: "text-ouro" },
+    { chave: "TRANSITO", rotulo: "Enviados em trânsito", valor: s.transito, detalhe: "aguardando conferência no destino", icone: Truck, cor: "text-t1" },
+    { chave: "A_RECEBER", rotulo: "A receber", valor: s.aReceber, detalhe: `${s.valesAReceber} vale(s) para conferir`, icone: PackageOpen, cor: "text-t1" },
   ];
   return (
-    <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="saldos-unidade">
       {itens.map((i) => (
-        <div
-          key={i.chave}
-          className={clsx("card-sm flex items-center gap-4 p-5", destaque?.includes(i.chave) && "ring-1 ring-lima/40")}
-        >
+        <div key={i.chave} className={clsx("card-sm flex items-center gap-4 p-5", destaque?.includes(i.chave) && "ring-1 ring-lima/40")}>
           <span className={clsx("poco flex h-11 w-11 flex-none items-center justify-center !rounded-2xl", i.cor)}>
             <i.icone className="h-5 w-5" />
           </span>
-          <div>
+          <div className="min-w-0">
             <p className="label !mb-0.5">{i.rotulo}</p>
-            <p className="num text-[26px] font-semibold leading-tight text-t1">{formatarNumero(i.valor)}</p>
+            <p className="num text-[26px] font-semibold leading-tight text-t1" data-testid={`saldo-${i.chave.toLowerCase()}`}>{formatarNumero(i.valor)}</p>
+            {i.detalhe && <p className="truncate text-[11px] text-t4">{i.detalhe}</p>}
           </div>
         </div>
       ))}

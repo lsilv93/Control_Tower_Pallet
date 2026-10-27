@@ -1,6 +1,6 @@
 # Control Tower Pallet — Gestão de Pallets PBR
 
-Sistema web para controlar a **conta corrente de pallets PBR**: saldo do pulmão, envios e recebimentos de CDs, recebimento de fornecedores com **Vale-Pallet** (impressão A4 em 2 vias), agendas de devolução, avarias e relatórios em Excel. Toda operação registra **data, hora e usuário**.
+Sistema web da **Torre de Controle Nível Brasil** de pallets PBR: estoque de pallets bons e quebrados em cada CD e Ponto de Cross, envios com Vale-Pallet (A4 em 2 vias com código de barras), conferência de recebimento com ocorrências de falta/sobra, conserto no CD Hub (CDJC), descarte, ajustes de administrador e TV gerencial. Toda operação registra **data, hora, usuário e unidade** em log imutável.
 
 **Stack:** Next.js 15 (App Router, Server Actions) · React 19 · Tailwind CSS · Prisma 6 · PostgreSQL · pronto para a **Vercel** (com Neon Postgres).
 
@@ -8,73 +8,47 @@ Sistema web para controlar a **conta corrente de pallets PBR**: saldo do pulmão
 
 ## Funcionalidades
 
-### Multi-CD e sessão
+### Unidades, usuários e visão
 
-- **Unidades:** **CDs** (operam o sistema, com estoques próprios, e também recebem envios) e **Pontos de Cross-Docking** (só recebem envios). Cadastros em *Cadastros → CDs* e *Cadastros → Pontos de Cross*.
-- **Usuário x CDs:** no cadastro de usuários marcam-se os CDs em que cada um opera.
-  - **1 CD:** selecionado automaticamente ao entrar; a troca fica bloqueada (cadeado no menu).
-  - **Mais de 1 CD:** a cada acesso abre o **modal obrigatório "Em qual CD você vai operar?"**; o botão *Trocar CD* do menu reabre o modal.
-  - Administradores sem CD marcado operam em todos; operadores precisam de ao menos 1 CD.
-- O CD escolhido fica num cookie **revalidado no servidor a cada requisição** (só CDs permitidos ao usuário). Todas as telas, ações, relatórios, PDFs e a auditoria usam o CD ativo; dados de outro CD não aparecem nem podem ser alterados.
+- **Unidades:** **CDs** e **Pontos de Cross**, todos com estoque próprio de pallets **bons** e **quebrados**. O **CD Hub (CDJC)** recebe os quebrados das filiais, faz o conserto e devolve pallets bons. Cada Ponto de Cross pertence a um **CD regional**.
+- **Cada usuário pertence a exatamente uma unidade.**
+  - **Visão regional:** vê e opera somente a própria unidade (fixa, com cadeado no menu).
+  - **Visão Nível Brasil:** Master, Administrador e usuários do Hub. Escolhem a unidade de operação no modal *"Em qual unidade você vai operar?"* e podem trocá-la no menu (*Trocar unidade*).
+  - **Usuários de Ponto de Cross:** só Painel, Envio, Recebimento/Conferência, Lançar Quebrado, Ocorrências e Descarte.
+- A unidade escolhida fica num cookie **revalidado no servidor a cada requisição**. Vales, PDFs e ocorrências só são visíveis às duas unidades envolvidas, ou a quem tem visão global.
 
 ### Telas
 
 | Módulo | Rota | O que faz |
 |---|---|---|
-| Dashboard (Control Tower) | `/` | Cards do CD: **Vazios**, **Saldo do CD (entradas de fornecedores)**, **Quebrados**, **Saldo devedor de CDs/Cross**. Indicadores do período (entradas, envios, retornos e faltas, recuperados, descartados), **saldos devedores por Ponto de Cross e CD destino**, **vales pendentes por fornecedor**, **consolidação por transportadora**, extrato dos estoques físicos, Farol Vale-pallet, cancelados e últimas movimentações. Filtros: Dia, Semana do Ano, Mês, Intervalo, Geral e Fornecedor. |
-| **Tela TV (Control Center)** | `/tv` | Tela cheia para monitores da gerência: Vazios, Quebrados, Recuperados e Descartados (Dia/Mês/Geral), entradas e envios, vales pendentes (total e por fornecedor), saldo devedor por CD/Cross, recebidos no dia por unidade (com faltas) e retiradas agendadas para hoje. **Botão **Tela cheia** (API Fullscreen do navegador; Esc volta ao normal). **Auto-refresh:** consulta a cada 10 s se houve novo lançamento e recarrega na hora; recarrega também a cada 60 s. |
-| Envio para CD / Ponto de Cross | `/cd/envio`, `/cross/envio` | Gera o **Vale-Pallet de Envio** (VE-). **Não subtrai dos Vazios**: só soma no saldo devedor e nos vales pendentes do destino. **Envio para CD:** CD destino, transportador (lista do cadastro), quantidade e observação. **Envio para Cross:** Ponto de Cross e transportador (listas do cadastro), quantidade e, opcionais, rota (texto livre, ex. `R-01/SP`), data de faturamento, placa e observação. |
-| **Retorno / Conferência** | `/retorno` | Seleciona os vales devolvidos pelo CD/Cross (soma automática) e a **quantidade física contada**. Física menor que os vales: aviso *"Quantidade física (290) menor que o total dos vales (300). Confirmar a falta de 10 pallets?"*; ao confirmar, **placa, transportadora e justificativa são obrigatórias**. Entra nos Vazios só o físico, os vales são baixados e é gerado automaticamente o **Vale-Ocorrência** (VO-) com a diferença, que volta ao saldo devedor do remetente. Física maior que os vales é bloqueada. |
-| Recebimento Pallet Fornecedor | `/fornecedor/entrada` | Leitura da chave da NF-e (ou *Sem Nota Fiscal*). Gera o **Vale-Pallet de Fornecedor** (VP-) e **sobe o saldo do CD com o fornecedor**; os Vazios não mudam. |
-| Agendar Retirada / Baixa de Pagamento | `/vales`, `/agendas` | Agenda a retirada dos vales de fornecedor; a baixa **subtrai dos Vazios** e reduz a dívida com o fornecedor. |
-| Consulta de Vales | `/vales/consulta`, `/vales/[id]` | Todos os tipos (VP, VE, VO, VA), com filtros por tipo, fornecedor, CD/Cross, status e período. PDF e impressão A4 em 2 vias com código de barras. |
-| Excluir Vale | `/vales/excluir` | Cancela qualquer tipo de vale pendente com motivo. Fornecedor: estorna o saldo com o fornecedor. Envio, ocorrência ou ajuste: reduz o saldo devedor. |
-| Quebras / Conserto / Descarte | `/avarias/*` | Quebra: Vazios → Quebrados. **Reparo** pergunta se outros quebrados foram desmontados; com a **trava matemática** recuperados + utilizados ≤ saldo de quebrados (*"Restam no máximo X pallets para utilização"*), validada no servidor. Recuperados voltam aos Vazios e os utilizados vão para Descartados. Descarte de Vazios ou Quebrados. |
-| Compra de Pallets | `/pallets/adicionar` | Leitura da NF-e; Compra → Vazios. |
-| **Inclusão de Vazios (Admin)** | `/estoque/vazios` | MASTER/ADMIN sobem o pulmão com **motivo (Compra, Estorno, Devolução)** e observação. Devolução de CD/Cross vai pela conferência de retorno. |
-| **Saldo Devedor (Admin)** | `/estoque/devedor` | MASTER/ADMIN incluem saldo devedor de um CD/Cross com **observação e justificativa**; gera um Vale de Ajuste (VA-) baixável no retorno. |
-| Correção de Inventário (Master) | `/estoque/ajuste` | Somente MASTER: inclui/remove em Vazios ou Quebrados com justificativa. |
-| Auditoria | `/auditoria` | Log imutável com data/hora, usuário, **CD da operação**, tipo, origem/destino, quantidade e observação. Filtro por CD (administrador: "Todos os CDs"), período, usuário e ação; exportação Excel e PDF. |
-| Relatórios | `/relatorios` | Movimentações do CD e Excel completo (vales de todos os tipos, conferências de retorno, saldos devedores, agendas, compras, pendências e auditoria). |
+| Painel | `/` | KPIs da unidade: bons, quebrados, em trânsito, a receber e faltas em aberto. Mostra o estoque por Ponto de Cross (todos na visão global; os da região num CD regional) e os vales em trânsito. Indicadores do período: enviados, recebidos, faltas, recuperados e descartados. Inclui consolidação por transportadora e o extrato dos estoques. |
+| **Torre de Controle (TV)** | `/tv` | Somente visão global, sem dados de fornecedores. Mostra bons e quebrados por CD e Cross e os **ativos fora do Hub** de cada filial (bons, quebrados, em trânsito ao CDJC, recebidos x enviados e **acuracidade**). Tem tela cheia (Esc volta) e auto-refresh a cada nova movimentação em qualquer unidade. |
+| **Envio de Pallets** | `/envio` | Abas: *para Ponto de Cross*, *para CD* e *quebrados para o CDJC*. Informa bons e/ou quebrados, transportador, placa e, no envio a Cross, rota e data de faturamento. **Saldo nunca negativo:** a tela bloqueia e o servidor revalida com o saldo travado. Antes de gravar aparece a confirmação *"Tem certeza do [CD/Cross] selecionado e da quantidade informada (X pallets)?"*. Gera o **Vale-Pallet de Envio** (VE-) ou o **Vale de Pallets Quebrados**; os pallets ficam em trânsito. Um Ponto de Cross envia só para CDs. |
+| **Recebimento / Conferência** | `/recebimento` | Seleciona os vales pendentes do remetente (soma automática) e informa a contagem física de **bons** e **quebrados**. Bons entram nos vazios e quebrados nos quebrados. Uma divergência exige confirmação e justificativa. **Falta:** gera o **Vale de Ocorrência** (VO-) devolutivo ao remetente. **Sobra:** entra no estoque e é registrada num VO de sobra. Cada conferência recebe um número (RC-). |
+| **Ocorrências** | `/ocorrencias` | Auditoria de faltas e sobras com data/hora, vale, conferência, remetente e recebedor, visível às duas pontas. O administrador resolve cada falta: **localizada** (volta ao estoque do remetente) ou **perda**. |
+| Lançar Quebrado / Conserto / Descarte | `/avarias/*` | Quebra: bons → quebrados. **Conserto:** só no Hub, com trava matemática (recuperados + utilizados ≤ quebrados). **Descarte:** todos os usuários, com pop-up de confirmação, e lista imutável de **Pallets Descartados**. |
+| **Ajuste de Saldo (Admin)** | `/estoque/inclusao`, `/estoque/remocao` | Inclusão de bons ou quebrados em qualquer CD/Cross com motivo (**Compra, Devolução, Ajuste Estoque, Inventário**) e observação obrigatória. Remoção com justificativa e confirmação *"Tem certeza?"*. Nunca deixa saldo negativo e tudo vai para a auditoria. |
+| Recebimento Pallet Fornecedor | `/fornecedor/entrada`, `/vales`, `/agendas` | **Desligado por padrão**: o Master libera por CD em *Cadastros → CDs → Editar → Configurações do Master*. Inclui NF-e/Sem NF, Vale-Pallet de Fornecedor (VP-), agendas e baixa. |
+| Consulta / Excluir Vale | `/vales/consulta`, `/vales/excluir` | Consulta dos vales da unidade (todos, na visão global). A exclusão de um envio ainda não conferido devolve os pallets do trânsito ao estoque de origem. |
+| Compra de Pallets | `/pallets/adicionar` | Leitura da NF-e (visão global); Compra → Vazios. |
+| Cadastros | `/cadastros/*` | Fornecedor, CD e Ponto de Cross com campos obrigatórios padronizados: **nome, CNPJ** (máscara e validação), **contato responsável, telefone** (máscara) e **e-mail**. CD e Cross também têm sigla; o Cross tem CD regional. Usuários têm unidade obrigatória. |
+| Auditoria / Relatórios | `/auditoria`, `/relatorios` | Log imutável (filtro por unidade; *Todas as unidades* na visão global) e Excel completo: movimentações, vales, conferências, posição por unidade, auditoria. |
 
-### Conta corrente em partida dobrada (por CD)
+### Conta corrente em partida dobrada (um livro por unidade)
 
-Cada movimentação tem uma conta de origem e uma de destino com a mesma quantidade, sempre dentro do CD da operação.
+Cada movimentação tem conta de origem e de destino com a mesma quantidade, no livro da unidade dona do lançamento.
 
-- **Estoques físicos** (nunca negativos): VAZIOS e QUEBRADOS.
-- **CUSTODIA:** saldo devedor de cada CD destino / Ponto de Cross (nunca negativo).
-- **FORNECEDOR:** saldo negativo = pallets devidos aos fornecedores.
-- CARGA, COMPRA, DESCARTE e AJUSTE são contrapartidas.
+- **Contas controladas (nunca negativas):** VAZIOS (bons), QUEBRADOS, TRANSITO (enviados e ainda não conferidos) e OCORRENCIA (faltas em apuração). Todas as saídas passam por um lock consultivo do PostgreSQL, então duas operações simultâneas não deixam saldo negativo.
+- **Envio:** origem VAZIOS/QUEBRADOS → TRANSITO.
+- **Conferência:**
+  - No livro do remetente: TRANSITO → ENVIADO, e a falta vai para TRANSITO → OCORRENCIA.
+  - No livro do recebedor: RECEBIDO → VAZIOS/QUEBRADOS, e a sobra vai para SOBRA → estoque.
+- **Ocorrência resolvida:** OCORRENCIA → estoque (localizada) ou OCORRENCIA → PERDA.
+- **Invariantes:** ΣENVIADO = ΣRECEBIDO. Gatilhos no banco impedem UPDATE/DELETE em `Movimentacao` e `Auditoria`.
 
-| Operação | Origem | Destino | Efeito |
-|---|---|---|---|
-| Recebimento de fornecedor (VP) | Fornecedor | Carga | sobe o saldo do CD com o fornecedor |
-| Baixa / pagamento ao fornecedor | Vazios | Fornecedor | −Vazios, −dívida |
-| Envio para CD / Cross (VE) | Carga | Custódia | +saldo devedor (Vazios inalterados) |
-| Retorno de CD / Cross | Custódia | Vazios | +físico nos Vazios, −saldo devedor |
-| Falta na conferência (VO) | — | — | a diferença permanece no saldo devedor |
-| Quebra | Vazios | Quebrados | |
-| Reparo: recuperados / utilizados | Quebrados | Vazios / Descarte | trava: recuperados + utilizados ≤ quebrados |
-| Descarte | Vazios ou Quebrados | Descarte | |
-| Compra / Inclusão de vazios | Compra / Ajuste | Vazios | |
-| Inclusão de saldo devedor (VA) | Ajuste | Custódia | |
-| Exclusão de vale | estorno do lançamento original | | |
+### Reset total (27/10/2026)
 
-- **ACID:** cada operação roda numa transação com bloqueio consultivo; nenhum saldo fica negativo, mesmo com usuários simultâneos.
-- **Imutável:** triggers no banco impedem `UPDATE`/`DELETE` em `Movimentacao` e `Auditoria`.
-- **Invariantes conferidos nos testes:**
-  - a soma de todas as contas de cada CD é zero;
-  - o saldo devedor de cada unidade é igual à soma dos seus vales pendentes;
-  - a dívida com fornecedores é igual à soma dos vales de fornecedor em aberto.
-
-### Migração para multi-CD (15/10/2026)
-
-As migrações `multi_cd_estrutura` e `multi_cd_dados` rodam sozinhas no próximo deploy:
-
-1. Criam o **CD Principal** (código `PRINCIPAL`) e vinculam a ele todo o histórico (movimentações, vales, agendas, compras). **Renomeie-o em Cadastros → CDs.**
-2. Operadores existentes passam a operar no CD Principal; administradores operam em todos.
-3. Transferências antigas para CDs ainda não retornadas viram **saldo devedor** do CD destino (um Vale de Ajuste "Saldo migrado" por CD).
-4. Os saldos de Vazios, Quebrados e vales de fornecedor ficam **exatamente iguais**.
+A migração `20261027120000_torre_controle_reset_total` **apaga todas as tabelas e dados** e recria o schema limpo. Em seguida o seed cria o **CD Hub CDJC** e o usuário MASTER (`SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD`, padrão `admin` / `admin123`). Os saldos começam zerados e entram por *Ajuste de Saldo → Inclusão manual* (motivo Inventário).
 
 ## Deploy na Vercel (passo a passo)
 
@@ -157,7 +131,7 @@ O botão de sol/lua no menu (ou no cabeçalho, no celular, e na tela de login) a
 
 ## Placa do veículo
 
-Em todos os campos de placa (recebimento, envio para Cross e conferência de retorno) a digitação é formatada automaticamente em maiúsculas e aceita os dois padrões: **antigo** `ABC-1234` (ou `ABC1234`) e **Mercosul** `ABC1D23`. O servidor valida de novo. O campo *Motorista* foi removido do sistema.
+Em todos os campos de placa (recebimento de fornecedor, envio e conferência) a digitação é formatada automaticamente em maiúsculas e aceita os dois padrões: **antigo** `ABC-1234` (ou `ABC1234`) e **Mercosul** `ABC1D23`. O servidor valida de novo. O campo *Motorista* foi removido do sistema.
 
 ## Leitores de código de barras
 
@@ -165,9 +139,8 @@ Leitores USB/Bluetooth funcionam como teclado (digitam o código e dão Enter): 
 
 ## Perfis de acesso (RBAC)
 
-- **MASTER:** todas as telas, inclusões manuais e a **correção de inventário** (exclusiva). Só um MASTER cria ou edita outro MASTER.
-- **ADMIN:** todas as telas, gestão de usuários e as **inclusões manuais de vazios e de saldo devedor**, sem correção de inventário.
-- **OPERADOR:** apenas as telas marcadas no cadastro e somente nos CDs vinculados.
-  - Telas disponíveis: Dashboard, Tela TV, Envio/Retorno de CDs e Cross, Entrada de fornecedor, Vales, Agendamento e baixa, Excluir vale, Avarias, Compras, Relatórios, Auditoria, Cadastros, CDs/Cross.
+- **MASTER:** tudo, inclusive as configurações das unidades (CD Hub e módulo Recebimento Pallet Fornecedor). Só um MASTER cria ou edita outro MASTER.
+- **ADMIN:** todas as telas com visão Nível Brasil, gestão de usuários, ajuste de saldo e resolução de ocorrências.
+- **OPERADOR:** apenas as telas marcadas no cadastro, na própria unidade. No Hub, também com visão global. No Ponto de Cross, limitado a painel, envio, recebimento e lançar quebrado.
 
-As permissões valem nas telas, nas ações do servidor e nas APIs (exportações e PDF retornam 403 sem permissão e 404 para vales de outro CD).
+As permissões valem nas telas, nas ações do servidor e nas APIs (exportações e PDF retornam 403 sem permissão e 404 para vales de outras unidades).

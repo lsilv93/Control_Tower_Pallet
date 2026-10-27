@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { ArrowUpFromLine, Building2, ClipboardCheck, FileClock, FileX, Hammer, MonitorPlay, Network, PackagePlus, Recycle, Trash2, TriangleAlert, Truck, Warehouse } from "lucide-react";
+import { ArrowUpFromLine, ClipboardCheck, FileClock, FileX, Hammer, MonitorPlay, Network, PackageOpen, PackagePlus, Recycle, Trash2, TriangleAlert, Truck, Warehouse } from "lucide-react";
 import { AtualizacaoAutomatica } from "@/components/AtualizacaoAutomatica";
 import { FiltroPeriodo } from "@/components/FiltroPeriodo";
 import { HistoricoExclusoes } from "@/components/HistoricoExclusoes";
-import { SaldosDevedores } from "@/components/SaldosDevedores";
 import { UltimasMovimentacoes } from "@/components/UltimasMovimentacoes";
 import { BarraComposicao } from "@/components/graficos/BarraComposicao";
 import { GraficoFluxo } from "@/components/graficos/GraficoFluxo";
@@ -15,8 +14,9 @@ import { redirect } from "next/navigation";
 import { requireCD } from "@/lib/auth";
 import { primeiraRota, tem } from "@/lib/permissoes";
 import { obterSaldos, saldosPorConta } from "@/lib/conta";
-import { consolidacaoTransporte, devedoresPorUnidade, fluxo, granularidadePara, pendenciasPorFornecedor, serieFluxo, totaisPorTipo, valesEmAberto } from "@/lib/consultas";
+import { consolidacaoTransporte, enviosEmTransito, fluxo, granularidadePara, pendenciasPorFornecedor, posicaoUnidades, serieFluxo, totaisPorTipo, valesEmAberto } from "@/lib/consultas";
 import { diaLocal, formatarData } from "@/lib/datas";
+import { formatarDataHora } from "@/lib/datas";
 import { formatarNumero as n, numeroVale, rotuloStatusVale } from "@/lib/formatos";
 import { filtroData, lerPeriodo } from "@/lib/periodo";
 import { prisma } from "@/lib/prisma";
@@ -32,46 +32,43 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const hoje = diaLocal();
   // Filtros globais: período (Dia/Semana/Mês/Intervalo/Geral) e fornecedor.
   const periodo = lerPeriodo(busca, hoje);
-  const fornecedores = await prisma.fornecedor.findMany({ select: { id: true, nome: true }, orderBy: { nome: "asc" } });
+  // Módulo de fornecedores só aparece quando liberado pelo Master na unidade.
+  const moduloFornecedor = cd.recebimentoFornecedor;
+  const fornecedores = moduloFornecedor ? await prisma.fornecedor.findMany({ select: { id: true, nome: true }, orderBy: { nome: "asc" } }) : [];
   const fornecedor = fornecedores.find((f) => f.id === busca.fornecedor);
   const fornecedorId = fornecedor?.id;
   const intervalo = { inicio: periodo.inicio, fim: periodo.fim };
   const granularidade = granularidadePara(periodo.inicio, periodo.fim);
+  // Pontos de Cross acompanhados: visão global vê todos; um CD regional vê os seus; um Cross vê a si mesmo.
+  const filtroCross = usuario.global ? {} : cd.tipo === "CROSS" ? { id: cd.id } : { cdRegionalId: cd.id };
+  const idsCross = (await prisma.centroDistribuicao.findMany({ where: { tipo: "CROSS", ativo: true, ...filtroCross }, select: { id: true } })).map((c) => c.id);
 
-  const [saldos, fluxoPeriodo, porTipo, serie, saldoAntes, pendencias, vales, excluidos, transporte, retornos, devedores, valesTodos] = await Promise.all([
+  const [saldos, fluxoPeriodo, porTipo, serie, saldoAntes, pendencias, vales, excluidos, transporte, conferencias, posicaoCross, transito, valesTodos] = await Promise.all([
     obterSaldos(cd.id),
     fluxo(cd.id, intervalo, fornecedorId),
     totaisPorTipo(cd.id, intervalo),
     serieFluxo(cd.id, intervalo, granularidade, fornecedorId),
     periodo.inicio ? saldosPorConta(prisma, cd.id, periodo.inicio) : null,
-    pendenciasPorFornecedor(cd.id),
-    valesEmAberto(cd.id, fornecedorId ? { fornecedorId } : {}),
+    moduloFornecedor ? pendenciasPorFornecedor(cd.id) : [],
+    moduloFornecedor ? valesEmAberto(cd.id, fornecedorId ? { fornecedorId } : {}) : [],
     prisma.valePallet.count({ where: { cdId: cd.id, status: "CANCELADO", canceladoEm: filtroData(periodo), ...(fornecedorId ? { fornecedorId } : {}) } }),
     consolidacaoTransporte(cd.id, intervalo),
-    prisma.retornoConferencia.aggregate({ where: { cdId: cd.id, criadoEm: filtroData(periodo) }, _sum: { falta: true }, _count: true }),
-    devedoresPorUnidade(cd.id),
-    fornecedorId ? valesEmAberto(cd.id) : null,
+    prisma.conferencia.findMany({ where: { cdId: cd.id, criadoEm: filtroData(periodo) }, select: { diferenca: true } }),
+    idsCross.length ? posicaoUnidades(idsCross) : [],
+    enviosEmTransito({ OR: [{ cdId: cd.id }, { unidadeId: cd.id }] }),
+    moduloFornecedor && fornecedorId ? valesEmAberto(cd.id) : null,
   ]);
   const saldoInicial = fornecedorId ? null : saldoAntes ? saldoAntes.VAZIOS + saldoAntes.QUEBRADOS : 0;
   const contagem = (f: string) => vales.filter((x) => x.farol === f).length;
   const sufixo = fornecedor ? ` · ${fornecedor.nome}` : "";
   const fisicos = saldos.vazios + saldos.quebrados;
+  const faltasPeriodo = conferencias.reduce((s, c) => s + Math.max(0, -c.diferenca), 0);
 
-  // ---- posição atual para os KPIs e gráficos gerenciais ----
-  const crosses = devedores.filter((d) => d.unidade.tipo === "CROSS" && d.saldo > 0);
-  const cdsDestino = devedores.filter((d) => d.unidade.tipo === "CD" && d.saldo > 0);
-  const totalCross = crosses.reduce((s, d) => s + d.saldo, 0);
-  const totalCds = cdsDestino.reduce((s, d) => s + d.saldo, 0);
-  const barrasCross = crosses.map((d) => ({
-    id: d.unidade.id,
-    codigo: d.unidade.codigo,
-    nome: d.unidade.nome,
-    saldo: d.saldo,
-    vales: d.vales,
-    maisAntigo: formatarData(d.maisAntigo),
-    idade: d.idade,
-  }));
-  const fatiasCross = paraFatias(crosses.map((d) => ({ id: d.unidade.id, rotulo: d.unidade.codigo, valor: d.saldo, detalhe: `${d.unidade.nome} · ${d.vales} vale(s)` })));
+  // ---- posição dos Pontos de Cross para os gráficos gerenciais ----
+  const crosses = posicaoCross.filter((p) => p.vazios + p.quebrados > 0);
+  const totalCross = crosses.reduce((s, p) => s + p.vazios + p.quebrados, 0);
+  const barrasCross = crosses.map((p) => ({ id: p.unidade.id, codigo: p.unidade.codigo, nome: p.unidade.nome, saldo: p.vazios + p.quebrados, bons: p.vazios, quebrados: p.quebrados, aReceber: p.aReceber }));
+  const fatiasCross = paraFatias(crosses.map((p) => ({ id: p.unidade.id, rotulo: p.unidade.codigo, valor: p.vazios + p.quebrados, detalhe: `${p.unidade.nome} · ${p.vazios} bons · ${p.quebrados} quebrados` })));
   const fatiasFornecedor = paraFatias(pendencias.map((p) => ({ id: p.fornecedor.id, rotulo: p.fornecedor.nome, valor: p.total, detalhe: `${p.vales} vale(s)` })), 6);
   const abertos = valesTodos ?? vales;
   const faixa = (min: number, max: number) => abertos.filter((v) => v.idade >= min && v.idade <= max);
@@ -82,16 +79,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   ]
     .map((f) => ({ id: f.id, rotulo: f.rotulo, cor: f.cor, valor: f.lista.reduce((s, v) => s + v.quantidade, 0), detalhe: `${f.lista.length} vale(s)` }))
     .filter((f) => f.valor > 0);
+  const tipoUnidade = cd.tipo === "CROSS" ? "Ponto de Cross" : cd.hub ? "CD Hub" : "CD";
 
   return (
     <>
       <Cabecalho
-        titulo={`Control Tower · CD ${cd.codigo}`}
-        descricao={`${cd.nome} · Vazios e Quebrados em tempo real, saldo com fornecedores e saldos devedores de CDs destino e Pontos de Cross.`}
+        titulo={`Painel · ${tipoUnidade} ${cd.codigo}`}
+        descricao={`${cd.nome} · Pallets bons e quebrados em tempo real, envios em trânsito, recebimentos a conferir e ocorrências.${usuario.global ? " Visão Nível Brasil disponível na Torre de Controle." : ""}`}
       >
-        {tem(usuario, "tv") && (
+        {usuario.global && tem(usuario, "tv") && (
           <Link href="/tv" className="btn-secondary" target="_blank">
-            <MonitorPlay className="h-4 w-4" /> Tela TV
+            <MonitorPlay className="h-4 w-4" /> Torre de Controle (TV)
           </Link>
         )}
         <AtualizacaoAutomatica />
@@ -102,66 +100,99 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         rotulo={periodo.rotulo + sufixo}
         anoAtual={Number(hoje.slice(0, 4))}
         atual={{ tipo: periodo.tipo, dia: periodo.dia, ano: periodo.ano, semana: periodo.semana, mes: periodo.mes, de: periodo.de, ate: periodo.ate }}
-        fornecedores={fornecedores}
+        fornecedores={moduloFornecedor ? fornecedores : undefined}
         fornecedor={fornecedorId}
       />
 
-      {/* KPIs superiores · posição atual do CD */}
+      {/* KPIs superiores · posição atual da unidade */}
       <div className="entrada grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5" data-testid="cards-saldos">
-        <Kpi titulo="Vazios" valor={saldos.vazios} legenda="Estoque físico ativo" icone={Warehouse} cor="lima" testid="saldo-vazios">
+        <Kpi titulo="Pallets bons" valor={saldos.vazios} legenda="Estoque de vazios" icone={Warehouse} cor="lima" testid="saldo-vazios">
           <BarraComposicao
             itens={[
-              { rotulo: "Vazios", valor: saldos.vazios, cor: "var(--viz-vazios)" },
+              { rotulo: "Bons", valor: saldos.vazios, cor: "var(--viz-vazios)" },
               { rotulo: "Quebrados", valor: saldos.quebrados, cor: "var(--viz-quebrados)" },
             ]}
           />
         </Kpi>
-        <Kpi titulo="Quebrados" valor={saldos.quebrados} legenda="Aguardando reparo ou descarte" icone={Hammer} cor="ouro" rodape={`${fisicos ? Math.round((saldos.quebrados / fisicos) * 100) : 0}% do estoque físico`} />
-        <Kpi titulo="Devedor Cross" valor={totalCross} legenda="Custódia externa" icone={Network} cor="neutro" rodape={`${crosses.length} Ponto(s) de Cross devendo`} />
-        <Kpi titulo="Devedor CDs" valor={totalCds} legenda="Transferências pendentes" icone={Building2} cor="neutro" rodape={`${cdsDestino.length} CD(s) devendo`} />
-        <Kpi titulo="Vales pendentes" valor={saldos.fornecedores} legenda="Débito com fornecedores" icone={FileClock} cor="erro" rodape={`${saldos.valesFornecedorEmAberto} vale(s) a pagar`} />
+        <Kpi titulo="Quebrados" valor={saldos.quebrados} legenda={cd.hub ? "Aguardando conserto" : "Enviar ao CDJC para conserto"} icone={Hammer} cor="ouro" testid="saldo-quebrados" rodape={`${fisicos ? Math.round((saldos.quebrados / fisicos) * 100) : 0}% do estoque físico`} />
+        <Kpi titulo="Em trânsito" valor={saldos.transito} legenda="Enviados, aguardando conferência" icone={Truck} cor="neutro" testid="saldo-transito" rodape={`${transito.filter((v) => v.cdId === cd.id).length} vale(s) de envio`} />
+        <Kpi titulo="A receber" valor={saldos.aReceber} legenda="Vales destinados a esta unidade" icone={PackageOpen} cor="neutro" testid="saldo-a-receber" rodape={`${saldos.valesAReceber} vale(s) para conferir`} />
+        <Kpi titulo="Faltas em aberto" valor={saldos.ocorrencias} legenda="Ocorrências a apurar" icone={TriangleAlert} cor="erro" testid="saldo-ocorrencias" rodape={`${saldos.ocorrenciasAbertas} ocorrência(s) envolvendo a unidade`} />
       </div>
 
-      {/* Gráficos gerenciais */}
-      <div className="mt-6 grid gap-6 xl:grid-cols-5">
-        <Painel
-          className="xl:col-span-3"
-          titulo={<span className="flex items-center gap-2"><Network className="h-4 w-4 text-lima" /> Saldo devedor por Ponto de Cross</span>}
-          acoes={<span className="num text-[12px] font-semibold text-t1">Total {n(totalCross)} pallets</span>}
-        >
-          <GraficoBarrasCross dados={barrasCross} />
-        </Painel>
-        <Painel
-          className="xl:col-span-2"
-          titulo={<span className="flex items-center gap-2"><Network className="h-4 w-4 text-lima" /> Participação de cada Cross</span>}
-          acoes={<span className="text-[11px] text-t3">% do saldo externo</span>}
-        >
-          <GraficoRosca dados={fatiasCross} rotuloTotal="pallets em Cross" vazio="Nenhum saldo devedor em Pontos de Cross." />
-        </Painel>
-      </div>
-      <div className="mt-6 grid gap-6 xl:grid-cols-5">
-        <Painel
-          className="xl:col-span-2"
-          titulo={<span className="flex items-center gap-2"><FileClock className="h-4 w-4 text-lima" /> Vales pendentes de fornecedores</span>}
-          acoes={<span className="num text-[12px] font-semibold text-t1">{n(saldos.fornecedores)} pallets</span>}
-        >
-          <PainelValesFornecedor porFornecedor={fatiasFornecedor} porIdade={fatiasIdade} />
-        </Painel>
-        <div className="xl:col-span-3">
-          <SaldosDevedores cdId={cd.id} titulo="Detalhamento dos saldos devedores (CDs e Cross)" />
+      {/* Gráficos gerenciais · Pontos de Cross */}
+      {idsCross.length > 0 && cd.tipo !== "CROSS" && (
+        <div className="mt-6 grid gap-6 xl:grid-cols-5">
+          <Painel
+            className="xl:col-span-3"
+            titulo={<span className="flex items-center gap-2"><Network className="h-4 w-4 text-lima" /> Estoque por Ponto de Cross{usuario.global ? "" : ` (região ${cd.codigo})`}</span>}
+            acoes={<span className="num text-[12px] font-semibold text-t1">Total {n(totalCross)} pallets</span>}
+          >
+            <GraficoBarrasCross dados={barrasCross} />
+          </Painel>
+          <Painel
+            className="xl:col-span-2"
+            titulo={<span className="flex items-center gap-2"><Network className="h-4 w-4 text-lima" /> Participação de cada Cross</span>}
+            acoes={<span className="text-[11px] text-t3">% do estoque em Cross</span>}
+          >
+            <GraficoRosca dados={fatiasCross} rotuloTotal="pallets em Cross" vazio="Nenhum pallet em estoque nos Pontos de Cross." />
+          </Painel>
         </div>
+      )}
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-5">
+        {moduloFornecedor && (
+          <Painel
+            className="xl:col-span-2"
+            titulo={<span className="flex items-center gap-2"><FileClock className="h-4 w-4 text-lima" /> Vales pendentes de fornecedores</span>}
+            acoes={<span className="num text-[12px] font-semibold text-t1">{n(saldos.fornecedores)} pallets</span>}
+          >
+            <PainelValesFornecedor porFornecedor={fatiasFornecedor} porIdade={fatiasIdade} />
+          </Painel>
+        )}
+        <Painel
+          className={moduloFornecedor ? "xl:col-span-3" : "xl:col-span-5"}
+          titulo={<span className="flex items-center gap-2"><Truck className="h-4 w-4 text-lima" /> Vales em trânsito (enviados e a receber)</span>}
+          acoes={<Link href="/recebimento" className="text-[11px] font-semibold text-lima hover:underline">Conferir recebimento</Link>}
+        >
+          {transito.length === 0 ? (
+            <Vazio>Nenhum vale em trânsito envolvendo {cd.codigo}.</Vazio>
+          ) : (
+            <Tabela className="max-h-[22rem] overflow-auto">
+              <table className="tabela" data-testid="tabela-transito">
+                <thead className="sticky top-0"><tr><th>Vale</th><th>Sentido</th><th>Origem → Destino</th><th className="text-right">Bons</th><th className="text-right">Quebrados</th><th>Emissão</th></tr></thead>
+                <tbody>
+                  {transito.map((v) => (
+                    <tr key={v.id}>
+                      <td><Link prefetch={false} href={`/vales/${v.id}`} className="num font-semibold text-lima hover:underline">{numeroVale(v.numero, v.tipo)}</Link></td>
+                      <td>{v.cdId === cd.id ? <span className="pill text-t2 bg-t2/10">Enviado</span> : <span className="pill text-lima bg-lima/10">A receber</span>}</td>
+                      <td className="num">{v.cd.codigo} → {v.unidade?.codigo ?? "—"}</td>
+                      <td className="num text-right">{n(v.quantidadeBons)}</td>
+                      <td className="num text-right">{n(v.quantidadeQuebrados)}</td>
+                      <td className="num">{formatarDataHora(v.criadoEm)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Tabela>
+          )}
+        </Painel>
       </div>
 
       {/* Indicadores do período */}
       <h2 className="secao mb-3 mt-8 flex items-center gap-2">Movimentação no período · {periodo.rotulo}</h2>
       <div className="entrada grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Indicador titulo="Entradas de fornecedor" valor={n(porTipo("RECEBIMENTO_FORNECEDOR"))} detalhe={periodo.rotulo} icone={<PackagePlus className="h-5 w-5" />} />
-        <Indicador titulo="Enviados a CDs / Cross" valor={n(porTipo("ENVIO_UNIDADE"))} detalhe={periodo.rotulo} cor="neutro" icone={<ArrowUpFromLine className="h-5 w-5" />} />
+        {moduloFornecedor ? (
+          <Indicador titulo="Entradas de fornecedor" valor={n(porTipo("RECEBIMENTO_FORNECEDOR"))} detalhe={periodo.rotulo} icone={<PackagePlus className="h-5 w-5" />} />
+        ) : (
+          <Indicador titulo="Inclusões / compras" valor={n(porTipo("INCLUSAO_MANUAL") + porTipo("COMPRA"))} detalhe={periodo.rotulo} icone={<PackagePlus className="h-5 w-5" />} />
+        )}
+        <Indicador titulo="Enviados" valor={n(porTipo("ENVIO"))} detalhe={periodo.rotulo} cor="neutro" icone={<ArrowUpFromLine className="h-5 w-5" />} />
         <Indicador
-          titulo="Retornos recebidos"
-          valor={n(porTipo("RETORNO_UNIDADE"))}
-          detalhe={`${retornos._count} conferência(s) · falta ${n(retornos._sum.falta ?? 0)}`}
-          cor={retornos._sum.falta ? "erro" : "lima"}
+          titulo="Recebidos (conferidos)"
+          valor={n(porTipo("RECEBIMENTO") + porTipo("SOBRA"))}
+          detalhe={`${conferencias.length} conferência(s) · falta ${n(faltasPeriodo)}`}
+          cor={faltasPeriodo ? "erro" : "lima"}
           icone={<ClipboardCheck className="h-5 w-5" />}
         />
         <Indicador titulo="Recuperados (reparo)" valor={n(porTipo("RECUPERADO"))} detalhe={periodo.rotulo} cor="lima" icone={<Recycle className="h-5 w-5" />} />
@@ -189,7 +220,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   <tr>
                     <th>Transportadora</th><th className="text-right">Operações</th>
                     <th className="text-right">Recebidos (fornecedor)</th><th className="text-right">Enviados</th>
-                    <th className="text-right">Retornados</th><th className="text-right">Faltas</th>
+                    <th className="text-right">Conferidos</th><th className="text-right">Faltas</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -199,7 +230,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                       <td className="num text-right">{t.operacoes}</td>
                       <td className="num text-right">{n(t.recebidosFornecedor)}</td>
                       <td className="num text-right">{n(t.enviados)}</td>
-                      <td className="num text-right text-lima">{n(t.retornados)}</td>
+                      <td className="num text-right text-lima">{n(t.conferidos)}</td>
                       <td className={`num text-right font-semibold ${t.faltas ? "text-erro" : "text-t3"}`}>{n(t.faltas)}</td>
                     </tr>
                   ))}
@@ -212,15 +243,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
       {/* Extrato dos estoques físicos */}
       <div className="mt-6">
-        <Painel titulo={`Extrato dos estoques físicos (Vazios + Quebrados) · entradas x saídas${sufixo}`} acoes={<span className="text-[11px] text-t3">{periodo.rotulo} · por {granularidade}</span>}>
+        <Painel titulo={`Extrato dos estoques físicos (bons + quebrados) · entradas x saídas${sufixo}`} acoes={<span className="text-[11px] text-t3">{periodo.rotulo} · por {granularidade}</span>}>
           <GraficoFluxo serie={serie} granularidade={granularidade} saldoInicial={saldoInicial} />
           <p className="mt-3 text-[11px] text-t3">
-            Entradas: retornos de CD/Cross, compras e inclusões. Saídas: pagamentos a fornecedores, descartes e correções.
+            Entradas: recebimentos conferidos, sobras, compras e inclusões. Saídas: envios, descartes e remoções.
             {fluxoPeriodo.transferencias > 0 && <> Quebras e consertos no período: <strong className="num text-t1">{n(fluxoPeriodo.transferencias)}</strong> (não alteram o total).</>}
           </p>
         </Painel>
       </div>
 
+      {moduloFornecedor && (
+        <>
       {/* Farol Vale-pallet */}
       <div className="mt-6">
         <Painel
@@ -263,6 +296,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <LegendaFarol itens={[["VERMELHO", "30 dias ou mais"], ["AMARELO", "20 a 29 dias"], ["VERDE", "menos de 20 dias"]]} />
         </Painel>
       </div>
+
+        </>
+      )}
 
       <div className="mt-6">
         <HistoricoExclusoes cdId={cd.id} limite={10} inicio={periodo.inicio} fim={periodo.fim} titulo={`Vales cancelados (excluídos) · ${periodo.rotulo}`} />

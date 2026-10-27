@@ -7,8 +7,8 @@ import { BotaoEnviar, Mensagem } from "./FormAcao";
 import { Modal } from "./ModalFornecedor";
 
 /**
- * Descarte/destruição: ao enviar, abre o pop-up "De qual pulmão este pallet será
- * descartado/destruído?" (Vazios ou Quebrados) antes de efetivar.
+ * Descarte/destruição: ao enviar, abre o pop-up de confirmação ("Tem certeza?") com a
+ * escolha do estoque de origem (bons ou quebrados) antes de efetivar.
  */
 export function FormDescarte({ saldoVazios, saldoQuebrados }: { saldoVazios: number; saldoQuebrados: number }) {
   const [estado, executar, enviando] = useActionState(registrarDescarte, null);
@@ -30,8 +30,8 @@ export function FormDescarte({ saldoVazios, saldoQuebrados }: { saldoVazios: num
 
   const qtd = Number(dados?.get("quantidade") ?? 0);
   const opcoes = [
-    { origem: "VAZIOS" as const, titulo: "Opção A · Pulmão de Vazios", saldo: saldoVazios, icone: Boxes },
-    { origem: "QUEBRADOS" as const, titulo: "Opção B · Pulmão de Quebrados", saldo: saldoQuebrados, icone: Hammer },
+    { origem: "VAZIOS" as const, titulo: "Pallets bons (vazios)", saldo: saldoVazios, icone: Boxes },
+    { origem: "QUEBRADOS" as const, titulo: "Pallets quebrados", saldo: saldoQuebrados, icone: Hammer },
   ];
 
   return (
@@ -60,9 +60,10 @@ export function FormDescarte({ saldoVazios, saldoQuebrados }: { saldoVazios: num
 
       {dados && (
         <Modal titulo="Confirmar descarte" aoFechar={() => setDados(null)}>
-          <p className="mb-5 text-[13px] font-semibold text-t1">De qual pulmão este pallet será descartado/destruído?</p>
+          <p className="mb-2 text-[14px] font-semibold text-t1" data-testid="pergunta-descarte">Tem certeza que deseja descartar estes pallets?</p>
+          <p className="mb-5 text-[12px] text-t2">Escolha de qual estoque eles saem para confirmar:</p>
           <p className="mb-4 text-[12px] text-t3">
-            Quantidade: <strong className="num text-t1">{qtd}</strong> pallet(s). A baixa é definitiva.
+            Quantidade: <strong className="num text-t1">{qtd}</strong> pallet(s). A baixa é definitiva e fica registrada em Pallets Descartados (não pode ser alterada nem excluída).
           </p>
           <div className="grid gap-3">
             {opcoes.map((o) => (

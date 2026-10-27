@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUsuarioAtual } from "@/lib/auth";
+import { getUsuarioAtual, podeVerVale } from "@/lib/auth";
 import { gerarPdfVale } from "@/lib/pdf";
 import { tem } from "@/lib/permissoes";
 
@@ -10,12 +10,11 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const usuario = await getUsuarioAtual();
   if (!usuario) return NextResponse.json({ erro: "Não autenticado" }, { status: 401 });
-  if (!(["vales", "entrada", "agendas", "excluir_vale", "cd"] as const).some((p) => tem(usuario, p))) {
+  if (!(["vales", "fornecedor", "excluir_vale", "envio", "recebimento"] as const).some((p) => tem(usuario, p))) {
     return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
   }
-  if (!usuario.cd) return NextResponse.json({ erro: "Selecione o CD de operação" }, { status: 409 });
   try {
-    const pdf = await gerarPdfVale((await params).id, usuario.cd.id);
+    const pdf = await gerarPdfVale((await params).id, (v) => podeVerVale(usuario, v));
     if (!pdf) return NextResponse.json({ erro: "Vale não encontrado" }, { status: 404 });
     const inline = req.nextUrl.searchParams.get("inline") === "1";
     return new NextResponse(new Uint8Array(pdf.arquivo), {

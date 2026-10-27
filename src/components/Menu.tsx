@@ -12,9 +12,7 @@ import {
   Lock,
   MonitorPlay,
   Network,
-  PackageCheck,
   Repeat,
-  Scale,
   CalendarCheck,
   ClipboardList,
   Factory,
@@ -32,48 +30,57 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Trash2,
+  TriangleAlert,
   Truck,
   Users,
   X,
 } from "lucide-react";
 import { sair } from "@/actions/auth";
-import { ehAdmin, ehMaster, ROTULO_PERFIL, tem, type Perfil, type Permissao } from "@/lib/permissoes";
+import { ehAdmin, ehMaster, ROTULO_PERFIL, tem, type Perfil, type Permissao, type UnidadeAcesso } from "@/lib/permissoes";
 import { BotaoTema, type Tema } from "./BotaoTema";
 
-type Item = { href: string; rotulo: string; icone: typeof Boxes; permissao?: Permissao; somente?: "admin" | "master" };
+type Item = {
+  href: string;
+  rotulo: string;
+  icone: typeof Boxes;
+  permissao?: Permissao;
+  somente?: "admin" | "master";
+  /** hub: só no CD Hub; fornecedor: módulo liberado na unidade; global: visão Nível Brasil. */
+  requer?: "hub" | "fornecedor" | "global";
+};
 
 const grupos: { titulo: string; itens: Item[] }[] = [
   {
     titulo: "",
     itens: [
-      { href: "/", rotulo: "Dashboard", icone: LayoutDashboard, permissao: "dashboard" },
-      { href: "/tv", rotulo: "Tela TV (Control Center)", icone: MonitorPlay, permissao: "tv" },
+      { href: "/", rotulo: "Painel", icone: LayoutDashboard, permissao: "dashboard" },
+      { href: "/tv", rotulo: "Torre de Controle (TV)", icone: MonitorPlay, permissao: "tv", requer: "global" },
     ],
   },
   {
-    titulo: "CDs & Pontos de Cross",
+    titulo: "Movimentação",
     itens: [
-      { href: "/cd/envio", rotulo: "Envio para CD", icone: ArrowUpFromLine, permissao: "cd" },
-      { href: "/cross/envio", rotulo: "Envio para Ponto de Cross", icone: Network, permissao: "cd" },
-      { href: "/retorno", rotulo: "Retorno / Conferência", icone: ClipboardCheck, permissao: "cd" },
-    ],
-  },
-  {
-    titulo: "Fornecedor & Vales",
-    itens: [
-      { href: "/fornecedor/entrada", rotulo: "Recebimento Pallet Fornecedor", icone: PackagePlus, permissao: "entrada" },
-      { href: "/vales/consulta", rotulo: "Consulta de Vales", icone: FileSearch, permissao: "vales" },
-      { href: "/vales", rotulo: "Agendar Retirada", icone: ClipboardList, permissao: "agendas" },
-      { href: "/agendas", rotulo: "Baixa de Pagamento", icone: CalendarCheck, permissao: "agendas" },
-      { href: "/vales/excluir", rotulo: "Excluir Vale", icone: FileX, permissao: "excluir_vale" },
+      { href: "/envio", rotulo: "Envio de Pallets", icone: ArrowUpFromLine, permissao: "envio" },
+      { href: "/recebimento", rotulo: "Recebimento / Conferência", icone: ClipboardCheck, permissao: "recebimento" },
+      { href: "/ocorrencias", rotulo: "Ocorrências", icone: TriangleAlert },
     ],
   },
   {
     titulo: "Avarias",
     itens: [
-      { href: "/avarias/quebras", rotulo: "Quebras", icone: Hammer, permissao: "avarias" },
-      { href: "/avarias/recuperados", rotulo: "Conserto / Reparo", icone: Recycle, permissao: "avarias" },
-      { href: "/avarias/descarte", rotulo: "Descarte", icone: Trash2, permissao: "avarias" },
+      { href: "/avarias/quebras", rotulo: "Lançar Quebrado", icone: Hammer, permissao: "quebras" },
+      { href: "/avarias/recuperados", rotulo: "Conserto / Reparo", icone: Recycle, permissao: "reparo", requer: "hub" },
+      { href: "/avarias/descarte", rotulo: "Descarte", icone: Trash2 },
+    ],
+  },
+  {
+    titulo: "Fornecedor & Vales",
+    itens: [
+      { href: "/fornecedor/entrada", rotulo: "Recebimento Pallet Fornecedor", icone: PackagePlus, permissao: "fornecedor", requer: "fornecedor" },
+      { href: "/vales/consulta", rotulo: "Consulta de Vales", icone: FileSearch, permissao: "vales" },
+      { href: "/vales", rotulo: "Agendar Retirada", icone: ClipboardList, permissao: "fornecedor", requer: "fornecedor" },
+      { href: "/agendas", rotulo: "Baixa de Pagamento", icone: CalendarCheck, permissao: "fornecedor", requer: "fornecedor" },
+      { href: "/vales/excluir", rotulo: "Excluir Vale", icone: FileX, permissao: "excluir_vale" },
     ],
   },
   {
@@ -89,9 +96,7 @@ const grupos: { titulo: string; itens: Item[] }[] = [
   {
     titulo: "Gestão",
     itens: [
-      { href: "/estoque/vazios", rotulo: "Inclusão de Vazios (Admin)", icone: PackageCheck, somente: "admin" },
-      { href: "/estoque/devedor", rotulo: "Saldo Devedor (Admin)", icone: Scale, somente: "admin" },
-      { href: "/estoque/ajuste", rotulo: "Correção de Inventário (Master)", icone: SlidersHorizontal, somente: "master" },
+      { href: "/estoque/inclusao", rotulo: "Ajuste de Saldo (Admin)", icone: SlidersHorizontal, somente: "admin" },
       { href: "/auditoria", rotulo: "Auditoria", icone: ShieldCheck, permissao: "auditoria" },
       { href: "/relatorios", rotulo: "Relatórios", icone: FileSpreadsheet, permissao: "relatorios" },
       { href: "/conta", rotulo: "Minha Senha", icone: KeyRound },
@@ -99,10 +104,17 @@ const grupos: { titulo: string; itens: Item[] }[] = [
   },
 ];
 
-function visivel(i: Item, u: { perfil: Perfil; permissoes: string[] }) {
-  if (i.somente === "master") return ehMaster(u);
-  if (i.somente === "admin") return ehAdmin(u);
-  return !i.permissao || tem(u, i.permissao);
+type UsuarioMenu = { nome: string; login: string; perfil: Perfil; permissoes: string[]; unidade: UnidadeAcesso; global: boolean };
+type CDMenu = { codigo: string; nome: string; tipo: "CD" | "CROSS"; hub: boolean; recebimentoFornecedor: boolean };
+
+function visivel(i: Item, u: UsuarioMenu, cd: CDMenu | null) {
+  if (i.somente === "master" && !ehMaster(u)) return false;
+  if (i.somente === "admin" && !ehAdmin(u)) return false;
+  if (i.permissao && !tem(u, i.permissao)) return false;
+  if (i.requer === "hub" && !cd?.hub) return false;
+  if (i.requer === "fornecedor" && !cd?.recebimentoFornecedor) return false;
+  if (i.requer === "global" && !u.global) return false;
+  return true;
 }
 
 export function Menu({
@@ -111,8 +123,8 @@ export function Menu({
   podeTrocarCD,
   tema,
 }: {
-  usuario: { nome: string; login: string; perfil: Perfil; permissoes: string[] };
-  cd: { codigo: string; nome: string } | null;
+  usuario: UsuarioMenu;
+  cd: CDMenu | null;
   podeTrocarCD: boolean;
   tema: Tema;
 }) {
@@ -130,7 +142,7 @@ export function Menu({
           </span>
           <span className="flex flex-col leading-tight">
             Control Tower Pallet
-            {cd && <span className="num text-[10px] font-medium text-lima">CD {cd.codigo}</span>}
+            {cd && <span className="num text-[10px] font-medium text-lima">{cd.tipo === "CROSS" ? "Cross" : "CD"} {cd.codigo}</span>}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -166,10 +178,10 @@ export function Menu({
           </div>
 
           <div className="px-3 pb-3">
-            <CDAtivo cd={cd} podeTrocar={podeTrocarCD} onNavegar={() => setAberto(false)} />
+            <CDAtivo cd={cd} podeTrocar={podeTrocarCD} global={usuario.global} onNavegar={() => setAberto(false)} />
           </div>
 
-          {tem(usuario, "compras") && (
+          {tem(usuario, "compras") && usuario.global && (
             <div className="px-3 pb-3">
               <Link
                 href="/pallets/adicionar"
@@ -183,7 +195,7 @@ export function Menu({
 
           <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4">
             {grupos.map((g) => {
-              const itens = g.itens.filter((i) => visivel(i, usuario));
+              const itens = g.itens.filter((i) => visivel(i, usuario, cd));
               if (!itens.length) return null;
               return (
                 <div key={g.titulo}>
@@ -216,6 +228,9 @@ export function Menu({
               <p className="text-[11px] text-t3">
                 {usuario.login} · {ROTULO_PERFIL[usuario.perfil]}
               </p>
+              <p className="mt-0.5 text-[10px] text-t4" data-testid="escopo-usuario">
+                {usuario.global ? "Visão Nível Brasil" : "Visão regional"}
+              </p>
             </div>
             <form action={sair} className="mt-3">
               <button className="btn-secondary w-full">
@@ -242,30 +257,30 @@ function BotaoSair() {
   );
 }
 
-/** CD de operação da sessão: fixo (cadeado) quando o usuário tem um só CD; senão, botão Trocar CD. */
-function CDAtivo({ cd, podeTrocar, onNavegar }: { cd: { codigo: string; nome: string } | null; podeTrocar: boolean; onNavegar: () => void }) {
+/** Unidade de operação: fixa (cadeado) para usuários regionais; visão global pode trocar. */
+function CDAtivo({ cd, podeTrocar, global, onNavegar }: { cd: CDMenu | null; podeTrocar: boolean; global: boolean; onNavegar: () => void }) {
   if (!cd) {
     return (
       <Link href="/selecionar-cd" onClick={onNavegar} className="poco-erro flex items-center gap-2 px-4 py-3 text-[11px] font-semibold text-erro-claro">
-        <Building2 className="h-4 w-4" /> Nenhum CD de operação
+        <Building2 className="h-4 w-4" /> Nenhuma unidade de operação
       </Link>
     );
   }
   return (
     <div className="poco flex items-center gap-3 px-4 py-3" data-testid="cd-ativo">
-      <Building2 className="h-4 w-4 flex-none text-lima" />
+      {cd.tipo === "CROSS" ? <Network className="h-4 w-4 flex-none text-lima" /> : <Building2 className="h-4 w-4 flex-none text-lima" />}
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] uppercase tracking-[0.12em] text-t4">CD de operação</p>
+        <p className="text-[10px] uppercase tracking-[0.12em] text-t4">{cd.tipo === "CROSS" ? "Ponto de Cross" : cd.hub ? "CD Hub" : "CD"} de operação</p>
         <p className="truncate text-[12px] font-semibold text-t1" title={cd.nome}>
           <span className="num">{cd.codigo}</span> · {cd.nome}
         </p>
       </div>
       {podeTrocar ? (
-        <Link href="/selecionar-cd?trocar=1" onClick={onNavegar} className="btn-icone !h-8 !w-8" title="Trocar CD" aria-label="Trocar CD">
+        <Link href="/selecionar-cd?trocar=1" onClick={onNavegar} className="btn-icone !h-8 !w-8" title="Trocar unidade" aria-label="Trocar unidade">
           <Repeat className="h-4 w-4" />
         </Link>
       ) : (
-        <span title="Seu usuário opera somente neste CD" aria-label="CD fixo"><Lock className="h-3.5 w-3.5 text-t4" /></span>
+        <span title={global ? "Única unidade ativa" : "Seu usuário opera somente nesta unidade"} aria-label="Unidade fixa"><Lock className="h-3.5 w-3.5 text-t4" /></span>
       )}
     </div>
   );

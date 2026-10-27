@@ -3,17 +3,18 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getUsuarioAtual } from "@/lib/auth";
 import { auditar, obterSaldos, ROTULO_CONTA } from "@/lib/conta";
 import { tem } from "@/lib/permissoes";
-import { devedoresPorUnidade, pendenciasPorFornecedor, valesEmAberto } from "@/lib/consultas";
+import { pendenciasPorFornecedor, posicaoUnidades, valesEmAberto } from "@/lib/consultas";
 import { formatarData, formatarDataHora } from "@/lib/datas";
 import { lerFiltros } from "@/lib/filtros";
 import {
   formatarCnpj,
   formatarPlaca,
   numeroAgenda,
-  numeroRetorno,
+  numeroConferencia,
   numeroVale,
   parteVale,
   rotuloMotivoCancelamento,
+  rotuloResolucao,
   rotuloTipoUnidade,
   rotuloTipoVale,
   rotuloNf,
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
 
   const movs = await prisma.movimentacao.findMany({
     where,
-    include: { usuario: true, unidade: true, fornecedor: true, vale: true, agenda: true, retorno: true },
+    include: { usuario: true, unidade: true, fornecedor: true, vale: true, agenda: true, conferencia: true },
     orderBy: { criadoEm: "asc" },
   });
   const linhasMov = movs.map((m) => ({
@@ -72,7 +73,7 @@ export async function GET(req: NextRequest) {
     cnpj: m.fornecedor ? formatarCnpj(m.fornecedor.cnpj) : "",
     vale: m.vale ? numeroVale(m.vale.numero, m.vale.tipo) : "",
     agenda: m.agenda ? numeroAgenda(m.agenda.numero) : "",
-    retorno: m.retorno ? numeroRetorno(m.retorno.numero) : "",
+    retorno: m.conferencia ? numeroConferencia(m.conferencia.numero) : "",
     motivo: m.motivo ?? "",
     usuario: m.usuario.login,
     nomeUsuario: m.usuario.nome,
@@ -84,8 +85,8 @@ export async function GET(req: NextRequest) {
     { header: "Quantidade", key: "quantidade" },
     { header: "Origem", key: "origem", width: 22 },
     { header: "Destino", key: "destino", width: 22 },
-    { header: "CD da operação", key: "cd", width: 16 },
-    { header: "CD destino / Cross", key: "unidade", width: 25 },
+    { header: "Unidade (livro)", key: "cd", width: 16 },
+    { header: "Outra unidade", key: "unidade", width: 25 },
     { header: "Fornecedor", key: "fornecedor", width: 30 },
     { header: "CNPJ", key: "cnpj", width: 20 },
     { header: "Vale", key: "vale" },
@@ -119,11 +120,12 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const [saldos, vales, agendas, fornecedores, abertos, auditoria, compras, retornos, devedores] = await Promise.all([
+  const modulo = cd.recebimentoFornecedor;
+  const [saldos, vales, agendas, fornecedores, abertos, auditoria, compras, conferencias, posicao] = await Promise.all([
     obterSaldos(cd.id),
     prisma.valePallet.findMany({
-      where: { cdId: cd.id },
-      include: { fornecedor: true, unidade: true, criadoPor: true, agenda: true, canceladoPor: true, retorno: true },
+      where: { OR: [{ cdId: cd.id }, { unidadeId: cd.id }] },
+      include: { fornecedor: true, unidade: true, cd: true, criadoPor: true, agenda: true, canceladoPor: true, conferencia: true },
       orderBy: { numero: "asc" },
     }),
     prisma.agendaDevolucao.findMany({
@@ -131,16 +133,16 @@ export async function GET(req: NextRequest) {
       include: { fornecedor: true, criadoPor: true, validadoPor: true, vales: { select: { numero: true, quantidade: true } } },
       orderBy: { numero: "asc" },
     }),
-    pendenciasPorFornecedor(cd.id),
-    valesEmAberto(cd.id),
+    modulo ? pendenciasPorFornecedor(cd.id) : [],
+    modulo ? valesEmAberto(cd.id) : [],
     prisma.auditoria.findMany({ where: { criadoEm: periodo, cdId: cd.id }, include: { usuario: true }, orderBy: { criadoEm: "asc" } }),
     prisma.compra.findMany({ where: { criadoEm: periodo, cdId: cd.id }, include: { fornecedor: true, usuario: true }, orderBy: { criadoEm: "asc" } }),
-    prisma.retornoConferencia.findMany({
-      where: { criadoEm: periodo, cdId: cd.id },
-      include: { unidade: true, usuario: true, ocorrencia: true, vales: { select: { numero: true, tipo: true } } },
+    prisma.conferencia.findMany({
+      where: { criadoEm: periodo, OR: [{ cdId: cd.id }, { remetenteId: cd.id }] },
+      include: { cd: true, remetente: true, usuario: true, ocorrencias: true, vales: { select: { numero: true, tipo: true } } },
       orderBy: { criadoEm: "asc" },
     }),
-    devedoresPorUnidade(cd.id),
+    posicaoUnidades(usuario.global ? undefined : [cd.id]),
   ]);
   const farolVale = new Map(abertos.map((v) => [v.id, v]));
 
@@ -151,14 +153,20 @@ export async function GET(req: NextRequest) {
   planilha(wb, "Resumo", [{ header: "Indicador", key: "k", width: 40 }, { header: "Valor", key: "v", width: 30 }], [
     { k: "Gerado em", v: formatarDataHora(new Date()) },
     { k: "Gerado por", v: `${usuario.nome} (${usuario.login})` },
-    { k: "CD de operação", v: `${cd.codigo} - ${cd.nome}` },
+    { k: "Unidade de operação", v: `${cd.codigo} - ${cd.nome}` },
     { k: "Período das movimentações", v: `${de} a ${ate}` },
     { k: "Filtro de tipo", v: tipo ? rotuloTipo[tipo] : "Todos" },
-    { k: "Estoque de Vazios (atual)", v: saldos.vazios },
-    { k: "Estoque de Quebrados (atual)", v: saldos.quebrados },
-    { k: "Saldo do CD com fornecedores (vales pendentes)", v: saldos.fornecedores },
-    { k: "Vales de fornecedor em aberto", v: saldos.valesFornecedorEmAberto },
-    { k: "Saldo devedor total (CDs destino e Cross)", v: saldos.devedor },
+    { k: "Pallets bons (atual)", v: saldos.vazios },
+    { k: "Pallets quebrados (atual)", v: saldos.quebrados },
+    { k: "Enviados em trânsito", v: saldos.transito },
+    { k: "A receber (vales destinados à unidade)", v: saldos.aReceber },
+    { k: "Faltas em aberto (ocorrências)", v: saldos.ocorrencias },
+    ...(modulo
+      ? [
+          { k: "Saldo com fornecedores (vales pendentes)", v: saldos.fornecedores },
+          { k: "Vales de fornecedor em aberto", v: saldos.valesFornecedorEmAberto },
+        ]
+      : []),
     { k: "Descartados/destruídos (acumulado)", v: saldos.descartados },
   ]);
 
@@ -170,10 +178,12 @@ export async function GET(req: NextRequest) {
     [
       { header: "Vale", key: "numero" },
       { header: "Tipo", key: "tipo", width: 26 },
+      { header: "Ocorrência", key: "ocorrencia" },
       { header: "Status", key: "status" },
       { header: "Farol", key: "farol" },
       { header: "Idade (dias)", key: "idade" },
-      { header: "Fornecedor / CD-Cross", key: "fornecedor", width: 30 },
+      { header: "Remetente", key: "remetente", width: 14 },
+      { header: "Fornecedor / destino", key: "fornecedor", width: 30 },
       { header: "CNPJ", key: "cnpj", width: 20 },
       { header: "Transportadora", key: "transportadora", width: 25 },
       { header: "Placa", key: "placa" },
@@ -182,7 +192,10 @@ export async function GET(req: NextRequest) {
       { header: "Nota Fiscal", key: "nf", width: 18 },
       { header: "Chave NF-e", key: "chaveNfe", width: 48 },
       { header: "Conferente", key: "conferente", width: 20 },
+      { header: "Bons", key: "bons" },
+      { header: "Quebrados", key: "quebrados" },
       { header: "Quantidade", key: "quantidade" },
+      { header: "Resolução", key: "resolucao", width: 24 },
       { header: "Emissão", key: "emissao", width: 20 },
       { header: "Emitido por", key: "usuario" },
       { header: "Agenda / Conferência", key: "agenda" },
@@ -195,9 +208,11 @@ export async function GET(req: NextRequest) {
     vales.map((v) => ({
       numero: numeroVale(v.numero, v.tipo),
       tipo: rotuloTipoVale[v.tipo],
+      ocorrencia: v.ocorrencia ?? "",
       status: rotuloStatusVale[v.status],
       farol: farolVale.get(v.id)?.farol ?? "",
       idade: farolVale.get(v.id)?.idade ?? "",
+      remetente: v.cd.codigo,
       fornecedor: parteVale(v),
       cnpj: v.fornecedor ? formatarCnpj(v.fornecedor.cnpj) : "",
       transportadora: v.transportadora ?? "",
@@ -207,10 +222,13 @@ export async function GET(req: NextRequest) {
       nf: v.tipo === "FORNECEDOR" ? rotuloNf(v) : "",
       chaveNfe: v.chaveNfe ?? "",
       conferente: v.conferente ?? "",
+      bons: v.quantidadeBons,
+      quebrados: v.quantidadeQuebrados,
       quantidade: v.quantidade,
+      resolucao: v.resolucao ? rotuloResolucao[v.resolucao] : "",
       emissao: formatarDataHora(v.criadoEm),
       usuario: v.criadoPor.login,
-      agenda: v.agenda ? numeroAgenda(v.agenda.numero) : v.retorno ? numeroRetorno(v.retorno.numero) : "",
+      agenda: v.agenda ? numeroAgenda(v.agenda.numero) : v.conferencia ? numeroConferencia(v.conferencia.numero) : "",
       finalizado: v.finalizadoEm ? formatarDataHora(v.finalizadoEm) : "",
       excluido: v.canceladoEm ? formatarDataHora(v.canceladoEm) : "",
       excluidoPor: v.canceladoPor?.login ?? "",
@@ -219,7 +237,7 @@ export async function GET(req: NextRequest) {
     })),
   );
 
-  planilha(
+  if (modulo) planilha(
     wb,
     "Agendas",
     [
@@ -277,7 +295,7 @@ export async function GET(req: NextRequest) {
     })),
   );
 
-  planilha(
+  if (modulo) planilha(
     wb,
     "Pendências Fornecedor",
     [
@@ -300,30 +318,34 @@ export async function GET(req: NextRequest) {
 
   planilha(
     wb,
-    "Conferências de Retorno",
+    "Conferências",
     [
       { header: "Conferência", key: "numero" },
       { header: "Data/Hora", key: "dataHora", width: 20 },
-      { header: "Remetente", key: "unidade", width: 28 },
-      { header: "Vales baixados", key: "vales", width: 30 },
-      { header: "Total dos vales", key: "total" },
-      { header: "Quantidade física", key: "fisico" },
-      { header: "Falta", key: "falta" },
-      { header: "Vale-Ocorrência", key: "ocorrencia" },
+      { header: "Remetente", key: "remetente", width: 22 },
+      { header: "Recebedor", key: "recebedor", width: 22 },
+      { header: "Vales conferidos", key: "vales", width: 30 },
+      { header: "Declarado", key: "total" },
+      { header: "Bons recebidos", key: "bons" },
+      { header: "Quebrados recebidos", key: "quebrados" },
+      { header: "Diferença", key: "diferenca" },
+      { header: "Vale de Ocorrência", key: "ocorrencia" },
       { header: "Placa", key: "placa" },
       { header: "Transportadora", key: "transportadora", width: 24 },
       { header: "Login", key: "usuario" },
       { header: "Observação", key: "obs", width: 40 },
     ],
-    retornos.map((r) => ({
-      numero: numeroRetorno(r.numero),
+    conferencias.map((r) => ({
+      numero: numeroConferencia(r.numero),
       dataHora: formatarDataHora(r.criadoEm),
-      unidade: `${rotuloTipoUnidade[r.unidade.tipo]} ${r.unidade.codigo} - ${r.unidade.nome}`,
+      remetente: `${rotuloTipoUnidade[r.remetente.tipo]} ${r.remetente.codigo}`,
+      recebedor: `${rotuloTipoUnidade[r.cd.tipo]} ${r.cd.codigo}`,
       vales: r.vales.map((v) => numeroVale(v.numero, v.tipo)).join(", "),
-      total: r.totalVales,
-      fisico: r.quantidadeFisica,
-      falta: r.falta,
-      ocorrencia: r.ocorrencia ? numeroVale(r.ocorrencia.numero, "OCORRENCIA") : "",
+      total: r.totalDeclarado,
+      bons: r.recebidoBons,
+      quebrados: r.recebidoQuebrados,
+      diferenca: r.diferenca,
+      ocorrencia: r.ocorrencias.map((o) => numeroVale(o.numero, "OCORRENCIA")).join(", "),
       placa: r.placa ? formatarPlaca(r.placa) : "",
       transportadora: r.transportadora ?? "",
       usuario: r.usuario.login,
@@ -333,22 +355,26 @@ export async function GET(req: NextRequest) {
 
   planilha(
     wb,
-    "Saldos Devedores",
+    "Posição por Unidade",
     [
       { header: "Tipo", key: "tipo" },
-      { header: "Código", key: "codigo" },
+      { header: "Sigla", key: "codigo" },
       { header: "Unidade", key: "nome", width: 30 },
-      { header: "Vales pendentes", key: "vales" },
-      { header: "Vale mais antigo", key: "antigo" },
-      { header: "Saldo devedor", key: "saldo" },
+      { header: "Bons", key: "bons" },
+      { header: "Quebrados", key: "quebrados" },
+      { header: "Em trânsito (enviados)", key: "transito" },
+      { header: "A receber", key: "receber" },
+      { header: "Faltas em aberto", key: "ocorrencias" },
     ],
-    devedores.map((d) => ({
-      tipo: rotuloTipoUnidade[d.unidade.tipo],
-      codigo: d.unidade.codigo,
-      nome: d.unidade.nome,
-      vales: d.vales,
-      antigo: d.maisAntigo ? formatarData(d.maisAntigo) : "",
-      saldo: d.saldo,
+    posicao.map((p) => ({
+      tipo: p.unidade.hub ? "CD Hub" : rotuloTipoUnidade[p.unidade.tipo],
+      codigo: p.unidade.codigo,
+      nome: p.unidade.nome,
+      bons: p.vazios,
+      quebrados: p.quebrados,
+      transito: p.transito,
+      receber: p.aReceber,
+      ocorrencias: p.ocorrencias,
     })),
   );
 

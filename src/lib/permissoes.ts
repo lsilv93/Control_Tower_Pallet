@@ -1,27 +1,32 @@
-// Controle de acesso (RBAC). Módulo puro: usado no servidor e no menu (cliente).
+// Controle de acesso (RBAC + escopo por unidade). Módulo puro: usado no servidor e no menu (cliente).
 
 /** Permissões granulares por tela/funcionalidade, atribuíveis a operadores. */
 export const PERMISSOES = [
-  { chave: "dashboard", rotulo: "Dashboard" },
-  { chave: "tv", rotulo: "Tela TV gerencial (Control Center)" },
-  { chave: "cd", rotulo: "Envio para CD / Ponto de Cross e conferência de retorno" },
-  { chave: "entrada", rotulo: "Entrada de fornecedor (gerar vale-pallet)" },
-  { chave: "vales", rotulo: "Vales pendentes e consulta / PDF de vales" },
-  { chave: "agendas", rotulo: "Agendamento de retirada e baixa de pagamento" },
-  { chave: "excluir_vale", rotulo: "Excluir vale-pallet" },
-  { chave: "avarias", rotulo: "Quebras, conserto e descarte" },
+  { chave: "dashboard", rotulo: "Painel da unidade" },
+  { chave: "tv", rotulo: "Tela TV · Torre de Controle (somente visão global)" },
+  { chave: "envio", rotulo: "Envio de pallets (CD, Cross e quebrados ao CDJC)" },
+  { chave: "recebimento", rotulo: "Recebimento / conferência de pallets" },
+  { chave: "quebras", rotulo: "Lançar quebrado" },
+  { chave: "reparo", rotulo: "Conserto / reparo de quebrados (Hub CDJC)" },
+  { chave: "vales", rotulo: "Consulta de vales" },
+  { chave: "excluir_vale", rotulo: "Excluir vale (antes da conferência)" },
+  { chave: "fornecedor", rotulo: "Recebimento Pallet Fornecedor (se liberado no CD)" },
   { chave: "compras", rotulo: "Compra de pallets (leitura de NF-e)" },
   { chave: "relatorios", rotulo: "Relatórios e exportação" },
-  { chave: "auditoria", rotulo: "Auditoria (consulta e exportação)" },
-  { chave: "cadastros", rotulo: "Cadastro de transportadoras e fornecedores" },
+  { chave: "auditoria", rotulo: "Auditoria" },
+  { chave: "cadastros", rotulo: "Cadastro de fornecedores e transportadoras" },
   { chave: "cds", rotulo: "Cadastro de CDs e Pontos de Cross" },
 ] as const;
 
 export type Permissao = (typeof PERMISSOES)[number]["chave"];
 export const CHAVES_PERMISSAO = PERMISSOES.map((p) => p.chave) as Permissao[];
 
+/** Usuários de Ponto de Cross: só o painel, envio, recebimento/conferência e lançar quebrado. */
+export const PERMISSOES_CROSS: readonly Permissao[] = ["dashboard", "envio", "recebimento", "quebras"];
+
 export type Perfil = "MASTER" | "ADMIN" | "OPERADOR";
-type ComAcesso = { perfil: Perfil; permissoes?: string[] };
+export type UnidadeAcesso = { tipo: "CD" | "CROSS"; hub: boolean };
+type ComAcesso = { perfil: Perfil; permissoes?: string[]; unidade?: UnidadeAcesso };
 
 export const ROTULO_PERFIL: Record<Perfil, string> = {
   MASTER: "Master",
@@ -29,38 +34,43 @@ export const ROTULO_PERFIL: Record<Perfil, string> = {
   OPERADOR: "Operador",
 };
 
-export const ehMaster = (u: ComAcesso) => u.perfil === "MASTER";
-/** Administração (usuários etc.): MASTER e ADMIN. */
-export const ehAdmin = (u: ComAcesso) => u.perfil === "MASTER" || u.perfil === "ADMIN";
+export const ehMaster = (u: { perfil: Perfil }) => u.perfil === "MASTER";
+/** Administração: MASTER e ADMIN. */
+export const ehAdmin = (u: { perfil: Perfil }) => u.perfil === "MASTER" || u.perfil === "ADMIN";
+/** Usuário de Ponto de Cross (não administrador). */
+export const ehUsuarioCross = (u: ComAcesso) => !ehAdmin(u) && u.unidade?.tipo === "CROSS";
+/** Visão global (Nível Brasil): Master, Administrador e usuários do Hub CDJC. */
+export const temVisaoGlobal = (u: ComAcesso) => ehAdmin(u) || !!u.unidade?.hub;
 
-/** MASTER e ADMIN têm todas as telas; OPERADOR só as permissões marcadas. */
+/**
+ * MASTER e ADMIN têm todas as telas; OPERADOR só as permissões marcadas. Usuários de
+ * Ponto de Cross ficam limitados ao painel, envio, recebimento e lançar quebrado.
+ */
 export function tem(u: ComAcesso, p: Permissao): boolean {
-  return ehAdmin(u) || !!u.permissoes?.includes(p);
+  if (ehAdmin(u)) return true;
+  if (ehUsuarioCross(u) && !PERMISSOES_CROSS.includes(p)) return false;
+  return !!u.permissoes?.includes(p);
 }
 
-/** Correção de inventário (incluir/remover em qualquer estoque): exclusiva do MASTER. */
-export const podeAjustarManual = (u: ComAcesso) => ehMaster(u);
-/** Inclusão manual de vazios e de saldo devedor: MASTER e ADMIN. */
-export const podeIncluirSaldo = (u: ComAcesso) => ehAdmin(u);
-
-/** Tela inicial de cada permissão (para quem não tem acesso ao Dashboard). */
+/** Tela inicial de cada permissão (para quem não tem acesso ao painel). */
 const ROTA_INICIAL: Record<Permissao, string> = {
   dashboard: "/",
   tv: "/tv",
-  cd: "/cd/envio",
-  entrada: "/fornecedor/entrada",
+  envio: "/envio",
+  recebimento: "/recebimento",
+  quebras: "/avarias/quebras",
+  reparo: "/avarias/recuperados",
   vales: "/vales/consulta",
-  agendas: "/vales",
   excluir_vale: "/vales/excluir",
-  avarias: "/avarias/quebras",
+  fornecedor: "/fornecedor/entrada",
   compras: "/pallets/adicionar",
   relatorios: "/relatorios",
   auditoria: "/auditoria",
-  cadastros: "/cadastros/transportadoras",
+  cadastros: "/cadastros/fornecedores",
   cds: "/cadastros/cds",
 };
 
 export function primeiraRota(u: ComAcesso): string {
-  const p = CHAVES_PERMISSAO.find((c) => tem(u, c));
-  return p ? ROTA_INICIAL[p] : "/conta";
+  const p = CHAVES_PERMISSAO.find((c) => c !== "tv" && c !== "fornecedor" && c !== "reparo" && tem(u, c));
+  return p ? ROTA_INICIAL[p] : "/avarias/descarte";
 }

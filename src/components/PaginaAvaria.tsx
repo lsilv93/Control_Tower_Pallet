@@ -1,47 +1,51 @@
+import { redirect } from "next/navigation";
 import { registrarQuebra } from "@/actions/avarias";
-import { requirePermissao } from "@/lib/auth";
+import { requireCD } from "@/lib/auth";
 import { obterSaldos } from "@/lib/conta";
+import { tem } from "@/lib/permissoes";
 import { Fluxo, SaldosEstoques } from "./Contas";
 import { FormAcao } from "./FormAcao";
 import { FormDescarte } from "./FormDescarte";
 import { FormReparo } from "./FormReparo";
+import { PalletsDescartados } from "./PalletsDescartados";
 import { UltimasMovimentacoes } from "./UltimasMovimentacoes";
 import { Abas, Cabecalho, Painel } from "./ui";
 
 const config = {
   quebras: {
-    titulo: "Lançamento de Pallets Quebrados",
+    titulo: "Lançar Quebrado",
     descricao: "Origem: Estoque de Vazios (subtrai) → Destino: Estoque de Quebrados (soma).",
     tipo: "QUEBRA",
   },
   recuperados: {
     titulo: "Conserto / Reparo de Pallets",
-    descricao: "Recuperados: Quebrados → Vazios. Pallets quebrados desmontados para o reparo: Quebrados → Descartados. A soma nunca ultrapassa o saldo de quebrados.",
+    descricao: "Exclusivo do CD Hub (CDJC). Recuperados: Quebrados → Vazios. Pallets quebrados desmontados para o reparo: Quebrados → Descartados. A soma nunca ultrapassa o saldo de quebrados.",
     tipo: "RECUPERADO",
   },
   descarte: {
     titulo: "Descarte / Destruição de Pallets",
-    descricao: "Baixa definitiva. Ao confirmar, escolha de qual pulmão os pallets saem: Vazios ou Quebrados.",
+    descricao: "Baixa definitiva e imutável, disponível a todos os usuários. Ao confirmar, escolha de qual estoque os pallets saem: bons (vazios) ou quebrados.",
     tipo: "DESCARTE",
   },
 } as const;
 
 export async function PaginaAvaria({ modo }: { modo: keyof typeof config }) {
-  const u = await requirePermissao("avarias");
+  const u = await requireCD();
+  // Descarte: todos os usuários. Quebra: permissão "quebras". Reparo: permissão "reparo" e somente no Hub.
+  if (modo === "quebras" && !tem(u, "quebras")) redirect("/sem-acesso");
+  if (modo === "recuperados" && (!tem(u, "reparo") || !u.cd.hub)) redirect("/sem-acesso?modulo=reparo");
   const c = config[modo];
+  const abas = [
+    ...(tem(u, "quebras") ? [{ href: "/avarias/quebras", rotulo: "Lançar Quebrado" }] : []),
+    ...(u.cd.hub && tem(u, "reparo") ? [{ href: "/avarias/recuperados", rotulo: "Conserto / Reparo" }] : []),
+    { href: "/avarias/descarte", rotulo: "Descarte" },
+  ];
   const saldos = await obterSaldos(u.cd.id);
 
   return (
     <>
-      <Cabecalho titulo={c.titulo} descricao={`${c.descricao} · CD ${u.cd.codigo}`} />
-      <Abas
-        ativo={`/avarias/${modo}`}
-        itens={[
-          { href: "/avarias/quebras", rotulo: "Quebras" },
-          { href: "/avarias/recuperados", rotulo: "Conserto / Reparo" },
-          { href: "/avarias/descarte", rotulo: "Descarte" },
-        ]}
-      />
+      <Cabecalho titulo={c.titulo} descricao={`${c.descricao} · Unidade ${u.cd.codigo}`} />
+      {abas.length > 1 && <Abas ativo={`/avarias/${modo}`} itens={abas} />}
       <SaldosEstoques cdId={u.cd.id} destaque={["VAZIOS", "QUEBRADOS"]} />
       <div className="grid gap-6 lg:grid-cols-3">
         <Painel titulo="Novo lançamento">
@@ -67,8 +71,9 @@ export async function PaginaAvaria({ modo }: { modo: keyof typeof config }) {
             </FormAcao>
           )}
         </Painel>
-        <div className="lg:col-span-2">
-          <UltimasMovimentacoes cdId={u.cd.id} tipos={modo === "recuperados" ? ["RECUPERADO", "CANIBALIZACAO"] : modo === "descarte" ? ["DESCARTE", "CANIBALIZACAO"] : [c.tipo]} titulo="Últimos lançamentos" />
+        <div className="space-y-6 lg:col-span-2">
+          {modo === "descarte" && <PalletsDescartados cdId={u.cd.id} global={u.global} />}
+          {modo !== "descarte" && <UltimasMovimentacoes cdId={u.cd.id} tipos={modo === "recuperados" ? ["RECUPERADO", "CANIBALIZACAO"] : [c.tipo]} titulo="Últimos lançamentos" />}
         </div>
       </div>
     </>

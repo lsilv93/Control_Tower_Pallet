@@ -1,24 +1,30 @@
-import type { StatusVale, TipoUnidade, TipoVale, MotivoCancelamento } from "@prisma/client";
+import type { MotivoCancelamento, ResolucaoOcorrencia, StatusVale, TipoOcorrencia, TipoUnidade, TipoVale } from "@prisma/client";
 import { formatarDataHora } from "./datas";
 import {
   formatarCnpj,
+  formatarNumero,
   formatarPlaca,
   numeroAgenda,
-  numeroRetorno,
+  numeroConferencia,
   numeroVale,
   rotuloMotivoCancelamento,
   rotuloNf,
+  rotuloResolucao,
   rotuloStatusVale,
-  rotuloTipoUnidade,
 } from "./formatos";
+
+type UnidadeDoc = { codigo: string; nome: string; tipo: TipoUnidade; hub: boolean };
 
 /** Dados do vale necessários para montar o documento impresso / PDF. */
 export type ValeDoc = {
   id: string;
   numero: number;
   tipo: TipoVale;
+  ocorrencia: TipoOcorrencia | null;
   status: StatusVale;
   quantidade: number;
+  quantidadeBons: number;
+  quantidadeQuebrados: number;
   transportadora: string | null;
   placa: string | null;
   rota: string | null;
@@ -32,14 +38,16 @@ export type ValeDoc = {
   finalizadoEm: Date | null;
   canceladoEm: Date | null;
   motivoCancelamento: MotivoCancelamento | null;
-  cd: { codigo: string; nome: string };
+  resolucao: ResolucaoOcorrencia | null;
+  resolvidoEm: Date | null;
+  cd: UnidadeDoc;
   fornecedor: { nome: string; cnpj: string } | null;
-  unidade: { codigo: string; nome: string; tipo: TipoUnidade } | null;
+  unidade: UnidadeDoc | null;
   criadoPor: { login: string };
   canceladoPor: { login: string } | null;
   agenda: { numero: number; dataPrevista: Date } | null;
-  retorno: { numero: number } | null;
-  retornoOrigem: { numero: number; totalVales: number; quantidadeFisica: number } | null;
+  conferencia: { numero: number } | null;
+  conferenciaOrigem: { numero: number; totalDeclarado: number; recebidoBons: number; recebidoQuebrados: number } | null;
 };
 
 export type Celula = { rotulo: string; valor: string; colunas: 1 | 2 | 3 | 4 };
@@ -57,41 +65,51 @@ export type DocumentoVale = {
   nomeAssinatura: string | null;
 };
 
-const destinoTexto = (u: ValeDoc["unidade"]) => (u ? `${rotuloTipoUnidade[u.tipo]} ${u.codigo} - ${u.nome}` : "—");
+const rotuloTipo = (u: UnidadeDoc) => (u.tipo === "CROSS" ? "Ponto de Cross" : u.hub ? "CD Hub" : "CD");
+const unidadeTexto = (u: UnidadeDoc | null) => (u ? `${rotuloTipo(u)} ${u.codigo} - ${u.nome}` : "—");
 
-/** Monta o conteúdo do documento conforme o tipo do vale (fornecedor, envio, ocorrência ou ajuste). */
+/** Monta o conteúdo do documento conforme o tipo do vale (fornecedor, envio ou ocorrência). */
 export function documentoVale(v: ValeDoc): DocumentoVale {
   const codigo = numeroVale(v.numero, v.tipo);
   const situacao =
     v.status === "CANCELADO"
       ? `Cancelado em ${formatarDataHora(v.canceladoEm)} por ${v.canceladoPor?.login ?? "-"} · ${v.motivoCancelamento ? rotuloMotivoCancelamento[v.motivoCancelamento] : ""}`
-      : v.status === "FINALIZADO"
-        ? `Baixado em ${formatarDataHora(v.finalizadoEm)}${v.agenda ? ` · ${numeroAgenda(v.agenda.numero)}` : ""}${v.retorno ? ` · ${numeroRetorno(v.retorno.numero)}` : ""}`
-        : v.status === "AGENDADO" && v.agenda
-          ? `Retirada agendada para ${formatarDataHora(v.agenda.dataPrevista)} · ${numeroAgenda(v.agenda.numero)}`
-          : v.tipo === "FORNECEDOR"
-            ? "Pendente de devolução ao fornecedor"
-            : `Pendente de devolução ao CD ${v.cd.codigo}`;
+      : v.tipo === "OCORRENCIA"
+        ? v.resolucao
+          ? `${rotuloResolucao[v.resolucao]} em ${formatarDataHora(v.resolvidoEm)}`
+          : v.ocorrencia === "SOBRA"
+            ? "Sobra registrada no estoque do recebedor"
+            : "Em aberto · aguardando apuração"
+        : v.status === "FINALIZADO"
+          ? `${v.tipo === "ENVIO" ? "Conferido" : "Baixado"} em ${formatarDataHora(v.finalizadoEm)}${v.agenda ? ` · ${numeroAgenda(v.agenda.numero)}` : ""}${v.conferencia ? ` · ${numeroConferencia(v.conferencia.numero)}` : ""}`
+          : v.status === "AGENDADO" && v.agenda
+            ? `Retirada agendada para ${formatarDataHora(v.agenda.dataPrevista)} · ${numeroAgenda(v.agenda.numero)}`
+            : v.tipo === "FORNECEDOR"
+              ? "Pendente de devolução ao fornecedor"
+              : `Em trânsito · aguardando conferência em ${v.unidade?.codigo ?? "-"}`;
   const transporte: Celula[] = [
     { rotulo: "Transportadora", valor: v.transportadora ?? "—", colunas: 2 },
     { rotulo: "Placa do veículo", valor: v.placa ? formatarPlaca(v.placa) : "—", colunas: 2 },
   ];
-  // Envio para Ponto de Cross: rota e data de faturamento (opcionais).
+  // Envio para Ponto de Cross: rota e data de faturamento.
   const envioCross: Celula[] = [
     { rotulo: "Transportadora", valor: v.transportadora ?? "—", colunas: 1 },
     { rotulo: "Placa do veículo", valor: v.placa ? formatarPlaca(v.placa) : "—", colunas: 1 },
     { rotulo: "Rota", valor: v.rota ?? "—", colunas: 1 },
     { rotulo: "Data de faturamento", valor: v.dataFaturamento ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(v.dataFaturamento) : "—", colunas: 1 },
   ];
-  const envioCD: Celula[] = [{ rotulo: "Transportadora", valor: v.transportadora ?? "—", colunas: 4 }];
   const emissao: Celula[] = [
     { rotulo: "Data/hora de emissão", valor: formatarDataHora(v.criadoEm), colunas: 2 },
     { rotulo: "Emitido por", valor: v.criadoPor.login, colunas: 1 },
-    { rotulo: "Status atual", valor: rotuloStatusVale[v.status], colunas: 1 },
+    { rotulo: "Status atual", valor: v.tipo === "OCORRENCIA" && v.ocorrencia === "FALTA" && v.status === "PENDENTE" ? "Em aberto" : rotuloStatusVale[v.status], colunas: 1 },
   ];
   const rodape: Celula[] = [
     { rotulo: "ID único do documento", valor: `${codigo} · ${v.id}`, colunas: 2 },
     { rotulo: "Situação", valor: situacao, colunas: 2 },
+  ];
+  const composicao: Celula[] = [
+    { rotulo: "Pallets bons", valor: formatarNumero(v.quantidadeBons), colunas: 2 },
+    { rotulo: "Pallets quebrados", valor: formatarNumero(v.quantidadeQuebrados), colunas: 2 },
   ];
 
   if (v.tipo === "FORNECEDOR") {
@@ -128,74 +146,72 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
     };
   }
 
-  const viaDestino = v.unidade?.tipo === "CROSS" ? "Via Ponto de Cross" : "Via CD Destino";
-  const base = {
-    codigo,
-    vias: [`Via CD ${v.cd.codigo} (emissor)`, viaDestino] as [string, string],
-    nomeAssinatura: null,
-  };
-  const partes: Celula[] = [
-    { rotulo: "CD emissor (credor)", valor: `${v.cd.codigo} - ${v.cd.nome}`, colunas: 2 },
-    { rotulo: v.tipo === "ENVIO" ? "Destino (devedor)" : "Devedor", valor: destinoTexto(v.unidade), colunas: 2 },
-  ];
-
   if (v.tipo === "ENVIO") {
+    const paraHub = !!v.unidade?.hub && v.quantidadeBons === 0;
     return {
-      ...base,
-      titulo: "VALE-PALLET DE ENVIO",
-      subtitulo: "Pallets PBR enviados para CD / Ponto de Cross",
-      linhas: [partes, v.unidade?.tipo === "CROSS" ? envioCross : envioCD, emissao, rodape],
-      rotuloQuantidade: "Quantidade de pallets PBR enviados",
-      destaque: null,
-      declaracao: `Os pallets PBR acima ficam sob custódia do destino e compõem o seu saldo devedor com o CD ${v.cd.codigo} até a conferência de retorno.`,
-      assinaturas: ["Expedição (CD emissor)", "Transportador"],
-    };
-  }
-  if (v.tipo === "OCORRENCIA") {
-    const r = v.retornoOrigem;
-    return {
-      ...base,
-      titulo: "VALE-OCORRÊNCIA · FALTA",
-      subtitulo: "Divergência física apurada na conferência de retorno",
+      codigo,
+      vias: [`Via ${v.cd.codigo} (remetente)`, `Via ${v.unidade?.codigo ?? "destino"} (destinatário)`],
+      nomeAssinatura: null,
+      titulo: paraHub ? "VALE DE PALLETS QUEBRADOS" : "VALE-PALLET DE ENVIO",
+      subtitulo: paraHub ? "Pallets quebrados enviados ao CD Hub (CDJC) para conserto" : "Transferência de pallets PBR entre unidades",
       linhas: [
-        partes,
         [
-          { rotulo: "Conferência de origem", valor: r ? numeroRetorno(r.numero) : "—", colunas: 2 },
-          { rotulo: "Total dos vales", valor: r ? String(r.totalVales) : "—", colunas: 1 },
-          { rotulo: "Contagem física", valor: r ? String(r.quantidadeFisica) : "—", colunas: 1 },
+          { rotulo: "Remetente", valor: unidadeTexto(v.cd), colunas: 2 },
+          { rotulo: "Destinatário", valor: unidadeTexto(v.unidade), colunas: 2 },
         ],
-        transporte,
+        composicao,
+        v.unidade?.tipo === "CROSS" ? envioCross : transporte,
         emissao,
         rodape,
       ],
-      rotuloQuantidade: "Quantidade de pallets em falta",
-      destaque: {
-        titulo: "OCORRÊNCIA DE DIVERGÊNCIA FÍSICA",
-        texto: "A quantidade física recebida foi menor que a soma dos vales devolvidos. A diferença permanece no saldo devedor do remetente.",
-      },
-      declaracao: `Os pallets em falta continuam devidos ao CD ${v.cd.codigo} e retornam ao saldo devedor do remetente até nova devolução.`,
-      assinaturas: ["Conferente (CD recebedor)", "Transportador"],
+      rotuloQuantidade: "Total de pallets PBR enviados",
+      destaque: null,
+      declaracao: `Os pallets acima saíram do estoque de ${v.cd.codigo} e permanecem em trânsito até a conferência física em ${v.unidade?.codigo ?? "destino"}. Divergências na conferência geram Vale de Ocorrência.`,
+      assinaturas: ["Expedição (remetente)", "Transportador"],
     };
   }
+
+  const c = v.conferenciaOrigem;
+  const falta = v.ocorrencia !== "SOBRA";
   return {
-    ...base,
-    titulo: "VALE DE AJUSTE · SALDO DEVEDOR",
-    subtitulo: "Inclusão manual de saldo devedor (administrador)",
-    linhas: [partes, emissao, rodape],
-    rotuloQuantidade: "Quantidade incluída no saldo devedor",
-    destaque: null,
-    declaracao: `Saldo devedor registrado manualmente com justificativa, devido ao CD ${v.cd.codigo} até a conferência de retorno.`,
-    assinaturas: ["Administrador responsável", "Responsável pela unidade devedora"],
+    codigo,
+    vias: [`Via ${v.cd.codigo} (remetente)`, `Via ${v.unidade?.codigo ?? "recebedor"} (recebedor)`],
+    nomeAssinatura: null,
+    titulo: falta ? "VALE DE OCORRÊNCIA · FALTA" : "VALE DE OCORRÊNCIA · SOBRA",
+    subtitulo: falta ? "Devolutivo ao remetente: divergência física apurada na conferência" : "Registro de pallets recebidos a mais na conferência",
+    linhas: [
+      [
+        { rotulo: "Remetente", valor: unidadeTexto(v.cd), colunas: 2 },
+        { rotulo: "Recebedor (conferente)", valor: unidadeTexto(v.unidade), colunas: 2 },
+      ],
+      [
+        { rotulo: "Conferência de origem", valor: c ? numeroConferencia(c.numero) : "—", colunas: 1 },
+        { rotulo: "Declarado nos vales", valor: c ? formatarNumero(c.totalDeclarado) : "—", colunas: 1 },
+        { rotulo: "Bons recebidos", valor: c ? formatarNumero(c.recebidoBons) : "—", colunas: 1 },
+        { rotulo: "Quebrados recebidos", valor: c ? formatarNumero(c.recebidoQuebrados) : "—", colunas: 1 },
+      ],
+      transporte,
+      emissao,
+      rodape,
+    ],
+    rotuloQuantidade: falta ? "Quantidade de pallets em falta" : "Quantidade de pallets em sobra",
+    destaque: falta
+      ? { titulo: "OCORRÊNCIA DE FALTA", texto: `A contagem física foi menor que a soma dos vales. A diferença fica em ocorrência no livro de ${v.cd.codigo} até ser localizada ou baixada como perda.` }
+      : { titulo: "OCORRÊNCIA DE SOBRA", texto: `A contagem física foi maior que a soma dos vales. O excedente entrou no estoque de ${v.unidade?.codigo ?? "recebedor"}.` },
+    declaracao: falta
+      ? `Vale devolutivo à unidade remetente ${v.cd.codigo} para apuração. Registrado com data, hora e número do vale, auditável pelas duas unidades.`
+      : "Sobra registrada com data, hora e número do vale, auditável pelas duas unidades.",
+    assinaturas: ["Conferente (recebedor)", "Transportador"],
   };
 }
 
 export const INCLUDE_VALE_DOC = {
-  cd: { select: { codigo: true, nome: true } },
+  cd: { select: { codigo: true, nome: true, tipo: true, hub: true } },
   fornecedor: { select: { nome: true, cnpj: true } },
-  unidade: { select: { codigo: true, nome: true, tipo: true } },
+  unidade: { select: { codigo: true, nome: true, tipo: true, hub: true } },
   criadoPor: { select: { login: true } },
   canceladoPor: { select: { login: true } },
   agenda: { select: { numero: true, dataPrevista: true } },
-  retorno: { select: { numero: true } },
-  retornoOrigem: { select: { numero: true, totalVales: true, quantidadeFisica: true } },
+  conferencia: { select: { numero: true } },
+  conferenciaOrigem: { select: { numero: true, totalDeclarado: true, recebidoBons: true, recebidoQuebrados: true } },
 } as const;

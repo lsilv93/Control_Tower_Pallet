@@ -9,12 +9,12 @@ import { requireUsuario } from "@/lib/auth";
 import { ehAdmin } from "@/lib/permissoes";
 import { temaAtual } from "@/lib/tema";
 
-export const metadata: Metadata = { title: "Selecionar CD" };
+export const metadata: Metadata = { title: "Selecionar Unidade" };
 export const dynamic = "force-dynamic";
 
 /**
- * Modal obrigatório de seleção do CD de operação (usuários com mais de um CD).
- * Com um único CD a seleção é automática e esta tela não aparece.
+ * Modal obrigatório de seleção da unidade de operação (CD ou Ponto de Cross) para quem
+ * tem visão global. Usuários regionais operam sempre na própria unidade.
  */
 export default async function SelecionarCDPage({ searchParams }: { searchParams: Promise<{ trocar?: string }> }) {
   const [u, tema, { trocar }] = await Promise.all([requireUsuario(), temaAtual(), searchParams]);
@@ -31,8 +31,8 @@ export default async function SelecionarCDPage({ searchParams }: { searchParams:
             <Building2 className="h-6 w-6" />
           </span>
           <div>
-            <h1 id="titulo-cd" className="text-[18px] font-semibold text-t1">Em qual CD você vai operar?</h1>
-            <p className="text-[12px] text-t3">Olá, {u.nome.split(" ")[0]}. Todas as operações desta sessão serão registradas no CD escolhido.</p>
+            <h1 id="titulo-cd" className="text-[18px] font-semibold text-t1">Em qual unidade você vai operar?</h1>
+            <p className="text-[12px] text-t3">Olá, {u.nome.split(" ")[0]}. Visão Nível Brasil: as operações desta sessão serão registradas na unidade escolhida.</p>
           </div>
         </div>
 
@@ -40,26 +40,26 @@ export default async function SelecionarCDPage({ searchParams }: { searchParams:
           <div className="poco-erro flex items-start gap-3 p-4 text-[12px] text-erro-claro">
             <TriangleAlert className="mt-0.5 h-4 w-4 flex-none" />
             <div>
-              <p className="font-semibold">Nenhum CD disponível para o seu usuário.</p>
+              <p className="font-semibold">Nenhuma unidade disponível para o seu usuário.</p>
               <p className="mt-1">
                 {ehAdmin(u) ? (
                   <>Cadastre um CD em <Link href="/cadastros/cds" className="font-semibold underline">Cadastros → CDs</Link>.</>
                 ) : (
-                  "Peça a um administrador para vincular um CD ao seu usuário."
+                  "Sua unidade está inativa. Procure um administrador."
                 )}
               </p>
             </div>
           </div>
         ) : (
-          <FormAcao acao={selecionarCD} botao="Operar neste CD" classeBotao="btn-primary w-full" limpar={false}>
-            <fieldset className="space-y-2">
-              <legend className="label">CD de operação *</legend>
+          <FormAcao acao={selecionarCD} botao="Operar nesta unidade" classeBotao="btn-primary w-full" limpar={false}>
+            <fieldset className="max-h-[50vh] space-y-2 overflow-y-auto">
+              <legend className="label">Unidade de operação *</legend>
               {u.cds.map((cd, i) => (
                 <label key={cd.id} className="poco flex cursor-pointer items-center gap-3 px-4 py-3 text-[13px] has-[:checked]:ring-1 has-[:checked]:ring-lima">
                   <input type="radio" name="cdId" value={cd.id} required defaultChecked={u.cd ? u.cd.id === cd.id : i === 0} />
                   <span className="min-w-0">
                     <span className="num font-semibold text-t1">{cd.codigo}</span> <span className="text-t2">· {cd.nome}</span>
-                    {cd.cidade && <span className="block text-[11px] text-t4">{cd.cidade}</span>}
+                    <span className="block text-[11px] text-t4">{cd.tipo === "CROSS" ? "Ponto de Cross" : cd.hub ? "CD Hub · Nível Brasil" : "CD"}</span>
                   </span>
                 </label>
               ))}
