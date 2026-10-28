@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, LogOut, TriangleAlert } from "lucide-react";
-import { sair, selecionarCD } from "@/actions/auth";
+import { Building2, TriangleAlert } from "lucide-react";
+import { selecionarCD } from "@/actions/auth";
+import { BotaoSair } from "@/components/BotaoSair";
 import { BotaoTema } from "@/components/BotaoTema";
 import { FormAcao } from "@/components/FormAcao";
 import { requireUsuario } from "@/lib/auth";
@@ -32,7 +33,7 @@ export default async function SelecionarCDPage({ searchParams }: { searchParams:
           </span>
           <div>
             <h1 id="titulo-cd" className="text-[18px] font-semibold text-t1">Em qual unidade você vai operar?</h1>
-            <p className="text-[12px] text-t3">Olá, {u.nome.split(" ")[0]}. Visão Nível Brasil: as operações desta sessão serão registradas na unidade escolhida.</p>
+            <p className="text-[12px] text-t3">Olá, {u.nome.split(" ")[0]}. Seu perfil tem acesso a todas as unidades: as operações desta sessão serão registradas na unidade escolhida.</p>
           </div>
         </div>
 
@@ -69,9 +70,7 @@ export default async function SelecionarCDPage({ searchParams }: { searchParams:
 
         <div className="mt-5 flex items-center justify-between">
           {u.cd ? <Link href="/" className="btn-secondary btn-sm">Voltar para {u.cd.codigo}</Link> : <span />}
-          <form action={sair}>
-            <button className="btn-secondary btn-sm"><LogOut className="h-3.5 w-3.5" /> Sair</button>
-          </form>
+          <div className="w-32"><BotaoSair variante="botao" /></div>
         </div>
       </div>
     </main>

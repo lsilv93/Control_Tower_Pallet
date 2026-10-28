@@ -8,7 +8,9 @@ export const somenteDigitos = (v: string) => v.replace(/\D/g, "");
  */
 export const normalizarCnpj = (v: string) => v.toUpperCase().replace(/[^0-9A-Z]/g, "");
 
-export function formatarCnpj(cnpj: string): string {
+/** CNPJ formatado (00.000.000/0000-00); vazio vira "—" (CNPJ é opcional nos cadastros). */
+export function formatarCnpj(cnpj: string | null | undefined): string {
+  if (!cnpj) return "—";
   const d = normalizarCnpj(cnpj);
   if (d.length !== 14) return cnpj;
   return d.replace(/^(.{2})(.{3})(.{3})(.{4})(.{2})$/, "$1.$2.$3/$4-$5");

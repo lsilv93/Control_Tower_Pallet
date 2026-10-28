@@ -66,7 +66,16 @@ export async function enviarPallets(_: Estado, form: FormData): Promise<Estado> 
       if (d.modo === "CROSS" && destino.tipo !== "CROSS") throw new ErroNegocio("Selecione um Ponto de Cross.");
       if (d.modo === "CD" && destino.tipo !== "CD") throw new ErroNegocio("Selecione um CD.");
       if (d.modo === "HUB" && !destino.hub) throw new ErroNegocio("O destino dos quebrados deve ser o CD Hub (CDJC).");
-      if (u.cd.tipo === "CROSS" && destino.tipo !== "CD") throw new ErroNegocio("Pontos de Cross enviam pallets somente para CDs.");
+      // Ponto de Cross x CD: só circulam pallets entre o Cross e os CDs vinculados a ele.
+      if (u.cd.tipo === "CROSS") {
+        if (destino.tipo !== "CD" || d.modo !== "CD") throw new ErroNegocio("O Ponto de Cross devolve pallets somente para um CD vinculado.");
+        const vinculo = await tx.crossCD.findUnique({ where: { crossId_cdId: { crossId: u.cd.id, cdId: destino.id } } });
+        if (!vinculo) throw new ErroNegocio(`${destino.codigo} não é um CD vinculado a ${u.cd.codigo}. Selecione um dos CDs atendidos por este Ponto de Cross.`);
+      }
+      if (destino.tipo === "CROSS") {
+        const vinculo = await tx.crossCD.findUnique({ where: { crossId_cdId: { crossId: destino.id, cdId: u.cd.id } } });
+        if (!vinculo) throw new ErroNegocio(`O Ponto de Cross ${destino.codigo} não está vinculado a ${u.cd.codigo}. Vincule-o em Cadastros → Pontos de Cross.`);
+      }
       const transportadora = await tx.transportadora.findUnique({ where: { id: d.transportadoraId } });
       if (!transportadora || !transportadora.ativo) throw new ErroNegocio("Transportador inválido ou inativo. Selecione um transportador cadastrado.");
 
@@ -134,7 +143,7 @@ const schemaConferencia = z.object({
   recebidoQuebrados: inteiro("a quantidade de Pallets Quebrados recebidos"),
   confirmarDivergencia: z.boolean(),
   placa: placaOpcional,
-  transportadora: opcional(200),
+  transportadoraId: opcional(60),
   observacao: opcional(500),
 });
 
@@ -155,13 +164,17 @@ export async function conferirRecebimento(_: Estado, form: FormData): Promise<Es
       recebidoQuebrados: form.get("recebidoQuebrados") || 0,
       confirmarDivergencia: form.get("confirmarDivergencia") === "1",
       placa: form.get("placa") ? String(form.get("placa")) : undefined,
-      transportadora: form.get("transportadora") ?? undefined,
+      transportadoraId: form.get("transportadoraId") ?? undefined,
       observacao: form.get("observacao") ?? undefined,
     });
 
     const r = await comContaBloqueada(async (tx) => {
       const remetente = await tx.centroDistribuicao.findUnique({ where: { id: d.remetenteId } });
       if (!remetente) throw new ErroNegocio("Unidade remetente inválida.");
+      // Transportadora (opcional) sempre escolhida no cadastro de transportadoras ativas.
+      const transp = d.transportadoraId ? await tx.transportadora.findUnique({ where: { id: d.transportadoraId } }) : null;
+      if (d.transportadoraId && (!transp || !transp.ativo)) throw new ErroNegocio("Transportadora inválida ou inativa. Selecione uma transportadora cadastrada.");
+      const nomeTransportadora = transp?.nome ?? null;
       const vales = await tx.valePallet.findMany({ where: { id: { in: d.valeIds } } });
       if (vales.length !== d.valeIds.length) throw new ErroNegocio("Um ou mais vales não foram encontrados.");
       for (const v of vales) {
@@ -192,7 +205,7 @@ export async function conferirRecebimento(_: Estado, form: FormData): Promise<Es
           recebidoQuebrados: d.recebidoQuebrados,
           diferenca,
           placa: d.placa,
-          transportadora: d.transportadora,
+          transportadora: nomeTransportadora,
           observacao: d.observacao,
           usuarioId: u.id,
         },
@@ -227,7 +240,7 @@ export async function conferirRecebimento(_: Estado, form: FormData): Promise<Es
         tipo: "OCORRENCIA" as const,
         cdId: remetente.id,
         unidadeId: u.cd.id,
-        transportadora: d.transportadora,
+        transportadora: nomeTransportadora,
         placa: d.placa,
         conferenciaOrigemId: conferencia.id,
         criadoPorId: u.id,

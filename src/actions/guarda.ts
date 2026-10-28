@@ -1,7 +1,7 @@
 import "server-only";
 import { requireUsuario, type UsuarioAtual, type UsuarioComCD } from "@/lib/auth";
 import { ErroNegocio } from "@/lib/conta";
-import { ehAdmin, ehMaster, tem, type Permissao } from "@/lib/permissoes";
+import { ehAdmin, ehMaster, ehUsuarioCross, tem, type Permissao } from "@/lib/permissoes";
 
 const semCD = () => new ErroNegocio("Selecione a unidade de operação antes de continuar (menu lateral → Trocar unidade).");
 
@@ -22,10 +22,11 @@ export async function exigirGlobal(...permissoes: Permissao[]): Promise<UsuarioA
   return u;
 }
 
-/** Qualquer usuário logado com unidade de operação (ex.: descarte). */
+/** Qualquer usuário de CD com unidade de operação (ex.: descarte); fora do escopo do Ponto de Cross. */
 export async function exigirUnidade(): Promise<UsuarioComCD> {
   const u = await requireUsuario();
   if (!u.cd) throw semCD();
+  if (ehUsuarioCross(u)) throw new ErroNegocio("Operação fora do escopo do usuário de Ponto de Cross.");
   return u as UsuarioComCD;
 }
 

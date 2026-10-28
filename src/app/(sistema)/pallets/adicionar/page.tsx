@@ -19,7 +19,7 @@ export default async function CompraPalletsPage() {
       />
       <SaldosEstoques cdId={u.cd.id} destaque={["VAZIOS"]} />
       <Painel titulo={<span className="flex items-center gap-3">Compra <Fluxo origem="COMPRA" destino="VAZIOS" /></span>}>
-        <FluxoCompra cnpjsCadastrados={fornecedores.map((f) => f.cnpj)} />
+        <FluxoCompra cnpjsCadastrados={fornecedores.flatMap((f) => (f.cnpj ? [f.cnpj] : []))} />
       </Painel>
       <div className="mt-6">
         <UltimasMovimentacoes cdId={u.cd.id} tipos={["COMPRA"]} titulo="Últimas compras" />

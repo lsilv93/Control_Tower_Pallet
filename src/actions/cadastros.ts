@@ -31,13 +31,39 @@ const cnpj = z
   .refine(cnpjValido, "CNPJ inválido.")
   .transform((v) => normalizarCnpj(v));
 
-/** Campos padronizados (obrigatórios) dos cadastros de Fornecedor, CD e Ponto de Cross. */
+/** Sigla: 2 a 20 caracteres, maiúscula e sem espaços (CD, Ponto de Cross e Fornecedor). */
+const sigla = z
+  .string({ message: "Informe a sigla." })
+  .trim()
+  .min(2, "Informe a sigla (mínimo 2 caracteres).")
+  .max(20, "A sigla deve ter no máximo 20 caracteres.")
+  .transform((v) => v.toUpperCase().replace(/\s+/g, ""));
+
+/**
+ * Campos dos cadastros de Fornecedor, CD e Ponto de Cross: só Sigla e Nome são
+ * obrigatórios; CNPJ, contato, telefone e e-mail são opcionais (validados se preenchidos).
+ */
 const camposPadrao = {
-  nome: z.string().trim().min(2, "Informe o nome.").max(200),
-  cnpj,
-  contato: z.string().trim().min(2, "Informe o contato responsável.").max(120),
-  telefone: z.string().trim().refine(telefoneValido, "Telefone inválido (informe DDD + número)."),
-  email: z.string().trim().max(160).refine(emailValido, "E-mail inválido."),
+  nome: z.string({ message: "Informe o nome." }).trim().min(2, "Informe o nome.").max(200),
+  cnpj: z
+    .string()
+    .optional()
+    .transform((v) => (v ? normalizarCnpj(v) : "") || null)
+    .refine((v) => !v || cnpjValido(v), "CNPJ inválido."),
+  contato: opcional(120),
+  telefone: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => v || null)
+    .refine((v) => !v || telefoneValido(v), "Telefone inválido (informe DDD + número)."),
+  email: z
+    .string()
+    .trim()
+    .max(160)
+    .optional()
+    .transform((v) => v || null)
+    .refine((v) => !v || emailValido(v), "E-mail inválido."),
 };
 
 /** Após salvar, volta para a listagem com a mensagem de confirmação no topo. */
@@ -80,7 +106,7 @@ export async function salvarTransportadora(_: Estado, form: FormData): Promise<E
 }
 
 // ---------------- Fornecedores (todos os usuários) ----------------
-const schemaFornecedor = z.object(camposPadrao);
+const schemaFornecedor = z.object({ sigla, ...camposPadrao });
 
 
 export async function salvarFornecedor(_: Estado, form: FormData): Promise<Estado> {
@@ -89,7 +115,9 @@ export async function salvarFornecedor(_: Estado, form: FormData): Promise<Estad
     const u = await exigir("cadastros");
     const id = lerId(form);
     const d = schemaFornecedor.parse(Object.fromEntries(form));
-    const duplicado = await prisma.fornecedor.findUnique({ where: { cnpj: d.cnpj } });
+    const siglaDup = await prisma.fornecedor.findUnique({ where: { sigla: d.sigla } });
+    if (siglaDup && siglaDup.id !== id) throw new ErroNegocio(`Já existe um fornecedor com a sigla ${d.sigla} (${siglaDup.nome}).`);
+    const duplicado = d.cnpj ? await prisma.fornecedor.findUnique({ where: { cnpj: d.cnpj } }) : null;
     if (duplicado && duplicado.id !== id) throw new ErroNegocio(`CNPJ já cadastrado para ${duplicado.nome}.`);
     const f = id ? await prisma.fornecedor.update({ where: { id }, data: d }) : await prisma.fornecedor.create({ data: d });
     await auditar(prisma, { acao: id ? "EDITAR_FORNECEDOR" : "CRIAR_FORNECEDOR", entidade: "Fornecedor", entidadeId: f.id, usuarioId: u.id, detalhes: d });
@@ -103,19 +131,14 @@ export async function salvarFornecedor(_: Estado, form: FormData): Promise<Estad
 // ---------------- CDs e Pontos de Cross ----------------
 const schemaCD = z.object({
   tipo: z.enum(["CD", "CROSS"]).default("CD"),
-  codigo: z
-    .string()
-    .trim()
-    .min(2, "Informe a sigla (ex.: CDJC, CDFT).")
-    .max(20)
-    .transform((v) => v.toUpperCase().replace(/\s+/g, "")),
+  codigo: sigla,
   ...camposPadrao,
-  cdRegionalId: z
-    .string()
-    .optional()
-    .transform((v) => v || null),
 });
 
+/**
+ * Cadastro de CD ou Ponto de Cross. O Ponto de Cross é vinculado a um ou mais CDs
+ * (multisseleção `cdIds`): só troca pallets com os CDs vinculados.
+ */
 export async function salvarCD(_: Estado, form: FormData): Promise<Estado> {
   let msg: string;
   let caminhoCD = "/cadastros/cds";
@@ -123,14 +146,16 @@ export async function salvarCD(_: Estado, form: FormData): Promise<Estado> {
     const admin = await exigir("cds");
     const id = lerId(form);
     const d = schemaCD.parse(Object.fromEntries(form));
+    const cdIds = [...new Set(form.getAll("cdIds").map(String).filter(Boolean))];
     caminhoCD = d.tipo === "CROSS" ? "/cadastros/cross" : "/cadastros/cds";
     const duplicado = await prisma.centroDistribuicao.findUnique({ where: { codigo: d.codigo } });
     if (duplicado && duplicado.id !== id) throw new ErroNegocio(`Já existe uma unidade com a sigla ${d.codigo}.`);
-    const cnpjDup = await prisma.centroDistribuicao.findUnique({ where: { cnpj: d.cnpj } });
+    const cnpjDup = d.cnpj ? await prisma.centroDistribuicao.findUnique({ where: { cnpj: d.cnpj } }) : null;
     if (cnpjDup && cnpjDup.id !== id) throw new ErroNegocio(`CNPJ já cadastrado para ${cnpjDup.codigo}.`);
     if (d.tipo === "CROSS") {
-      const regional = d.cdRegionalId ? await prisma.centroDistribuicao.findUnique({ where: { id: d.cdRegionalId } }) : null;
-      if (!regional || regional.tipo !== "CD") throw new ErroNegocio("Selecione o CD regional ao qual o Ponto de Cross pertence.");
+      if (cdIds.length === 0) throw new ErroNegocio("Selecione ao menos um CD atendido pelo Ponto de Cross.");
+      const validos = await prisma.centroDistribuicao.count({ where: { id: { in: cdIds }, tipo: "CD" } });
+      if (validos !== cdIds.length) throw new ErroNegocio("Um ou mais CDs selecionados são inválidos.");
     }
     if (id) {
       // O tipo (CD / Cross) não muda depois do cadastro: o histórico depende dele.
@@ -138,17 +163,16 @@ export async function salvarCD(_: Estado, form: FormData): Promise<Estado> {
       if (!atual) throw new ErroNegocio("Cadastro não encontrado.");
       if (atual.tipo !== d.tipo) throw new ErroNegocio("Não é possível transformar um CD em Ponto de Cross (ou o contrário).");
     }
-    const dados = {
-      tipo: d.tipo,
-      codigo: d.codigo,
-      nome: d.nome,
-      cnpj: d.cnpj,
-      contato: d.contato,
-      telefone: d.telefone,
-      email: d.email,
-      cdRegionalId: d.tipo === "CROSS" ? d.cdRegionalId : null,
-    };
-    const cd = id ? await prisma.centroDistribuicao.update({ where: { id }, data: dados }) : await prisma.centroDistribuicao.create({ data: dados });
+    const dados = { tipo: d.tipo, codigo: d.codigo, nome: d.nome, cnpj: d.cnpj, contato: d.contato, telefone: d.telefone, email: d.email };
+    const cd = await prisma.$transaction(async (tx) => {
+      const cd = id ? await tx.centroDistribuicao.update({ where: { id }, data: dados }) : await tx.centroDistribuicao.create({ data: dados });
+      if (d.tipo === "CROSS") {
+        await tx.crossCD.deleteMany({ where: { crossId: cd.id, cdId: { notIn: cdIds } } });
+        await tx.crossCD.createMany({ data: cdIds.map((cdId) => ({ crossId: cd.id, cdId })), skipDuplicates: true });
+      }
+      return cd;
+    });
+    const codigosCDs = d.tipo === "CROSS" ? (await prisma.centroDistribuicao.findMany({ where: { id: { in: cdIds } }, select: { codigo: true } })).map((c) => c.codigo) : [];
     const rotulo = d.tipo === "CROSS" ? "Ponto de Cross" : "CD";
     await auditar(prisma, {
       acao: `${id ? "EDITAR" : "CRIAR"}_${d.tipo === "CROSS" ? "PONTO_CROSS" : "CD"}`,
@@ -156,9 +180,9 @@ export async function salvarCD(_: Estado, form: FormData): Promise<Estado> {
       entidadeId: cd.id,
       usuarioId: admin.id,
       cdId: cd.id,
-      detalhes: dados,
+      detalhes: { ...dados, ...(d.tipo === "CROSS" ? { cdsAtendidos: codigosCDs } : {}) },
     });
-    msg = `${rotulo} ${cd.codigo} ${id ? "atualizado" : "cadastrado"}.`;
+    msg = `${rotulo} ${cd.codigo} ${id ? "atualizado" : "cadastrado"}${codigosCDs.length ? ` (atende: ${codigosCDs.join(", ")})` : ""}.`;
   } catch (e) {
     return tratarErro(e);
   }

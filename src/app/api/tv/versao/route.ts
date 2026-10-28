@@ -9,6 +9,6 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const usuario = await getUsuarioAtual();
   if (!usuario) return NextResponse.json({ erro: "Não autenticado" }, { status: 401 });
-  if (!usuario.global || (!tem(usuario, "tv") && !tem(usuario, "dashboard"))) return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
+  if (!usuario.visaoBrasil || (!tem(usuario, "tv") && !tem(usuario, "dashboard"))) return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
   return NextResponse.json({ versao: await versaoTV() }, { headers: { "Cache-Control": "no-store" } });
 }

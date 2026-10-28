@@ -55,7 +55,7 @@ function Quadro({ titulo, icone: Icone, total, children, className }: { titulo: 
  */
 export default async function TelaTV() {
   const u = await requireUsuario();
-  if (!u.global || (!tem(u, "tv") && !tem(u, "dashboard"))) redirect("/sem-acesso?modulo=tv");
+  if (!u.visaoBrasil || (!tem(u, "tv") && !tem(u, "dashboard"))) redirect("/sem-acesso?modulo=tv");
   const [d, versao] = await Promise.all([dadosTV(), versaoTV()]);
   const t = d.totais;
   const altura = "xl:h-[max(20rem,calc(100vh-24rem))]";

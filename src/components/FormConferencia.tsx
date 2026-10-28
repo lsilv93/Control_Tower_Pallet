@@ -28,7 +28,17 @@ const inteiro = (v: string) => (v === "" ? null : Math.max(0, Math.trunc(Number(
  * informa a contagem física de pallets bons e quebrados e, havendo divergência, confirma
  * a falta/sobra com justificativa — o servidor gera o Vale de Ocorrência.
  */
-export function FormConferencia({ remetentes, vales, remetenteInicial }: { remetentes: Unidade[]; vales: ValeConferencia[]; remetenteInicial?: string }) {
+export function FormConferencia({
+  remetentes,
+  vales,
+  transportadoras,
+  remetenteInicial,
+}: {
+  remetentes: Unidade[];
+  vales: ValeConferencia[];
+  transportadoras: { id: string; nome: string }[];
+  remetenteInicial?: string;
+}) {
   const { estado, enviando, aoEnviar } = useAcao(conferirRecebimento);
   const [remetenteId, setRemetenteId] = useState(remetentes.some((r) => r.id === remetenteInicial) ? remetenteInicial! : remetentes.length === 1 ? remetentes[0].id : "");
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -197,8 +207,13 @@ export function FormConferencia({ remetentes, vales, remetenteInicial }: { remet
         <div className="grid grid-cols-2 gap-4">
           <InputPlaca rotulo="Placa do veículo" />
           <div>
-            <label className="label" htmlFor="transportadora">Transportadora</label>
-            <input id="transportadora" name="transportadora" className="input" maxLength={200} />
+            <label className="label" htmlFor="transportadoraId">Transportadora</label>
+            <select id="transportadoraId" name="transportadoraId" className="input" defaultValue="">
+              <option value="">Não informada</option>
+              {transportadoras.map((t) => (
+                <option key={t.id} value={t.id}>{t.nome}</option>
+              ))}
+            </select>
           </div>
         </div>
         <div>

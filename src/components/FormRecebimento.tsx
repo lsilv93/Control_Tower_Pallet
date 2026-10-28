@@ -5,7 +5,6 @@ import clsx from "clsx";
 import { CircleCheck, FileX2, RotateCcw, ScanBarcode, UserPlus } from "lucide-react";
 import { identificarNfRecebimento, registrarRecebimentoFornecedor, type IdentificacaoNf } from "@/actions/fornecedor";
 import { normalizarChave } from "@/lib/nfe";
-import { CamposFornecedor } from "./CamposFornecedor";
 import { BotaoEnviar, Mensagem, useAcao } from "./FormAcao";
 import { InputPlaca } from "./InputPlaca";
 import { ModalFornecedor } from "./ModalFornecedor";
@@ -17,9 +16,19 @@ type NfOk = Extract<IdentificacaoNf, { ok: true }>;
  * - Com NF (padrão): foco no código de barras da NF-e; o leitor "digita" os 44
  *   dígitos (+ Enter) e o sistema extrai CNPJ e número da NF, busca o fornecedor e
  *   preenche os campos. Fornecedor não cadastrado abre o cadastro com o CNPJ.
- * - Sem Nota Fiscal: o código de barras some e o fornecedor é buscado pelo CNPJ.
+ * - Sem Nota Fiscal: o código de barras some e o fornecedor é escolhido na lista dos
+ *   fornecedores cadastrados e ativos.
+ * Transportadora: sempre escolhida na lista do cadastro (sem digitação livre).
  */
-export function FormRecebimento({ transportadoras, conferentePadrao }: { transportadoras: string[]; conferentePadrao: string }) {
+export function FormRecebimento({
+  transportadoras,
+  fornecedores,
+  conferentePadrao,
+}: {
+  transportadoras: { id: string; nome: string }[];
+  fornecedores: { id: string; sigla: string | null; nome: string }[];
+  conferentePadrao: string;
+}) {
   const [semNf, setSemNf] = useState(false);
   const [leitura, setLeitura] = useState("");
   const [nf, setNf] = useState<NfOk | null>(null);
@@ -177,8 +186,15 @@ export function FormRecebimento({ transportadoras, conferentePadrao }: { transpo
           <p className="poco-ouro px-4 py-3 text-[12px] text-ouro">
             Opção <strong>Sem Nota Fiscal</strong>: o vale será impresso com &quot;SEM NOTA FISCAL&quot; e uma observação de destaque.
           </p>
-          <div className="grid gap-4 md:grid-cols-2">
-            <CamposFornecedor />
+          <div className="md:w-1/2">
+            <label className="label" htmlFor="fornecedorId">Fornecedor *</label>
+            <select id="fornecedorId" name="fornecedorId" className="input" required defaultValue="">
+              <option value="" disabled>Selecione...</option>
+              {fornecedores.map((f) => (
+                <option key={f.id} value={f.id}>{f.sigla ? `${f.sigla} - ` : ""}{f.nome}</option>
+              ))}
+            </select>
+            {fornecedores.length === 0 && <p className="mt-1 text-[11px] text-erro">Nenhum fornecedor ativo cadastrado. Cadastre em Cadastros → Fornecedores.</p>}
           </div>
         </div>
       )}
@@ -196,13 +212,13 @@ export function FormRecebimento({ transportadoras, conferentePadrao }: { transpo
             <input id="conferente" name="conferente" className="input" required minLength={2} maxLength={120} defaultValue={conferentePadrao} />
           </div>
           <div>
-            <label className="label" htmlFor="transportadora">Transportadora *</label>
-            <input id="transportadora" name="transportadora" className="input" required maxLength={200} list="lista-transportadoras" autoComplete="off" />
-            <datalist id="lista-transportadoras">
+            <label className="label" htmlFor="transportadoraId">Transportadora *</label>
+            <select id="transportadoraId" name="transportadoraId" className="input" required defaultValue="">
+              <option value="" disabled>Selecione...</option>
               {transportadoras.map((t) => (
-                <option key={t} value={t} />
+                <option key={t.id} value={t.id}>{t.nome}</option>
               ))}
-            </datalist>
+            </select>
           </div>
           <InputPlaca obrigatorio />
           <div className="md:col-span-2 xl:col-span-4">

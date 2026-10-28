@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { registrarQuebra } from "@/actions/avarias";
 import { requireCD } from "@/lib/auth";
 import { obterSaldos } from "@/lib/conta";
-import { tem } from "@/lib/permissoes";
+import { ehUsuarioCross, tem } from "@/lib/permissoes";
 import { Fluxo, SaldosEstoques } from "./Contas";
 import { FormAcao } from "./FormAcao";
 import { FormDescarte } from "./FormDescarte";
@@ -31,14 +31,16 @@ const config = {
 
 export async function PaginaAvaria({ modo }: { modo: keyof typeof config }) {
   const u = await requireCD();
-  // Descarte: todos os usuários. Quebra: permissão "quebras". Reparo: permissão "reparo" e somente no Hub.
+  // Descarte: todos os usuários de CD (fora do escopo do Ponto de Cross). Quebra: permissão
+  // "quebras". Reparo: permissão "reparo" e somente no Hub.
+  if (modo === "descarte" && ehUsuarioCross(u)) redirect("/sem-acesso?modulo=cross");
   if (modo === "quebras" && !tem(u, "quebras")) redirect("/sem-acesso");
   if (modo === "recuperados" && (!tem(u, "reparo") || !u.cd.hub)) redirect("/sem-acesso?modulo=reparo");
   const c = config[modo];
   const abas = [
     ...(tem(u, "quebras") ? [{ href: "/avarias/quebras", rotulo: "Lançar Quebrado" }] : []),
     ...(u.cd.hub && tem(u, "reparo") ? [{ href: "/avarias/recuperados", rotulo: "Conserto / Reparo" }] : []),
-    { href: "/avarias/descarte", rotulo: "Descarte" },
+    ...(ehUsuarioCross(u) ? [] : [{ href: "/avarias/descarte", rotulo: "Descarte" }]),
   ];
   const saldos = await obterSaldos(u.cd.id);
 

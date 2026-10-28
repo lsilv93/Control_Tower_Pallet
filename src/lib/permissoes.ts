@@ -21,7 +21,11 @@ export const PERMISSOES = [
 export type Permissao = (typeof PERMISSOES)[number]["chave"];
 export const CHAVES_PERMISSAO = PERMISSOES.map((p) => p.chave) as Permissao[];
 
-/** Usuários de Ponto de Cross: só o painel, envio, recebimento/conferência e lançar quebrado. */
+/**
+ * Usuários de Ponto de Cross: exclusivamente o painel do próprio Cross, recebimento/
+ * conferência dos vales enviados pelos CDs, envio de retorno aos CDs vinculados e
+ * lançamento de quebrados.
+ */
 export const PERMISSOES_CROSS: readonly Permissao[] = ["dashboard", "envio", "recebimento", "quebras"];
 
 export type Perfil = "MASTER" | "ADMIN" | "OPERADOR";
@@ -39,8 +43,13 @@ export const ehMaster = (u: { perfil: Perfil }) => u.perfil === "MASTER";
 export const ehAdmin = (u: { perfil: Perfil }) => u.perfil === "MASTER" || u.perfil === "ADMIN";
 /** Usuário de Ponto de Cross (não administrador). */
 export const ehUsuarioCross = (u: ComAcesso) => !ehAdmin(u) && u.unidade?.tipo === "CROSS";
-/** Visão global (Nível Brasil): Master, Administrador e usuários do Hub CDJC. */
-export const temVisaoGlobal = (u: ComAcesso) => ehAdmin(u) || !!u.unidade?.hub;
+/**
+ * Acesso cruzado a várias unidades (operar em qualquer CD/Cross e ver os dados de todas):
+ * exclusivo de Master e Administrador. Usuários comuns ficam na própria unidade.
+ */
+export const temVisaoGlobal = (u: ComAcesso) => ehAdmin(u);
+/** Torre de Controle (TV) Nível Brasil, somente leitura: administradores e usuários do Hub CDJC. */
+export const temVisaoBrasil = (u: ComAcesso) => ehAdmin(u) || !!u.unidade?.hub;
 
 /**
  * MASTER e ADMIN têm todas as telas; OPERADOR só as permissões marcadas. Usuários de
@@ -72,5 +81,5 @@ const ROTA_INICIAL: Record<Permissao, string> = {
 
 export function primeiraRota(u: ComAcesso): string {
   const p = CHAVES_PERMISSAO.find((c) => c !== "tv" && c !== "fornecedor" && c !== "reparo" && tem(u, c));
-  return p ? ROTA_INICIAL[p] : "/avarias/descarte";
+  return p ? ROTA_INICIAL[p] : ehUsuarioCross(u) ? "/conta" : "/avarias/descarte";
 }

@@ -59,7 +59,7 @@ export function ModalFornecedor({
       <p className="poco-ouro mb-5 px-4 py-3 text-[12px] text-ouro">{aviso}</p>
       <form onSubmit={aoEnviar} className="space-y-4">
         <input type="hidden" name="origem" value={origem} />
-        <CamposPadrao prefixo="rapido" rotuloNome="Nome / Razão social" cnpjFixo={cnpj} />
+        <CamposPadrao prefixo="rapido" rotuloNome="Nome / Razão social" cnpjFixo={cnpj} campoSigla="sigla" exemploSigla="Ex.: AMBEV" />
         <Mensagem estado={estado} />
         <BotaoEnviar enviando={enviando} className="btn-primary w-full">
           Cadastrar e continuar

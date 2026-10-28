@@ -20,17 +20,21 @@ export function FormEnvio({
   transportadoras,
   saldo,
   origem,
+  retorno = false,
 }: {
   modo: "CROSS" | "CD" | "HUB";
   destinos: Unidade[];
   transportadoras: { id: string; nome: string }[];
   saldo: { vazios: number; quebrados: number };
   origem: string;
+  /** Ponto de Cross devolvendo pallets a um dos CDs vinculados. */
+  retorno?: boolean;
 }) {
   const [estado, executar, enviando] = useActionState(enviarPallets, null);
   const [dados, setDados] = useState<FormData | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [unidadeId, setUnidadeId] = useState(modo === "HUB" && destinos.length === 1 ? destinos[0].id : "");
+  // Destino único (Hub, ou Cross com um só CD vinculado) já vem selecionado; com mais de um, a escolha é obrigatória.
+  const [unidadeId, setUnidadeId] = useState((modo === "HUB" || retorno) && destinos.length === 1 ? destinos[0].id : "");
   const [bons, setBons] = useState("");
   const [quebrados, setQuebrados] = useState("");
 
@@ -66,7 +70,7 @@ export function FormEnvio({
       <form onSubmit={aoEnviar} className="space-y-4">
         <input type="hidden" name="modo" value={modo} />
         <div>
-          <label className="label" htmlFor="unidadeId">{tipoDestino} de destino *</label>
+          <label className="label" htmlFor="unidadeId">{retorno ? "CD que recebe a devolução *" : `${tipoDestino} de destino *`}</label>
           <select id="unidadeId" name="unidadeId" className="input" required value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)}>
             <option value="" disabled>Selecione...</option>
             {destinos.map((d) => (
@@ -121,7 +125,7 @@ export function FormEnvio({
         )}
         <Mensagem estado={estado} />
         <BotaoEnviar enviando={enviando} className="btn-primary w-full" textoEnviando="Enviando...">
-          <Send className="h-4 w-4" /> {modo === "HUB" ? "Enviar Pallets Quebrados ao CDJC" : "Gerar vale de envio"}
+          <Send className="h-4 w-4" /> {modo === "HUB" ? "Enviar Pallets Quebrados ao CDJC" : retorno ? "Gerar vale de retorno" : "Gerar vale de envio"}
         </BotaoEnviar>
       </form>
 

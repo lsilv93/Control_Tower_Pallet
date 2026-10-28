@@ -40,7 +40,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const intervalo = { inicio: periodo.inicio, fim: periodo.fim };
   const granularidade = granularidadePara(periodo.inicio, periodo.fim);
   // Pontos de Cross acompanhados: visão global vê todos; um CD regional vê os seus; um Cross vê a si mesmo.
-  const filtroCross = usuario.global ? {} : cd.tipo === "CROSS" ? { id: cd.id } : { cdRegionalId: cd.id };
+  const filtroCross = usuario.global ? {} : cd.tipo === "CROSS" ? { id: cd.id } : { cdsAtendidos: { some: { cdId: cd.id } } };
   const idsCross = (await prisma.centroDistribuicao.findMany({ where: { tipo: "CROSS", ativo: true, ...filtroCross }, select: { id: true } })).map((c) => c.id);
 
   const [saldos, fluxoPeriodo, porTipo, serie, saldoAntes, pendencias, vales, excluidos, transporte, conferencias, posicaoCross, transito, valesTodos] = await Promise.all([
@@ -87,7 +87,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         titulo={`Painel · ${tipoUnidade} ${cd.codigo}`}
         descricao={`${cd.nome} · Pallets PBR e Pallets Quebrados em tempo real, envios em trânsito, recebimentos a conferir e ocorrências.${usuario.global ? " Visão Nível Brasil disponível na Torre de Controle." : ""}`}
       >
-        {usuario.global && tem(usuario, "tv") && (
+        {usuario.visaoBrasil && tem(usuario, "tv") && (
           <Link href="/tv" className="btn-secondary" target="_blank">
             <MonitorPlay className="h-4 w-4" /> Torre de Controle (TV)
           </Link>

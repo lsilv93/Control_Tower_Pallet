@@ -3,7 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "./prisma";
-import { ehAdmin, ehMaster, tem, temVisaoGlobal, type Perfil, type Permissao } from "./permissoes";
+import { ehAdmin, ehMaster, ehUsuarioCross, tem, temVisaoBrasil, temVisaoGlobal, type Perfil, type Permissao } from "./permissoes";
 import { CD_COOKIE, SESSION_COOKIE, verifySession } from "./session";
 
 export type CDResumo = {
@@ -23,9 +23,11 @@ export type UsuarioAtual = {
   permissoes: string[];
   /** Unidade (CD ou Ponto de Cross) à qual o usuário pertence. */
   unidade: CDResumo;
-  /** Visão Nível Brasil: Master, Administrador e usuários do Hub CDJC. */
+  /** Acesso cruzado a todas as unidades: somente Master e Administrador. */
   global: boolean;
-  /** Unidades em que pode operar: todas (visão global) ou só a própria. */
+  /** TV Nível Brasil (somente leitura): administradores e usuários do Hub CDJC. */
+  visaoBrasil: boolean;
+  /** Unidades em que pode operar: todas (administradores) ou só a própria. */
   cds: CDResumo[];
   /** Unidade de operação da sessão (a própria; na visão global, a escolhida no modal). */
   cd: CDResumo | null;
@@ -51,7 +53,8 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioAtual | null> => {
   if (!usuario || !usuario.ativo) return null;
   const { ativo: unidadeAtiva, ...unidade } = usuario.unidade;
   const global = temVisaoGlobal({ perfil: usuario.perfil, unidade });
-  // Visão global: escolhe entre todas as unidades ativas. Regional: somente a própria (se ativa).
+  const visaoBrasil = temVisaoBrasil({ perfil: usuario.perfil, unidade });
+  // Administrador: escolhe entre todas as unidades ativas. Demais: somente a própria (se ativa).
   const cds = global
     ? await prisma.centroDistribuicao.findMany({ where: { ativo: true }, select: CAMPOS_UNIDADE, orderBy: [{ hub: "desc" }, { tipo: "asc" }, { codigo: "asc" }] })
     : unidadeAtiva
@@ -67,6 +70,7 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioAtual | null> => {
     permissoes: usuario.permissoes,
     unidade,
     global,
+    visaoBrasil,
     cds,
     cd,
   };
@@ -134,10 +138,10 @@ export async function requireMaster(): Promise<UsuarioAtual> {
   return usuario;
 }
 
-/** Visão Nível Brasil (TV / Torre de Controle). */
-export async function requireGlobal(): Promise<UsuarioComCD> {
+/** Tela fora do escopo do usuário de Ponto de Cross (ex.: descarte, ocorrências). */
+export async function requireNaoCross(): Promise<UsuarioComCD> {
   const usuario = await requireCD();
-  if (!usuario.global) redirect("/sem-acesso");
+  if (ehUsuarioCross(usuario)) redirect("/sem-acesso?modulo=cross");
   return usuario;
 }
 

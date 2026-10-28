@@ -28,7 +28,7 @@ export default async function FornecedoresPage({ searchParams }: { searchParams:
         <Painel titulo={editando ? `Editar ${editando.nome}` : "Novo fornecedor"}>
           <FormAcao key={editando?.id ?? "novo"} acao={salvarFornecedor} botao={editando ? "Salvar alterações" : "Cadastrar"} limpar={false}>
             {editando && <input type="hidden" name="id" value={editando.id} />}
-            <CamposPadrao valores={editando ?? undefined} rotuloNome="Nome / Razão social" />
+            <CamposPadrao valores={editando ?? undefined} campoSigla="sigla" exemploSigla="Ex.: AMBEV" rotuloNome="Nome / Razão social" />
             <RodapeForm editando={!!editando} caminho={CAMINHO} />
           </FormAcao>
         </Painel>
@@ -39,11 +39,12 @@ export default async function FornecedoresPage({ searchParams }: { searchParams:
             <Tabela>
               <table className="tabela">
                 <thead>
-                  <tr><th>Nome</th><th>CNPJ</th><th>Contato responsável</th><th>Telefone / e-mail</th><th className="text-right">Vales</th><th className="text-right">Compras</th><th>Situação</th><th /></tr>
+                  <tr><th>Sigla</th><th>Nome</th><th>CNPJ</th><th>Contato responsável</th><th>Telefone / e-mail</th><th className="text-right">Vales</th><th className="text-right">Compras</th><th>Situação</th><th /></tr>
                 </thead>
                 <tbody>
                   {lista.map((f) => (
                     <tr key={f.id} className={f.ativo ? undefined : "opacity-60"}>
+                      <td className="num font-semibold text-t1">{f.sigla ?? "—"}</td>
                       <td className="font-medium text-t1">{f.nome}</td>
                       <td className="num">{formatarCnpj(f.cnpj)}</td>
                       <td>{f.contato ?? "—"}</td>

@@ -18,7 +18,7 @@ export const metadata = { title: "Recebimento / Conferência" };
 export default async function RecebimentoPage({ searchParams }: { searchParams: Promise<{ ok?: string; de?: string }> }) {
   const u = await requirePermissao("recebimento");
   const { ok, de } = await searchParams;
-  const [pendentes, conferencias] = await Promise.all([
+  const [pendentes, conferencias, transportadoras] = await Promise.all([
     prisma.valePallet.findMany({
       where: { unidadeId: u.cd.id, tipo: "ENVIO", status: "PENDENTE" },
       include: { cd: { select: { id: true, codigo: true, nome: true, tipo: true, hub: true } } },
@@ -30,6 +30,7 @@ export default async function RecebimentoPage({ searchParams }: { searchParams: 
       orderBy: { criadoEm: "desc" },
       take: 15,
     }),
+    prisma.transportadora.findMany({ where: { ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
   ]);
 
   const remetentes = [...new Map(pendentes.map((v) => [v.cd.id, v.cd])).values()].sort((a, b) => a.codigo.localeCompare(b.codigo));
@@ -62,7 +63,7 @@ export default async function RecebimentoPage({ searchParams }: { searchParams: 
           {remetentes.length === 0 ? (
             <Vazio>Nenhum vale pendente de recebimento em {u.cd.codigo}.</Vazio>
           ) : (
-            <FormConferencia remetentes={remetentes} vales={vales} remetenteInicial={de} />
+            <FormConferencia remetentes={remetentes} vales={vales} transportadoras={transportadoras} remetenteInicial={de} />
           )}
         </Painel>
         <div className="space-y-6 lg:col-span-3">

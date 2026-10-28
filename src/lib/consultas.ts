@@ -117,7 +117,7 @@ export async function pendenciasPorFornecedor(cdId: string) {
 }
 
 export type LinhaUnidade = {
-  unidade: { id: string; codigo: string; nome: string; tipo: "CD" | "CROSS"; hub: boolean; cdRegionalId: string | null };
+  unidade: { id: string; codigo: string; nome: string; tipo: "CD" | "CROSS"; hub: boolean };
   vazios: number;
   quebrados: number;
   /** Enviados pela unidade, aguardando conferência no destino. */
@@ -137,7 +137,7 @@ export async function posicaoUnidades(ids?: string[]): Promise<LinhaUnidade[]> {
   const [unidades, estoques, aReceber] = await Promise.all([
     prisma.centroDistribuicao.findMany({
       where: { ativo: true, ...(ids ? { id: { in: ids } } : {}) },
-      select: { id: true, codigo: true, nome: true, tipo: true, hub: true, cdRegionalId: true },
+      select: { id: true, codigo: true, nome: true, tipo: true, hub: true },
       orderBy: [{ hub: "desc" }, { tipo: "asc" }, { codigo: "asc" }],
     }),
     estoquesPorUnidade(prisma, ids),

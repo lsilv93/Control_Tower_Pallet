@@ -45,8 +45,9 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
                 ))}
               </select>
               <p className="mt-1.5 text-[11px] text-t4">
-                Usuários regionais veem e operam somente a própria unidade. Administradores e usuários do Hub (CDJC) têm visão Nível Brasil.
-                Usuários de Ponto de Cross ficam limitados a painel, envio, recebimento/conferência e lançar quebrado.
+                Operadores pertencem a um único CD ou Ponto de Cross e veem e operam somente essa unidade. Somente Administrador e Master
+                têm acesso cruzado a todos os CDs e Pontos de Cross (a unidade marcada é a de origem). Usuários de Ponto de Cross ficam
+                limitados a painel, recebimento/conferência, retorno ao CD e lançar quebrado.
               </p>
             </div>
             <Campo
@@ -75,7 +76,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
                     <td className="num whitespace-nowrap text-[11px]">
                       <span className="font-semibold text-t1">{u.unidade.codigo}</span>{" "}
                       <span className="text-t4">{u.unidade.tipo === "CROSS" ? "Cross" : u.unidade.hub ? "Hub" : "CD"}</span>
-                      {(u.perfil !== "OPERADOR" || u.unidade.hub) && <span className="block text-lima">Nível Brasil</span>}
+                      {u.perfil !== "OPERADOR" && <span className="block text-lima">Todas as unidades</span>}
                     </td>
                     <td className="max-w-[16rem] whitespace-normal text-[11px] text-t3">
                       {u.perfil === "OPERADOR"

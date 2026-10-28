@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { Printer } from "lucide-react";
 import { FormResolverOcorrencia } from "@/components/FormResolverOcorrencia";
 import { Abas, Cabecalho, Indicador, Painel, StatusBadge, Tabela, Vazio } from "@/components/ui";
-import { requireCD } from "@/lib/auth";
+import { requireNaoCross } from "@/lib/auth";
 import { formatarDataHora } from "@/lib/datas";
 import { formatarNumero as n, numeroConferencia, numeroVale, rotuloResolucao, rotuloStatusVale } from "@/lib/formatos";
 import { ehAdmin } from "@/lib/permissoes";
@@ -20,7 +20,7 @@ type Filtro = keyof typeof FILTROS;
  * todas; administradores resolvem as faltas (localizada ou perda).
  */
 export default async function OcorrenciasPage({ searchParams }: { searchParams: Promise<{ f?: string; unidade?: string }> }) {
-  const u = await requireCD();
+  const u = await requireNaoCross();
   const sp = await searchParams;
   const filtro: Filtro = sp.f && sp.f in FILTROS ? (sp.f as Filtro) : "abertas";
   const escopoUnidade = u.global ? (sp.unidade && u.cds.some((c) => c.id === sp.unidade) ? sp.unidade : null) : u.cd.id;

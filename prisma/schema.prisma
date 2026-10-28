@@ -35,40 +35,40 @@ enum Conta {
   QUEBRADOS
   TRANSITO
   OCORRENCIA
-  ENVIADO    // transferido a outra unidade (baixa do trânsito na conferência)
-  RECEBIDO   // recebido de outra unidade
-  SOBRA      // recebido a mais que o declarado no vale
-  PERDA      // falta baixada como perda
-  DESCARTE   // descartados/destruídos (inclusive os usados no reparo)
-  AJUSTE     // inclusões e remoções manuais de administrador
-  COMPRA     // compra de pallets novos (NF-e)
+  ENVIADO // transferido a outra unidade (baixa do trânsito na conferência)
+  RECEBIDO // recebido de outra unidade
+  SOBRA // recebido a mais que o declarado no vale
+  PERDA // falta baixada como perda
+  DESCARTE // descartados/destruídos (inclusive os usados no reparo)
+  AJUSTE // inclusões e remoções manuais de administrador
+  COMPRA // compra de pallets novos (NF-e)
   FORNECEDOR // fornecedores (módulo Recebimento Pallet Fornecedor)
-  CARGA      // pallets carregados recebidos de fornecedores
+  CARGA // pallets carregados recebidos de fornecedores
 }
 
 enum TipoMovimentacao {
-  ENVIO                  // unidade origem: Vazios/Quebrados → Trânsito
-  BAIXA_TRANSITO         // unidade origem: Trânsito → Enviado (conferido no destino)
-  RECEBIMENTO            // unidade destino: Recebido → Vazios/Quebrados
-  FALTA                  // unidade origem: Trânsito → Ocorrência
-  SOBRA                  // unidade destino: Sobra → Vazios/Quebrados
-  OCORRENCIA_LOCALIZADA  // unidade origem: Ocorrência → Vazios/Quebrados
-  OCORRENCIA_PERDA       // unidade origem: Ocorrência → Perda
-  ESTORNO_ENVIO          // unidade origem: Trânsito → Vazios/Quebrados (vale excluído antes da conferência)
-  QUEBRA                 // Vazios → Quebrados
-  RECUPERADO             // Quebrados → Vazios (reparo no Hub)
-  CANIBALIZACAO          // Quebrados → Descarte (usados no reparo)
-  DESCARTE               // Vazios/Quebrados → Descarte
-  INCLUSAO_MANUAL        // Ajuste → Vazios/Quebrados (motivo)
-  REMOCAO_MANUAL         // Vazios/Quebrados → Ajuste
-  COMPRA                 // Compra → Vazios
+  ENVIO // unidade origem: Vazios/Quebrados → Trânsito
+  BAIXA_TRANSITO // unidade origem: Trânsito → Enviado (conferido no destino)
+  RECEBIMENTO // unidade destino: Recebido → Vazios/Quebrados
+  FALTA // unidade origem: Trânsito → Ocorrência
+  SOBRA // unidade destino: Sobra → Vazios/Quebrados
+  OCORRENCIA_LOCALIZADA // unidade origem: Ocorrência → Vazios/Quebrados
+  OCORRENCIA_PERDA // unidade origem: Ocorrência → Perda
+  ESTORNO_ENVIO // unidade origem: Trânsito → Vazios/Quebrados (vale excluído antes da conferência)
+  QUEBRA // Vazios → Quebrados
+  RECUPERADO // Quebrados → Vazios (reparo no Hub)
+  CANIBALIZACAO // Quebrados → Descarte (usados no reparo)
+  DESCARTE // Vazios/Quebrados → Descarte
+  INCLUSAO_MANUAL // Ajuste → Vazios/Quebrados (motivo)
+  REMOCAO_MANUAL // Vazios/Quebrados → Ajuste
+  COMPRA // Compra → Vazios
   RECEBIMENTO_FORNECEDOR // Fornecedor → Carga
-  DEVOLUCAO_FORNECEDOR   // Vazios → Fornecedor
-  ESTORNO_VALE           // Carga → Fornecedor
+  DEVOLUCAO_FORNECEDOR // Vazios → Fornecedor
+  ESTORNO_VALE // Carga → Fornecedor
 }
 
 enum TipoVale {
-  ENVIO      // transferência entre unidades (bons e/ou quebrados)
+  ENVIO // transferência entre unidades (bons e/ou quebrados)
   OCORRENCIA // falta ou sobra apurada na conferência
   FORNECEDOR // recebimento de fornecedor
 }
@@ -80,12 +80,12 @@ enum TipoOcorrencia {
 
 enum ResolucaoOcorrencia {
   LOCALIZADA // pallets localizados e devolvidos à unidade remetente
-  PERDA      // baixada como perda
+  PERDA // baixada como perda
 }
 
 enum StatusVale {
-  PENDENTE   // envio: em trânsito; ocorrência de falta: aberta; fornecedor: a devolver
-  AGENDADO   // fornecedor: retirada agendada
+  PENDENTE // envio: em trânsito; ocorrência de falta: aberta; fornecedor: a devolver
+  AGENDADO // fornecedor: retirada agendada
   FINALIZADO // envio: conferido; ocorrência: resolvida/registrada; fornecedor: baixado
   CANCELADO
 }
@@ -121,56 +121,70 @@ model Usuario {
   unidade          CentroDistribuicao @relation("UsuarioUnidade", fields: [unidadeId], references: [id])
   movimentacoes    Movimentacao[]
   conferencias     Conferencia[]
-  valesCriados     ValePallet[]      @relation("ValeCriadoPor")
-  valesCancelados  ValePallet[]      @relation("ValeCanceladoPor")
-  valesResolvidos  ValePallet[]      @relation("ValeResolvidoPor")
-  agendasCriadas   AgendaDevolucao[] @relation("AgendaCriadaPor")
-  agendasValidadas AgendaDevolucao[] @relation("AgendaValidadaPor")
+  valesCriados     ValePallet[]       @relation("ValeCriadoPor")
+  valesCancelados  ValePallet[]       @relation("ValeCanceladoPor")
+  valesResolvidos  ValePallet[]       @relation("ValeResolvidoPor")
+  agendasCriadas   AgendaDevolucao[]  @relation("AgendaCriadaPor")
+  agendasValidadas AgendaDevolucao[]  @relation("AgendaValidadaPor")
   auditorias       Auditoria[]
   compras          Compra[]
 
   @@index([unidadeId])
 }
 
-/// Unidade: CD (o Hub CDJC tem `hub = true`) ou Ponto de Cross (vinculado a um CD regional).
+/// Unidade: CD (o Hub CDJC tem `hub = true`) ou Ponto de Cross (vinculado a um ou mais CDs).
 model CentroDistribuicao {
-  id       String      @id @default(cuid())
-  codigo   String      @unique
-  nome     String
-  tipo     TipoUnidade @default(CD)
+  id                    String      @id @default(cuid())
+  codigo                String      @unique
+  nome                  String
+  tipo                  TipoUnidade @default(CD)
   /// CD Hub principal (CDJC): visão Nível Brasil, recebe quebrados das filiais e faz o conserto.
-  hub      Boolean     @default(false)
-  cnpj     String?     @unique
-  contato  String?
-  telefone String?
-  email    String?
-  /// Pontos de Cross: CD da região a que o Cross pertence.
-  cdRegionalId String?
+  hub                   Boolean     @default(false)
+  cnpj                  String?     @unique
+  contato               String?
+  telefone              String?
+  email                 String?
   /// Módulo "Recebimento Pallet Fornecedor" liberado para este CD (configuração do Master).
-  recebimentoFornecedor Boolean @default(false)
-  ativo    Boolean     @default(true)
-  criadoEm DateTime    @default(now())
+  recebimentoFornecedor Boolean     @default(false)
+  ativo                 Boolean     @default(true)
+  criadoEm              DateTime    @default(now())
 
-  cdRegional    CentroDistribuicao?  @relation("CrossRegional", fields: [cdRegionalId], references: [id])
-  crosses       CentroDistribuicao[] @relation("CrossRegional")
-  usuarios      Usuario[]            @relation("UsuarioUnidade")
-  movimentacoes        Movimentacao[]  @relation("MovimentacaoCD")
-  movimentacoesUnidade Movimentacao[]  @relation("MovimentacaoUnidade")
-  vales                ValePallet[]    @relation("ValeCD")
-  valesDestino         ValePallet[]    @relation("ValeUnidade")
-  conferencias         Conferencia[]   @relation("ConferenciaCD")
-  conferenciasRemetente Conferencia[]  @relation("ConferenciaRemetente")
-  agendas              AgendaDevolucao[]
-  compras              Compra[]
-  auditorias           Auditoria[]
+  /// Ponto de Cross: CDs que ele atende (um Cross pode atender vários CDs).
+  cdsAtendidos          CrossCD[]         @relation("CrossDoVinculo")
+  /// CD: Pontos de Cross vinculados a ele.
+  crossesAtendidos      CrossCD[]         @relation("CDDoVinculo")
+  usuarios              Usuario[]         @relation("UsuarioUnidade")
+  movimentacoes         Movimentacao[]    @relation("MovimentacaoCD")
+  movimentacoesUnidade  Movimentacao[]    @relation("MovimentacaoUnidade")
+  vales                 ValePallet[]      @relation("ValeCD")
+  valesDestino          ValePallet[]      @relation("ValeUnidade")
+  conferencias          Conferencia[]     @relation("ConferenciaCD")
+  conferenciasRemetente Conferencia[]     @relation("ConferenciaRemetente")
+  agendas               AgendaDevolucao[]
+  compras               Compra[]
+  auditorias            Auditoria[]
 
   @@index([tipo, ativo])
 }
 
+/// Vínculo N:N entre Ponto de Cross e os CDs que ele atende.
+model CrossCD {
+  crossId  String
+  cdId     String
+  criadoEm DateTime @default(now())
+
+  cross CentroDistribuicao @relation("CrossDoVinculo", fields: [crossId], references: [id], onDelete: Cascade)
+  cd    CentroDistribuicao @relation("CDDoVinculo", fields: [cdId], references: [id], onDelete: Cascade)
+
+  @@id([crossId, cdId])
+  @@index([cdId])
+}
+
 model Fornecedor {
   id       String   @id @default(cuid())
+  sigla    String?  @unique
   nome     String
-  cnpj     String   @unique // normalizado: 14 caracteres (numérico ou alfanumérico)
+  cnpj     String?  @unique // normalizado: 14 caracteres (numérico ou alfanumérico)
   contato  String?
   telefone String?
   email    String?
@@ -208,8 +222,8 @@ model Compra {
   usuarioId    String
 
   cd            CentroDistribuicao @relation(fields: [cdId], references: [id])
-  fornecedor    Fornecedor     @relation(fields: [fornecedorId], references: [id])
-  usuario       Usuario        @relation(fields: [usuarioId], references: [id])
+  fornecedor    Fornecedor         @relation(fields: [fornecedorId], references: [id])
+  usuario       Usuario            @relation(fields: [usuarioId], references: [id])
   movimentacoes Movimentacao[]
 }
 
@@ -217,42 +231,42 @@ model Compra {
 /// (unidadeId), em trânsito até a conferência. OCORRENCIA: falta/sobra apurada na
 /// conferência (cdId = remetente, unidadeId = recebedor). FORNECEDOR: módulo de fornecedores.
 model ValePallet {
-  id                  String     @id @default(cuid())
-  numero              Int        @unique @default(autoincrement())
-  tipo                TipoVale
-  ocorrencia          TipoOcorrencia?
+  id                     String               @id @default(cuid())
+  numero                 Int                  @unique @default(autoincrement())
+  tipo                   TipoVale
+  ocorrencia             TipoOcorrencia?
   /// Unidade emissora (envio) ou remetente (ocorrência) ou recebedora (fornecedor).
-  cdId                String
+  cdId                   String
   /// Unidade destino (envio) ou recebedora (ocorrência).
-  unidadeId           String?
-  fornecedorId        String?
-  quantidadeBons      Int        @default(0)
-  quantidadeQuebrados Int        @default(0)
+  unidadeId              String?
+  fornecedorId           String?
+  quantidadeBons         Int                  @default(0)
+  quantidadeQuebrados    Int                  @default(0)
   /// Total do vale (bons + quebrados).
-  quantidade          Int
-  transportadora      String?
-  placa               String?
-  rota                String?
-  dataFaturamento     DateTime?  @db.Date
-  notaFiscal          String?
-  serieNf             String?
-  chaveNfe            String?    @unique
-  semNotaFiscal       Boolean    @default(false)
-  conferente          String?
-  status              StatusVale @default(PENDENTE)
-  observacao          String?
-  criadoEm            DateTime   @default(now())
-  criadoPorId         String
-  agendaId            String?
-  finalizadoEm        DateTime?
+  quantidade             Int
+  transportadora         String?
+  placa                  String?
+  rota                   String?
+  dataFaturamento        DateTime?            @db.Date
+  notaFiscal             String?
+  serieNf                String?
+  chaveNfe               String?              @unique
+  semNotaFiscal          Boolean              @default(false)
+  conferente             String?
+  status                 StatusVale           @default(PENDENTE)
+  observacao             String?
+  criadoEm               DateTime             @default(now())
+  criadoPorId            String
+  agendaId               String?
+  finalizadoEm           DateTime?
   /// Conferência em que o vale de envio foi recebido.
-  conferenciaId       String?
+  conferenciaId          String?
   /// Conferência que gerou o vale de ocorrência.
-  conferenciaOrigemId String?
-  resolucao           ResolucaoOcorrencia?
-  resolvidoEm         DateTime?
-  resolvidoPorId      String?
-  observacaoResolucao String?
+  conferenciaOrigemId    String?
+  resolucao              ResolucaoOcorrencia?
+  resolvidoEm            DateTime?
+  resolvidoPorId         String?
+  observacaoResolucao    String?
   canceladoEm            DateTime?
   canceladoPorId         String?
   motivoCancelamento     MotivoCancelamento?
@@ -260,13 +274,13 @@ model ValePallet {
 
   cd                CentroDistribuicao  @relation("ValeCD", fields: [cdId], references: [id])
   unidade           CentroDistribuicao? @relation("ValeUnidade", fields: [unidadeId], references: [id])
-  fornecedor        Fornecedor?      @relation(fields: [fornecedorId], references: [id])
-  criadoPor         Usuario          @relation("ValeCriadoPor", fields: [criadoPorId], references: [id])
-  canceladoPor      Usuario?         @relation("ValeCanceladoPor", fields: [canceladoPorId], references: [id])
-  resolvidoPor      Usuario?         @relation("ValeResolvidoPor", fields: [resolvidoPorId], references: [id])
-  agenda            AgendaDevolucao? @relation(fields: [agendaId], references: [id])
-  conferencia       Conferencia?     @relation("ValesConferencia", fields: [conferenciaId], references: [id])
-  conferenciaOrigem Conferencia?     @relation("OcorrenciasConferencia", fields: [conferenciaOrigemId], references: [id])
+  fornecedor        Fornecedor?         @relation(fields: [fornecedorId], references: [id])
+  criadoPor         Usuario             @relation("ValeCriadoPor", fields: [criadoPorId], references: [id])
+  canceladoPor      Usuario?            @relation("ValeCanceladoPor", fields: [canceladoPorId], references: [id])
+  resolvidoPor      Usuario?            @relation("ValeResolvidoPor", fields: [resolvidoPorId], references: [id])
+  agenda            AgendaDevolucao?    @relation(fields: [agendaId], references: [id])
+  conferencia       Conferencia?        @relation("ValesConferencia", fields: [conferenciaId], references: [id])
+  conferenciaOrigem Conferencia?        @relation("OcorrenciasConferencia", fields: [conferenciaOrigemId], references: [id])
   movimentacoes     Movimentacao[]
 
   @@index([status])
@@ -294,11 +308,11 @@ model Conferencia {
   criadoEm          DateTime @default(now())
   usuarioId         String
 
-  cd          CentroDistribuicao @relation("ConferenciaCD", fields: [cdId], references: [id])
-  remetente   CentroDistribuicao @relation("ConferenciaRemetente", fields: [remetenteId], references: [id])
-  usuario     Usuario            @relation(fields: [usuarioId], references: [id])
-  vales       ValePallet[]       @relation("ValesConferencia")
-  ocorrencias ValePallet[]       @relation("OcorrenciasConferencia")
+  cd            CentroDistribuicao @relation("ConferenciaCD", fields: [cdId], references: [id])
+  remetente     CentroDistribuicao @relation("ConferenciaRemetente", fields: [remetenteId], references: [id])
+  usuario       Usuario            @relation(fields: [usuarioId], references: [id])
+  vales         ValePallet[]       @relation("ValesConferencia")
+  ocorrencias   ValePallet[]       @relation("OcorrenciasConferencia")
   movimentacoes Movimentacao[]
 
   @@index([cdId, criadoEm])
@@ -307,23 +321,23 @@ model Conferencia {
 
 /// Agenda de devolução a fornecedor (módulo Recebimento Pallet Fornecedor).
 model AgendaDevolucao {
-  id              String       @id @default(cuid())
-  numero          Int          @unique @default(autoincrement())
-  cdId            String
-  fornecedorId    String
-  dataPrevista    DateTime
-  status          StatusAgenda @default(ABERTA)
-  observacao      String?
-  criadoEm        DateTime     @default(now())
-  criadoPorId     String
-  validadoEm      DateTime?
-  validadoPorId   String?
-  canceladoEm     DateTime?
+  id            String       @id @default(cuid())
+  numero        Int          @unique @default(autoincrement())
+  cdId          String
+  fornecedorId  String
+  dataPrevista  DateTime
+  status        StatusAgenda @default(ABERTA)
+  observacao    String?
+  criadoEm      DateTime     @default(now())
+  criadoPorId   String
+  validadoEm    DateTime?
+  validadoPorId String?
+  canceladoEm   DateTime?
 
   cd            CentroDistribuicao @relation(fields: [cdId], references: [id])
-  fornecedor    Fornecedor     @relation(fields: [fornecedorId], references: [id])
-  criadoPor     Usuario        @relation("AgendaCriadaPor", fields: [criadoPorId], references: [id])
-  validadoPor   Usuario?       @relation("AgendaValidadaPor", fields: [validadoPorId], references: [id])
+  fornecedor    Fornecedor         @relation(fields: [fornecedorId], references: [id])
+  criadoPor     Usuario            @relation("AgendaCriadaPor", fields: [criadoPorId], references: [id])
+  validadoPor   Usuario?           @relation("AgendaValidadaPor", fields: [validadoPorId], references: [id])
   vales         ValePallet[]
   movimentacoes Movimentacao[]
 

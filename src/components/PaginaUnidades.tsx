@@ -1,5 +1,5 @@
 import { configurarUnidade, salvarCD } from "@/actions/cadastros";
-import { AcoesLinha, BannerOk, Campo, RodapeForm, Situacao } from "./Cadastro";
+import { AcoesLinha, BannerOk, RodapeForm, Situacao } from "./Cadastro";
 import { CamposPadrao } from "./CamposPadrao";
 import { FormAcao } from "./FormAcao";
 import { Painel, Tabela, Vazio } from "./ui";
@@ -14,9 +14,9 @@ const config = {
 } as const;
 
 /**
- * Cadastro de unidades com os campos padronizados (nome, CNPJ, contato responsável,
- * telefone e e-mail) + sigla. Pontos de Cross pertencem a um CD regional. O Master
- * configura o CD Hub e libera o módulo Recebimento Pallet Fornecedor por CD.
+ * Cadastro de unidades: Sigla e Nome obrigatórios; CNPJ, contato, telefone e e-mail
+ * opcionais. Pontos de Cross são vinculados a um ou mais CDs. O Master configura o CD
+ * Hub e libera o módulo Recebimento Pallet Fornecedor por CD.
  */
 export async function PaginaUnidades({ tipo, editar, ok }: { tipo: "CD" | "CROSS"; editar?: string; ok?: string }) {
   const u = await requirePermissaoGlobal("cds");
@@ -25,10 +25,13 @@ export async function PaginaUnidades({ tipo, editar, ok }: { tipo: "CD" | "CROSS
   const [lista, editando, cds] = await Promise.all([
     prisma.centroDistribuicao.findMany({
       where: { tipo },
-      include: { _count: { select: { usuarios: true, crosses: true } }, cdRegional: { select: { codigo: true } } },
+      include: {
+        _count: { select: { usuarios: true, crossesAtendidos: true } },
+        cdsAtendidos: { select: { cd: { select: { codigo: true } } }, orderBy: { cd: { codigo: "asc" } } },
+      },
       orderBy: [{ ativo: "desc" }, { hub: "desc" }, { codigo: "asc" }],
     }),
-    editar ? prisma.centroDistribuicao.findFirst({ where: { id: editar, tipo } }) : null,
+    editar ? prisma.centroDistribuicao.findFirst({ where: { id: editar, tipo }, include: { cdsAtendidos: { select: { cdId: true } } } }) : null,
     tipo === "CROSS" ? prisma.centroDistribuicao.findMany({ where: { tipo: "CD", ativo: true }, select: { id: true, codigo: true, nome: true }, orderBy: { codigo: "asc" } }) : [],
   ]);
 
@@ -41,16 +44,29 @@ export async function PaginaUnidades({ tipo, editar, ok }: { tipo: "CD" | "CROSS
             <FormAcao key={editando?.id ?? "novo"} acao={salvarCD} botao={editando ? "Salvar alterações" : "Cadastrar"} limpar={false}>
               {editando && <input type="hidden" name="id" value={editando.id} />}
               <input type="hidden" name="tipo" value={tipo} />
-              <Campo nome="codigo" rotulo="Sigla" valor={editando?.codigo} obrigatorio maxLength={20} className="uppercase" placeholder={tipo === "CD" ? "Ex.: CDFT" : "Ex.: XRJ01"} />
-              <CamposPadrao valores={editando ?? undefined} rotuloNome={tipo === "CD" ? "Nome do CD" : "Nome do Ponto de Cross"} />
+              <CamposPadrao
+                valores={editando ? { ...editando, sigla: editando.codigo } : undefined}
+                campoSigla="codigo"
+                exemploSigla={tipo === "CD" ? "Ex.: CDFT" : "Ex.: XRJ01"}
+                rotuloNome={tipo === "CD" ? "Nome do CD" : "Nome do Ponto de Cross"}
+              />
               {tipo === "CROSS" && (
-                <div>
-                  <label className="label" htmlFor="cdRegionalId">CD regional *</label>
-                  <select id="cdRegionalId" name="cdRegionalId" className="input" required defaultValue={editando?.cdRegionalId ?? ""}>
-                    <option value="" disabled>Selecione...</option>
-                    {cds.map((cd) => <option key={cd.id} value={cd.id}>{cd.codigo} - {cd.nome}</option>)}
-                  </select>
-                </div>
+                <fieldset className="poco p-4" data-testid="cds-atendidos">
+                  <legend className="label !mb-2">CDs atendidos * <span className="normal-case tracking-normal text-t4">(marque um ou mais)</span></legend>
+                  {cds.length === 0 ? (
+                    <p className="text-[11px] text-erro">Cadastre um CD antes de cadastrar o Ponto de Cross.</p>
+                  ) : (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {cds.map((cd) => (
+                        <label key={cd.id} className="flex cursor-pointer items-center gap-2 text-[12px] text-t2">
+                          <input type="checkbox" name="cdIds" value={cd.id} defaultChecked={editando?.cdsAtendidos.some((v) => v.cdId === cd.id) ?? cds.length === 1} />
+                          <span><span className="num font-semibold">{cd.codigo}</span> · {cd.nome}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-2 text-[11px] text-t4">O Cross recebe envios e devolve pallets somente aos CDs marcados.</p>
+                </fieldset>
               )}
               <p className="text-[11px] text-t4">
                 {tipo === "CD"
@@ -91,7 +107,7 @@ export async function PaginaUnidades({ tipo, editar, ok }: { tipo: "CD" | "CROSS
                 <thead>
                   <tr>
                     <th>Sigla</th><th>Nome / CNPJ</th><th>Contato responsável</th>
-                    {tipo === "CROSS" ? <th>CD regional</th> : <th>Módulos</th>}
+                    {tipo === "CROSS" ? <th>CDs atendidos</th> : <th>Módulos</th>}
                     <th className="text-right">Usuários</th><th>Situação</th><th />
                   </tr>
                 </thead>
@@ -108,12 +124,12 @@ export async function PaginaUnidades({ tipo, editar, ok }: { tipo: "CD" | "CROSS
                         <p className="text-[11px] text-t4">{[x.telefone, x.email].filter(Boolean).join(" · ")}</p>
                       </td>
                       {tipo === "CROSS" ? (
-                        <td className="num">{x.cdRegional?.codigo ?? "—"}</td>
+                        <td className="num">{x.cdsAtendidos.map((v) => v.cd.codigo).join(", ") || "—"}</td>
                       ) : (
                         <td className="space-x-1 whitespace-nowrap">
                           {x.hub && <span className="pill text-lima bg-lima/10">Hub</span>}
                           {x.recebimentoFornecedor ? <span className="pill text-t2 bg-t2/10">Fornecedor</span> : !x.hub && <span className="text-t4">—</span>}
-                          {x._count.crosses > 0 && <span className="text-[11px] text-t4">{x._count.crosses} Cross</span>}
+                          {x._count.crossesAtendidos > 0 && <span className="text-[11px] text-t4">{x._count.crossesAtendidos} Cross</span>}
                         </td>
                       )}
                       <td className="num text-right">{x._count.usuarios}</td>

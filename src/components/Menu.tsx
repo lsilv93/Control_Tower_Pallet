@@ -22,7 +22,6 @@ import {
   Hammer,
   KeyRound,
   LayoutDashboard,
-  LogOut,
   Menu as MenuIcon,
   PackagePlus,
   Plus,
@@ -35,8 +34,8 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { sair } from "@/actions/auth";
-import { ehAdmin, ehMaster, ROTULO_PERFIL, tem, type Perfil, type Permissao, type UnidadeAcesso } from "@/lib/permissoes";
+import { ehAdmin, ehMaster, ehUsuarioCross, ROTULO_PERFIL, tem, type Perfil, type Permissao, type UnidadeAcesso } from "@/lib/permissoes";
+import { BotaoSair } from "./BotaoSair";
 import { BotaoTema, type Tema } from "./BotaoTema";
 
 type Item = {
@@ -45,8 +44,8 @@ type Item = {
   icone: typeof Boxes;
   permissao?: Permissao;
   somente?: "admin" | "master";
-  /** hub: só no CD Hub; fornecedor: módulo liberado na unidade; global: visão Nível Brasil. */
-  requer?: "hub" | "fornecedor" | "global";
+  /** hub: só no CD Hub; fornecedor: módulo liberado na unidade; brasil: TV Nível Brasil; naoCross: fora do escopo do usuário de Cross. */
+  requer?: "hub" | "fornecedor" | "brasil" | "naoCross";
 };
 
 const grupos: { titulo: string; itens: Item[] }[] = [
@@ -54,7 +53,7 @@ const grupos: { titulo: string; itens: Item[] }[] = [
     titulo: "",
     itens: [
       { href: "/", rotulo: "Painel", icone: LayoutDashboard, permissao: "dashboard" },
-      { href: "/tv", rotulo: "Torre de Controle (TV)", icone: MonitorPlay, permissao: "tv", requer: "global" },
+      { href: "/tv", rotulo: "Torre de Controle (TV)", icone: MonitorPlay, permissao: "tv", requer: "brasil" },
     ],
   },
   {
@@ -62,7 +61,7 @@ const grupos: { titulo: string; itens: Item[] }[] = [
     itens: [
       { href: "/envio", rotulo: "Envio de Pallets", icone: ArrowUpFromLine, permissao: "envio" },
       { href: "/recebimento", rotulo: "Recebimento / Conferência", icone: ClipboardCheck, permissao: "recebimento" },
-      { href: "/ocorrencias", rotulo: "Ocorrências", icone: TriangleAlert },
+      { href: "/ocorrencias", rotulo: "Ocorrências", icone: TriangleAlert, requer: "naoCross" },
     ],
   },
   {
@@ -70,7 +69,7 @@ const grupos: { titulo: string; itens: Item[] }[] = [
     itens: [
       { href: "/avarias/quebras", rotulo: "Lançar Quebrado", icone: Hammer, permissao: "quebras" },
       { href: "/avarias/recuperados", rotulo: "Conserto / Reparo", icone: Recycle, permissao: "reparo", requer: "hub" },
-      { href: "/avarias/descarte", rotulo: "Descarte", icone: Trash2 },
+      { href: "/avarias/descarte", rotulo: "Descarte", icone: Trash2, requer: "naoCross" },
     ],
   },
   {
@@ -104,7 +103,7 @@ const grupos: { titulo: string; itens: Item[] }[] = [
   },
 ];
 
-type UsuarioMenu = { nome: string; login: string; perfil: Perfil; permissoes: string[]; unidade: UnidadeAcesso; global: boolean };
+type UsuarioMenu = { nome: string; login: string; perfil: Perfil; permissoes: string[]; unidade: UnidadeAcesso; global: boolean; visaoBrasil: boolean };
 type CDMenu = { codigo: string; nome: string; tipo: "CD" | "CROSS"; hub: boolean; recebimentoFornecedor: boolean };
 
 function visivel(i: Item, u: UsuarioMenu, cd: CDMenu | null) {
@@ -113,7 +112,8 @@ function visivel(i: Item, u: UsuarioMenu, cd: CDMenu | null) {
   if (i.permissao && !tem(u, i.permissao)) return false;
   if (i.requer === "hub" && !cd?.hub) return false;
   if (i.requer === "fornecedor" && !cd?.recebimentoFornecedor) return false;
-  if (i.requer === "global" && !u.global) return false;
+  if (i.requer === "brasil" && !u.visaoBrasil) return false;
+  if (i.requer === "naoCross" && ehUsuarioCross(u)) return false;
   return true;
 }
 
@@ -229,31 +229,18 @@ export function Menu({
                 {usuario.login} · {ROTULO_PERFIL[usuario.perfil]}
               </p>
               <p className="mt-0.5 text-[10px] text-t4" data-testid="escopo-usuario">
-                {usuario.global ? "Visão Nível Brasil" : "Visão regional"}
+                {usuario.global ? "Acesso a todas as unidades" : usuario.unidade.tipo === "CROSS" ? "Ponto de Cross" : "Visão da unidade"}
               </p>
             </div>
-            <form action={sair} className="mt-3">
-              <button className="btn-secondary w-full">
-                <LogOut className="h-4 w-4" /> Sair
-              </button>
-            </form>
+            <div className="mt-3">
+              <BotaoSair variante="botao" />
+            </div>
           </div>
         </div>
       </aside>
 
       {aberto && <div className="fixed inset-0 z-30 bg-[#000814]/60 lg:hidden" onClick={() => setAberto(false)} />}
     </>
-  );
-}
-
-/** Botão Sair (ícone), sempre visível no topo do menu e no cabeçalho do celular. */
-function BotaoSair() {
-  return (
-    <form action={sair}>
-      <button type="submit" className="btn-icone hover:!text-erro" aria-label="Sair do sistema" title="Sair do sistema">
-        <LogOut className="h-5 w-5" />
-      </button>
-    </form>
   );
 }
 

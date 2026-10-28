@@ -10,11 +10,12 @@ Sistema web da **Torre de Controle Nível Brasil** de pallets PBR: estoque de pa
 
 ### Unidades, usuários e visão
 
-- **Unidades:** **CDs** e **Pontos de Cross**, todos com estoque próprio de pallets **bons** e **quebrados**. O **CD Hub (CDJC)** recebe os quebrados das filiais, faz o conserto e devolve pallets bons. Cada Ponto de Cross pertence a um **CD regional**.
+- **Unidades:** **CDs** e **Pontos de Cross**, todos com estoque próprio de **Pallets PBR** e **Pallets Quebrados**. O **CD Hub (CDJC)** recebe os quebrados das filiais, faz o conserto e devolve Pallets PBR. Cada Ponto de Cross é vinculado a **um ou mais CDs** (tabela `CrossCD`, N:N) e só troca pallets com os CDs vinculados.
 - **Cada usuário pertence a exatamente uma unidade.**
-  - **Visão regional:** vê e opera somente a própria unidade (fixa, com cadeado no menu).
-  - **Visão Nível Brasil:** Master, Administrador e usuários do Hub. Escolhem a unidade de operação no modal *"Em qual unidade você vai operar?"* e podem trocá-la no menu (*Trocar unidade*).
-  - **Usuários de Ponto de Cross:** só Painel, Envio, Recebimento/Conferência, Lançar Quebrado, Ocorrências e Descarte.
+  - **Operadores:** pertencem a 1 CD ou 1 Ponto de Cross e veem e operam somente essa unidade (fixa, com cadeado no menu).
+  - **Master e Administrador:** únicos com acesso cruzado a todos os CDs e Pontos de Cross. Escolhem a unidade de operação no modal *"Em qual unidade você vai operar?"* e podem trocá-la no menu (*Trocar unidade*).
+  - **Usuários do Hub (CDJC):** operam somente o CDJC; têm acesso de leitura à TV Nível Brasil.
+  - **Usuários de Ponto de Cross:** exclusivamente o painel do próprio Cross, recebimento/conferência dos vales enviados pelos CDs, **retorno ao CD** (escolhendo na lista qual CD vinculado recebe a devolução) e lançar quebrado.
 - A unidade escolhida fica num cookie **revalidado no servidor a cada requisição**. Vales, PDFs e ocorrências só são visíveis às duas unidades envolvidas, ou a quem tem visão global.
 
 ### Telas
@@ -31,7 +32,7 @@ Sistema web da **Torre de Controle Nível Brasil** de pallets PBR: estoque de pa
 | Recebimento Pallet Fornecedor | `/fornecedor/entrada`, `/vales`, `/agendas` | **Desligado por padrão**: o Master libera por CD em *Cadastros → CDs → Editar → Configurações do Master*. Inclui NF-e/Sem NF, Vale-Pallet de Fornecedor (VP-), agendas e baixa. |
 | Consulta / Excluir Vale | `/vales/consulta`, `/vales/excluir` | Consulta dos vales da unidade (todos, na visão global). A exclusão de um envio ainda não conferido devolve os pallets do trânsito ao estoque de origem. |
 | Compra de Pallets | `/pallets/adicionar` | Leitura da NF-e (visão global); Compra → Vazios. |
-| Cadastros | `/cadastros/*` | Fornecedor, CD e Ponto de Cross com campos obrigatórios padronizados: **nome, CNPJ** (máscara e validação), **contato responsável, telefone** (máscara) e **e-mail**. CD e Cross também têm sigla; o Cross tem CD regional. Usuários têm unidade obrigatória. |
+| Cadastros | `/cadastros/*` | Fornecedor, CD e Ponto de Cross: **só Sigla e Nome são obrigatórios**. CNPJ (máscara e validação), contato responsável, telefone (máscara) e e-mail são opcionais e só validados se preenchidos. O Ponto de Cross marca **um ou mais CDs atendidos**. Usuários têm unidade obrigatória. |
 | Auditoria / Relatórios | `/auditoria`, `/relatorios` | Log imutável (filtro por unidade; *Todas as unidades* na visão global) e Excel completo: movimentações, vales, conferências, posição por unidade, auditoria. |
 
 ### Conta corrente em partida dobrada (um livro por unidade)
@@ -51,6 +52,10 @@ Cada movimentação tem conta de origem e de destino com a mesma quantidade, no 
 A migração `20261027120000_torre_controle_reset_total` **apaga todas as tabelas e dados** e recria o schema limpo. Em seguida o seed cria o **CD Hub CDJC** e o usuário MASTER (`SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD`, padrão `admin` / `Admin`). Os saldos começam zerados e entram por *Ajuste de Saldo → Inclusão manual* (motivo Inventário).
 
 A migração `20261028120000_zerar_dados_para_testes` zera de novo **todos os dados** (cadastros, usuários, vales e movimentações) para o início dos testes, mantendo o schema e os gatilhos de imutabilidade. O seed recria o CDJC e o MASTER.
+
+**Listas de seleção:** transportadora, CD, Ponto de Cross e fornecedor são sempre escolhidos em listas suspensas carregadas com os registros cadastrados e ativos (sem digitação livre). O servidor revalida cada escolha.
+
+**Sair:** apaga os cookies de sessão e de unidade antes de qualquer outra etapa, revoga o token no servidor, limpa o armazenamento do navegador e recarrega a tela de login (o botão Voltar não reexibe telas protegidas).
 
 A migração `20261028150000_usuario_admin_master` garante o usuário MASTER **`Admin` / senha `Admin`** (o login não diferencia maiúsculas). Ela cria o usuário ou redefine a senha uma única vez. Troque a senha em *Minha Senha* depois do primeiro acesso.
 

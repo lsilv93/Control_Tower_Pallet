@@ -14,17 +14,17 @@ async function main() {
   }
   const hub = await prisma.centroDistribuicao.findFirstOrThrow({ where: { hub: true } });
 
-  const unidade = (codigo, nome, cnpj, tipo, cdRegionalId = null) =>
+  const unidade = (codigo, nome, cnpj, tipo, cdsAtendidos = []) =>
     prisma.centroDistribuicao.upsert({
       where: { codigo },
       update: {},
-      create: { codigo, nome, cnpj, tipo, cdRegionalId, contato: "Gerente da unidade", telefone: "(11) 4000-0000", email: `${codigo.toLowerCase()}@exemplo.com.br` },
+      create: { codigo, nome, cnpj, tipo, cdsAtendidos: { create: cdsAtendidos.map((cdId) => ({ cdId })) }, contato: "Gerente da unidade", telefone: "(11) 4000-0000", email: `${codigo.toLowerCase()}@exemplo.com.br` },
     });
   const cdsp = await unidade("CDSP", "CD São Paulo", "11444777000161", "CD");
   const cdrj = await unidade("CDRJ", "CD Rio de Janeiro", "19131243000197", "CD");
-  await unidade("XCPS", "Cross Campinas", "04252011000110", "CROSS", cdsp.id);
-  await unidade("XSJC", "Cross São José dos Campos", "07526557000100", "CROSS", hub.id);
-  await unidade("XNIT", "Cross Niterói", "60746948000112", "CROSS", cdrj.id);
+  await unidade("XCPS", "Cross Campinas", "04252011000110", "CROSS", [cdsp.id, hub.id]);
+  await unidade("XSJC", "Cross São José dos Campos", "07526557000100", "CROSS", [hub.id]);
+  await unidade("XNIT", "Cross Niterói", "60746948000112", "CROSS", [cdrj.id]);
 
   for (const [nome, cnpj] of [
     ["Transportes Rápido", "45997418000153"],

@@ -9,11 +9,10 @@ export const metadata = { title: "Recebimento Pallet Fornecedor" };
 
 export default async function EntradaFornecedorPage() {
   const usuario = await requireModuloFornecedor();
-  const transportadoras = await prisma.transportadora.findMany({
-    where: { ativo: true },
-    select: { id: true, nome: true },
-    orderBy: { nome: "asc" },
-  });
+  const [transportadoras, fornecedores] = await Promise.all([
+    prisma.transportadora.findMany({ where: { ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
+    prisma.fornecedor.findMany({ where: { ativo: true }, select: { id: true, sigla: true, nome: true }, orderBy: { nome: "asc" } }),
+  ]);
 
   return (
     <>
@@ -23,7 +22,7 @@ export default async function EntradaFornecedorPage() {
       />
       <SaldosEstoques cdId={usuario.cd.id} />
       <Painel titulo="Recebimento pallet fornecedor">
-        <FormRecebimento transportadoras={transportadoras.map((t) => t.nome)} conferentePadrao={usuario.nome} />
+        <FormRecebimento transportadoras={transportadoras} fornecedores={fornecedores} conferentePadrao={usuario.nome} />
       </Painel>
       <div className="mt-6">
         <UltimasMovimentacoes cdId={usuario.cd.id} tipos={["RECEBIMENTO_FORNECEDOR"]} titulo="Últimos recebimentos de fornecedor" />

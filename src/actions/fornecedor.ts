@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireUsuario } from "@/lib/auth";
 import { exigirGlobal, exigirModuloFornecedor } from "./guarda";
 import { auditar, comContaBloqueada, ErroNegocio, lancar } from "@/lib/conta";
 import { prisma } from "@/lib/prisma";
@@ -13,28 +12,20 @@ import { cnpjValido, emailValido, formatarCnpj, normalizarCnpj, telefoneValido, 
 import { lerChaveNFe } from "@/lib/nfe";
 import { sucesso, tratarErro, type Estado } from "./estado";
 
-export type BuscaFornecedor =
-  | { status: "ok"; cnpj: string; nome: string }
-  | { status: "inativo"; cnpj: string; nome: string }
-  | { status: "nao_encontrado"; cnpj: string }
-  | { status: "invalido" };
-
-/** Localiza o fornecedor pelo CNPJ (usado para liberar/preencher o nome na entrada). */
-export async function buscarFornecedorPorCnpj(valor: string): Promise<BuscaFornecedor> {
-  await requireUsuario();
-  if (!cnpjValido(valor)) return { status: "invalido" };
-  const cnpj = normalizarCnpj(valor);
-  const f = await prisma.fornecedor.findUnique({ where: { cnpj }, select: { nome: true, ativo: true } });
-  if (!f) return { status: "nao_encontrado", cnpj };
-  return { status: f.ativo ? "ok" : "inativo", cnpj, nome: f.nome };
-}
-
+const vazioNulo = (v: string | undefined) => (v ?? "").trim() || null;
+// Cadastro rápido (aberto pela NF-e): o CNPJ vem da nota; Sigla e Nome obrigatórios, o resto opcional.
 const schemaCadastro = z.object({
   cnpj: z.string().refine(cnpjValido, "CNPJ inválido."),
-  nome: z.string().trim().min(2, "Informe o nome do fornecedor.").max(200),
-  contato: z.string().trim().min(2, "Informe o contato responsável.").max(120),
-  telefone: z.string().trim().refine(telefoneValido, "Telefone inválido (informe DDD + número)."),
-  email: z.string().trim().max(160).refine(emailValido, "E-mail inválido."),
+  sigla: z
+    .string({ message: "Informe a sigla." })
+    .trim()
+    .min(2, "Informe a sigla (mínimo 2 caracteres).")
+    .max(20)
+    .transform((v) => v.toUpperCase().replace(/\s+/g, "")),
+  nome: z.string({ message: "Informe o nome do fornecedor." }).trim().min(2, "Informe o nome do fornecedor.").max(200),
+  contato: z.string().max(120).optional().transform(vazioNulo),
+  telefone: z.string().optional().transform(vazioNulo).refine((v) => !v || telefoneValido(v), "Telefone inválido (informe DDD + número)."),
+  email: z.string().max(160).optional().transform(vazioNulo).refine((v) => !v || emailValido(v), "E-mail inválido."),
 });
 
 
@@ -48,6 +39,8 @@ export async function cadastrarFornecedorRapido(_: Estado, form: FormData): Prom
     const d = schemaCadastro.parse(Object.fromEntries(form));
     const cnpj = normalizarCnpj(d.cnpj);
     if (await prisma.fornecedor.findUnique({ where: { cnpj } })) throw new ErroNegocio("Fornecedor já cadastrado.");
+    const siglaDup = await prisma.fornecedor.findUnique({ where: { sigla: d.sigla } });
+    if (siglaDup) throw new ErroNegocio(`Já existe um fornecedor com a sigla ${d.sigla} (${siglaDup.nome}).`);
     const f = await prisma.fornecedor.create({ data: { ...d, cnpj } });
     await auditar(prisma, {
       acao: "CRIAR_FORNECEDOR",
@@ -111,7 +104,7 @@ export async function identificarNfRecebimento(leitura: string): Promise<Identif
 }
 
 const operacionais = {
-  transportadora: z.string().trim().min(2, "Informe a transportadora.").max(200),
+  transportadoraId: z.string({ message: "Selecione a transportadora." }).min(1, "Selecione a transportadora."),
   placa: z.string().refine(placaValida, "Placa inválida (use ABC-1234 ou ABC1D23)."),
   quantidade: z.coerce.number({ message: "Informe a quantidade." }).int("Quantidade deve ser inteira.").positive("Quantidade deve ser maior que zero."),
   conferente: z.string().trim().min(2, "Informe o conferente.").max(120),
@@ -121,7 +114,7 @@ const operacionais = {
 const schema = z.discriminatedUnion("modo", [
   // Com NF: CNPJ, número e série vêm SEMPRE da chave (parse no servidor, não confia no navegador).
   z.object({ modo: z.literal("NF"), chave: z.string().min(1, "Leia o código de barras da NF-e."), ...operacionais }),
-  z.object({ modo: z.literal("SEM_NF"), cnpj: z.string().refine(cnpjValido, "CNPJ inválido."), ...operacionais }),
+  z.object({ modo: z.literal("SEM_NF"), fornecedorId: z.string({ message: "Selecione o fornecedor." }).min(1, "Selecione o fornecedor."), ...operacionais }),
 ], { message: "Selecione se o recebimento tem ou não nota fiscal." });
 
 export async function registrarRecebimentoFornecedor(_: Estado, form: FormData): Promise<Estado> {
@@ -130,13 +123,17 @@ export async function registrarRecebimentoFornecedor(_: Estado, form: FormData):
     const usuario = await exigirModuloFornecedor();
     const d = schema.parse(Object.fromEntries(form));
     const nfe = d.modo === "NF" ? lerChaveNFe(d.chave) : null;
-    const cnpj = nfe ? nfe.cnpj : normalizarCnpj(d.modo === "SEM_NF" ? d.cnpj : "");
     const rotulo = nfe ? `NF ${nfe.numero}` : "SEM NOTA FISCAL";
 
     valeId = await comContaBloqueada(async (tx) => {
-      // O fornecedor vem sempre do cadastro (o nome não é digitado na entrada).
-      const fornecedor = await tx.fornecedor.findUnique({ where: { cnpj } });
-      if (!fornecedor) throw new ErroNegocio("CNPJ não cadastrado. Cadastre o fornecedor antes de gerar o vale.");
+      // Fornecedor e transportadora vêm sempre do cadastro (nada é digitado livremente):
+      // com NF, pelo CNPJ emitente da chave; sem NF, pela lista de fornecedores ativos.
+      const fornecedor = nfe
+        ? await tx.fornecedor.findUnique({ where: { cnpj: nfe.cnpj } })
+        : await tx.fornecedor.findUnique({ where: { id: d.modo === "SEM_NF" ? d.fornecedorId : "" } });
+      if (!fornecedor) throw new ErroNegocio(nfe ? "CNPJ não cadastrado. Cadastre o fornecedor antes de gerar o vale." : "Fornecedor não encontrado. Selecione um fornecedor cadastrado.");
+      const transportadora = await tx.transportadora.findUnique({ where: { id: d.transportadoraId } });
+      if (!transportadora || !transportadora.ativo) throw new ErroNegocio("Transportadora inválida ou inativa. Selecione uma transportadora cadastrada.");
       if (!fornecedor.ativo) throw new ErroNegocio(`O fornecedor ${fornecedor.nome} está inativo. Reative-o em Cadastros.`);
       if (nfe && (await tx.valePallet.findUnique({ where: { chaveNfe: nfe.chave }, select: { id: true } }))) {
         throw new ErroNegocio("Esta NF já foi recebida e possui vale-pallet.");
@@ -146,7 +143,7 @@ export async function registrarRecebimentoFornecedor(_: Estado, form: FormData):
           tipo: "FORNECEDOR",
           cdId: usuario.cd.id,
           fornecedorId: fornecedor.id,
-          transportadora: d.transportadora,
+          transportadora: transportadora.nome,
           placa: normalizarPlaca(d.placa),
           notaFiscal: nfe?.numero ?? null,
           serieNf: nfe?.serie ?? null,
@@ -185,7 +182,7 @@ export async function registrarRecebimentoFornecedor(_: Estado, form: FormData):
         cdId: usuario.cd.id,
         fornecedorId: fornecedor.id,
         valeId: vale.id,
-        observacao: `${rotulo} - ${d.transportadora} - ${normalizarPlaca(d.placa)}`,
+        observacao: `${rotulo} - ${transportadora.nome} - ${normalizarPlaca(d.placa)}`,
       });
       return vale.id;
     });

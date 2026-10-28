@@ -41,7 +41,7 @@ export type ValeDoc = {
   resolucao: ResolucaoOcorrencia | null;
   resolvidoEm: Date | null;
   cd: UnidadeDoc;
-  fornecedor: { nome: string; cnpj: string } | null;
+  fornecedor: { nome: string; cnpj: string | null } | null;
   unidade: UnidadeDoc | null;
   criadoPor: { login: string };
   canceladoPor: { login: string } | null;
