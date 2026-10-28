@@ -66,7 +66,7 @@ A migração `20261028150000_usuario_admin_master` garante o usuário MASTER **`
    - **Não** cadastre na Vercel o `DATABASE_URL` de exemplo do `.env.example` (ele aponta para `localhost`).
 3. **Adicione as variáveis de ambiente** em *Settings → Environment Variables*:
    - `AUTH_SECRET`: um valor aleatório longo (gere com `openssl rand -base64 32`). **Obrigatória.**
-   - `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD` (opcionais): login e senha do primeiro administrador. O padrão é `admin` / `admin123`.
+   - `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD` (opcionais): login e senha do primeiro administrador. O padrão é `admin` / `Admin`.
 4. **Faça o deploy.** O `build` roda automaticamente:
    `prisma generate → prisma migrate deploy → prisma db seed → next build` (script `scripts/build.mjs`).
    Ou seja, cria as tabelas e o usuário administrador (só se o banco ainda não tiver nenhum usuário).
@@ -84,7 +84,7 @@ Pré-requisitos: Node.js 20+ e PostgreSQL.
 cp .env.example .env            # ajuste DATABASE_URL, DATABASE_URL_UNPOOLED e AUTH_SECRET
 npm install
 npx prisma migrate deploy       # cria as tabelas
-npm run db:seed                 # cria o admin (admin / admin123)
+npm run db:seed                 # cria o admin (admin / Admin)
 npm run db:demo                 # (opcional) dados de demonstração
 npm run dev                     # http://localhost:3000
 ```
