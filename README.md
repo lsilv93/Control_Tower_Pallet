@@ -49,7 +49,7 @@ Cada movimentação tem conta de origem e de destino com a mesma quantidade, no 
 
 ### Reset total (27/10/2026)
 
-A migração `20261027120000_torre_controle_reset_total` **apaga todas as tabelas e dados** e recria o schema limpo. Em seguida o seed cria o **CD Hub CDJC** e o usuário MASTER (`SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD`, padrão `admin` / `Admin`). Os saldos começam zerados e entram por *Ajuste de Saldo → Inclusão manual* (motivo Inventário).
+A migração `20261027120000_torre_controle_reset_total` **apaga todas as tabelas e dados** e recria o schema limpo. Em seguida o seed cria o **CD Hub CDJC** e o usuário MASTER (`SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD`, padrão `admin` / `admin123`). Os saldos começam zerados e entram por *Ajuste de Saldo → Inclusão manual* (motivo Inventário).
 
 A migração `20261028120000_zerar_dados_para_testes` zera de novo **todos os dados** (cadastros, usuários, vales e movimentações) para o início dos testes, mantendo o schema e os gatilhos de imutabilidade. O seed recria o CDJC e o MASTER.
 
@@ -57,7 +57,7 @@ A migração `20261028120000_zerar_dados_para_testes` zera de novo **todos os da
 
 **Sair:** apaga os cookies de sessão e de unidade antes de qualquer outra etapa, revoga o token no servidor, limpa o armazenamento do navegador e recarrega a tela de login (o botão Voltar não reexibe telas protegidas).
 
-A migração `20261028150000_usuario_admin_master` garante o usuário MASTER **`Admin` / senha `Admin`** (o login não diferencia maiúsculas). Ela cria o usuário ou redefine a senha uma única vez. Troque a senha em *Minha Senha* depois do primeiro acesso.
+A migração `20261029120000_reset_senha_admin` redefine o usuário MASTER **`admin` / senha `admin123`** (o login não diferencia maiúsculas). Ela cria o usuário ou redefine a senha, reativa e garante o perfil MASTER, uma única vez. Troque a senha em *Minha Senha* depois do primeiro acesso.
 
 **Nomenclatura nas telas:** o estoque disponível aparece como **Pallets PBR** e o avariado como **Pallets Quebrados** (no banco, as contas continuam `VAZIOS` e `QUEBRADOS`).
 
@@ -71,7 +71,7 @@ A migração `20261028150000_usuario_admin_master` garante o usuário MASTER **`
    - **Não** cadastre na Vercel o `DATABASE_URL` de exemplo do `.env.example` (ele aponta para `localhost`).
 3. **Adicione as variáveis de ambiente** em *Settings → Environment Variables*:
    - `AUTH_SECRET`: um valor aleatório longo (gere com `openssl rand -base64 32`). **Obrigatória.**
-   - `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD` (opcionais): login e senha do primeiro administrador. O padrão é `admin` / `Admin`.
+   - `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD` (opcionais): login e senha do primeiro administrador. O padrão é `admin` / `admin123`.
 4. **Faça o deploy.** O `build` roda automaticamente:
    `prisma generate → prisma migrate deploy → prisma db seed → next build` (script `scripts/build.mjs`).
    Ou seja, cria as tabelas e o usuário administrador (só se o banco ainda não tiver nenhum usuário).
@@ -89,7 +89,7 @@ Pré-requisitos: Node.js 20+ e PostgreSQL.
 cp .env.example .env            # ajuste DATABASE_URL, DATABASE_URL_UNPOOLED e AUTH_SECRET
 npm install
 npx prisma migrate deploy       # cria as tabelas
-npm run db:seed                 # cria o admin (admin / Admin)
+npm run db:seed                 # cria o admin (admin / admin123)
 npm run db:demo                 # (opcional) dados de demonstração
 npm run dev                     # http://localhost:3000
 ```

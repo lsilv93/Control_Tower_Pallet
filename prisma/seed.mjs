@@ -32,7 +32,7 @@ async function main() {
   }
   if (!hub) hub = await prisma.centroDistribuicao.findFirstOrThrow({ where: { tipo: "CD" }, orderBy: { criadoEm: "asc" } });
   const login = (process.env.SEED_ADMIN_LOGIN || "admin").toLowerCase();
-  const senha = process.env.SEED_ADMIN_PASSWORD || "Admin";
+  const senha = process.env.SEED_ADMIN_PASSWORD || "admin123";
   const admin = await prisma.usuario.create({
     data: {
       nome: "Administrador",
