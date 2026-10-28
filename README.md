@@ -48,9 +48,11 @@ Cada movimentação tem conta de origem e de destino com a mesma quantidade, no 
 
 ### Reset total (27/10/2026)
 
-A migração `20261027120000_torre_controle_reset_total` **apaga todas as tabelas e dados** e recria o schema limpo. Em seguida o seed cria o **CD Hub CDJC** e o usuário MASTER (`SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD`, padrão `admin` / `admin123`). Os saldos começam zerados e entram por *Ajuste de Saldo → Inclusão manual* (motivo Inventário).
+A migração `20261027120000_torre_controle_reset_total` **apaga todas as tabelas e dados** e recria o schema limpo. Em seguida o seed cria o **CD Hub CDJC** e o usuário MASTER (`SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD`, padrão `admin` / `Admin`). Os saldos começam zerados e entram por *Ajuste de Saldo → Inclusão manual* (motivo Inventário).
 
 A migração `20261028120000_zerar_dados_para_testes` zera de novo **todos os dados** (cadastros, usuários, vales e movimentações) para o início dos testes, mantendo o schema e os gatilhos de imutabilidade. O seed recria o CDJC e o MASTER.
+
+A migração `20261028150000_usuario_admin_master` garante o usuário MASTER **`Admin` / senha `Admin`** (o login não diferencia maiúsculas). Ela cria o usuário ou redefine a senha uma única vez. Troque a senha em *Minha Senha* depois do primeiro acesso.
 
 **Nomenclatura nas telas:** o estoque disponível aparece como **Pallets PBR** e o avariado como **Pallets Quebrados** (no banco, as contas continuam `VAZIOS` e `QUEBRADOS`).
 
