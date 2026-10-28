@@ -68,8 +68,8 @@ export function FormReparo({ saldoQuebrados }: { saldoQuebrados: number }) {
       </div>
       {r > 0 && !erro && (
         <div className="poco space-y-1 px-4 py-3 text-[12px] text-t2">
-          <p>Quebrados: <strong className="num text-t1">−{r + u}</strong> (saldo final {saldoQuebrados - r - u})</p>
-          <p>Vazios: <strong className="num text-lima">+{r}</strong></p>
+          <p>Pallets Quebrados: <strong className="num text-t1">−{r + u}</strong> (saldo final {saldoQuebrados - r - u})</p>
+          <p>Pallets PBR: <strong className="num text-lima">+{r}</strong></p>
           {u > 0 && <p>Descartados/destruídos: <strong className="num text-erro">+{u}</strong></p>}
         </div>
       )}

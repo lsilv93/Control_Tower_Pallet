@@ -50,6 +50,12 @@ Cada movimentação tem conta de origem e de destino com a mesma quantidade, no 
 
 A migração `20261027120000_torre_controle_reset_total` **apaga todas as tabelas e dados** e recria o schema limpo. Em seguida o seed cria o **CD Hub CDJC** e o usuário MASTER (`SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD`, padrão `admin` / `admin123`). Os saldos começam zerados e entram por *Ajuste de Saldo → Inclusão manual* (motivo Inventário).
 
+A migração `20261028120000_zerar_dados_para_testes` zera de novo **todos os dados** (cadastros, usuários, vales e movimentações) para o início dos testes, mantendo o schema e os gatilhos de imutabilidade. O seed recria o CDJC e o MASTER.
+
+**Nomenclatura nas telas:** o estoque disponível aparece como **Pallets PBR** e o avariado como **Pallets Quebrados** (no banco, as contas continuam `VAZIOS` e `QUEBRADOS`).
+
+**Celular:** layout responsivo, com abas e filtros numa linha com rolagem lateral, cards em duas colunas e menu lateral rolável. Foi testado em iPhone (390 px) e Android (360 px), sem rolagem horizontal.
+
 ## Deploy na Vercel (passo a passo)
 
 1. **Importe o repositório** em [vercel.com/new](https://vercel.com/new). A Vercel detecta Next.js sozinha.

@@ -118,7 +118,7 @@ export function GraficoFluxo({
 
       {saldoInicial !== null && largura > 0 && (
         <>
-          <p className="label mb-1 mt-4">Saldo total dos estoques físicos (Vazios + Quebrados) ao fim de cada período</p>
+          <p className="label mb-1 mt-4">Saldo total dos estoques físicos (Pallets PBR + Pallets Quebrados) ao fim de cada período</p>
           <svg width={W} height={H2} role="img" aria-label="Saldo total ao longo do período">
             {[baseS, baseS + escS.topo / 2, baseS + escS.topo].map((t) => (
               <g key={t}>

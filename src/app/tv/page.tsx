@@ -81,21 +81,21 @@ export default async function TelaTV() {
       </header>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <Kpi rotulo="Pallets bons · Brasil" valor={t.bons} detalhe="todos os CDs e Cross" cor="text-lima" icone={Boxes} grande />
-        <Kpi rotulo="Pallets quebrados · Brasil" valor={t.quebrados} detalhe={d.hub ? `${n(d.hub.quebrados)} no Hub ${d.hub.unidade.codigo}` : "sem Hub cadastrado"} cor="text-ouro" icone={Hammer} grande />
-        <Kpi rotulo="Quebrados em trânsito ao Hub" valor={t.transitoHubQuebrados} detalhe={`${t.valesHub} vale(s) a conferir no CDJC`} cor="text-t1" icone={Truck} />
+        <Kpi rotulo="Pallets PBR · Brasil" valor={t.bons} detalhe="todos os CDs e Cross" cor="text-lima" icone={Boxes} grande />
+        <Kpi rotulo="Pallets Quebrados · Brasil" valor={t.quebrados} detalhe={d.hub ? `${n(d.hub.quebrados)} no Hub ${d.hub.unidade.codigo}` : "sem Hub cadastrado"} cor="text-ouro" icone={Hammer} grande />
+        <Kpi rotulo="Pallets Quebrados em trânsito ao Hub" valor={t.transitoHubQuebrados} detalhe={`${t.valesHub} vale(s) a conferir no CDJC`} cor="text-t1" icone={Truck} />
         <Kpi rotulo="Faltas em aberto" valor={t.ocorrenciasAbertas} detalhe={`${t.valesOcorrencia} ocorrência(s) · conferidos hoje ${n(t.recebidosHoje)}`} cor={t.ocorrenciasAbertas ? "text-erro" : "text-t1"} icone={TriangleAlert} />
         <Kpi rotulo="Acuracidade" valor={pct(t.acuracidade)} detalhe={`recebidos ${n(t.recebidosConferidos)} x enviados ${n(t.enviadosConferidos)}`} cor={corAcur(t.acuracidade)} icone={Target} />
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-5">
-        <Quadro titulo="Posição por unidade" icone={Building2} total={`${n(t.bons)} bons · ${n(t.quebrados)} queb.`} className={clsx("xl:col-span-2", altura)}>
+        <Quadro titulo="Posição por unidade" icone={Building2} total={`${n(t.bons)} PBR · ${n(t.quebrados)} quebrados`} className={clsx("xl:col-span-2", altura)}>
           <table className="w-full text-[14px]" data-testid="tv-unidades">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-t4">
                 <th className="pb-2 font-semibold">Unidade</th>
-                <th className="pb-2 text-right font-semibold">Bons</th>
-                <th className="pb-2 text-right font-semibold">Quebrados</th>
+                <th className="pb-2 text-right font-semibold">Pallets PBR</th>
+                <th className="pb-2 text-right font-semibold">Pallets Quebrados</th>
                 <th className="pb-2 text-right font-semibold">Trânsito</th>
               </tr>
             </thead>
@@ -118,7 +118,7 @@ export default async function TelaTV() {
           </table>
         </Quadro>
 
-        <Quadro titulo="Ativos fora do Hub" icone={Gauge} total={`${n(t.foraHubBons)} bons · ${n(t.foraHubQuebrados)} queb.`} className={clsx("xl:col-span-3", altura)}>
+        <Quadro titulo="Ativos fora do Hub" icone={Gauge} total={`${n(t.foraHubBons)} PBR · ${n(t.foraHubQuebrados)} quebrados`} className={clsx("xl:col-span-3", altura)}>
           {d.filiais.length === 0 ? (
             <p className="poco px-4 py-6 text-center text-[13px] text-t3">Nenhuma filial ou Ponto de Cross cadastrado.</p>
           ) : (
@@ -126,8 +126,8 @@ export default async function TelaTV() {
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-t4">
                   <th className="pb-2 font-semibold">Filial</th>
-                  <th className="pb-2 text-right font-semibold">Bons</th>
-                  <th className="pb-2 text-right font-semibold">Quebrados</th>
+                  <th className="pb-2 text-right font-semibold">Pallets PBR</th>
+                  <th className="pb-2 text-right font-semibold">Pallets Quebrados</th>
                   <th className="pb-2 text-right font-semibold">Em trânsito ao CDJC</th>
                   <th className="pb-2 text-right font-semibold">Recebidos x enviados</th>
                   <th className="pb-2 text-right font-semibold">Acuracidade</th>

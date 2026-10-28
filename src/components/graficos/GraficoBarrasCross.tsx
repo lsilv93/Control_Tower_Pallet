@@ -51,7 +51,7 @@ export function GraficoBarrasCross({ dados }: { dados: BarraCross[] }) {
                 onMouseLeave={() => setFoco(null)}
                 onFocus={() => setFoco(i)}
                 onBlur={() => setFoco(null)}
-                aria-label={`${b.codigo} ${b.nome}: ${b.saldo} pallets em estoque (${b.bons} bons, ${b.quebrados} quebrados)`}
+                aria-label={`${b.codigo} ${b.nome}: ${b.saldo} pallets em estoque (${b.bons} Pallets PBR, ${b.quebrados} Pallets Quebrados)`}
                 className="cursor-pointer outline-none"
               >
                 <rect x={0} y={y - 8} width={W} height={linha} rx={10} fill={foco === i ? "var(--viz-grade)" : "transparent"} />
@@ -75,8 +75,8 @@ export function GraficoBarrasCross({ dados }: { dados: BarraCross[] }) {
           <p className="mb-1 font-semibold text-t1">{d.codigo} · {d.nome}</p>
           <div className="flex justify-between gap-4"><span>Estoque total</span><strong className="num text-t1">{fmt(d.saldo)} pallets</strong></div>
           <div className="flex justify-between gap-4"><span>Participação no total</span><strong className="num text-t1">{total ? ((d.saldo / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : 0}%</strong></div>
-          <div className="flex justify-between gap-4"><span>Bons</span><strong className="num text-lima">{fmt(d.bons)}</strong></div>
-          <div className="flex justify-between gap-4"><span>Quebrados</span><strong className="num text-ouro">{fmt(d.quebrados)}</strong></div>
+          <div className="flex justify-between gap-4"><span>Pallets PBR</span><strong className="num text-lima">{fmt(d.bons)}</strong></div>
+          <div className="flex justify-between gap-4"><span>Pallets Quebrados</span><strong className="num text-ouro">{fmt(d.quebrados)}</strong></div>
           <div className="flex justify-between gap-4"><span>A receber</span><strong className="num text-t1">{fmt(d.aReceber)}</strong></div>
         </Dica>
       )}

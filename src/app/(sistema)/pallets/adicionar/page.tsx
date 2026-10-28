@@ -15,7 +15,7 @@ export default async function CompraPalletsPage() {
     <>
       <Cabecalho
         titulo="Compra de Pallets"
-        descricao={`Entrada de pallets novos pela leitura do código de barras da NF-e. Destino: Estoque de Vazios de ${u.cd.codigo}.`}
+        descricao={`Entrada de pallets novos pela leitura do código de barras da NF-e. Destino: estoque de Pallets PBR de ${u.cd.codigo}.`}
       />
       <SaldosEstoques cdId={u.cd.id} destaque={["VAZIOS"]} />
       <Painel titulo={<span className="flex items-center gap-3">Compra <Fluxo origem="COMPRA" destino="VAZIOS" /></span>}>

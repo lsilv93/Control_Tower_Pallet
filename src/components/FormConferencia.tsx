@@ -133,7 +133,7 @@ export function FormConferencia({ remetentes, vales, remetenteInicial }: { remet
                   </span>
                   <span className="text-right text-[11px] text-t3">
                     <span className="num block text-[13px] font-semibold text-t1">{fmt(v.quantidade)}</span>
-                    {fmt(v.bons)} bons · {fmt(v.quebrados)} queb.
+                    {fmt(v.bons)} PBR · {fmt(v.quebrados)} quebrados
                   </span>
                 </label>
               ))}
@@ -148,22 +148,22 @@ export function FormConferencia({ remetentes, vales, remetenteInicial }: { remet
           <p className="num text-[22px] font-semibold text-t1" data-testid="total-vales">{fmt(declarado)}</p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.12em] text-t4">Bons</p>
+          <p className="text-[10px] uppercase tracking-[0.12em] text-t4">Pallets PBR</p>
           <p className="num text-[16px] font-semibold text-lima">{fmt(declaradoBons)}</p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.12em] text-t4">Quebrados</p>
+          <p className="text-[10px] uppercase tracking-[0.12em] text-t4">Pallets Quebrados</p>
           <p className="num text-[16px] font-semibold text-ouro">{fmt(declaradoQuebrados)}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="label" htmlFor="recebidoBons">Bons recebidos (físico) *</label>
+          <label className="label" htmlFor="recebidoBons">Pallets PBR recebidos *</label>
           <input id="recebidoBons" name="recebidoBons" type="number" min={0} step={1} className="input" required value={bons} onChange={(e) => { setBons(e.target.value); reiniciar(); }} />
         </div>
         <div>
-          <label className="label" htmlFor="recebidoQuebrados">Quebrados recebidos (físico) *</label>
+          <label className="label" htmlFor="recebidoQuebrados">Pallets Quebrados recebidos *</label>
           <input id="recebidoQuebrados" name="recebidoQuebrados" type="number" min={0} step={1} className="input" required value={quebrados} onChange={(e) => { setQuebrados(e.target.value); reiniciar(); }} />
         </div>
       </div>

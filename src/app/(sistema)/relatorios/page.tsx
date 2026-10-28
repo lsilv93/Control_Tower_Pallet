@@ -67,9 +67,9 @@ export default async function RelatoriosPage({
         <button className="btn-primary">Aplicar filtros</button>
       </form>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Indicador titulo="Pallets bons (atual)" valor={formatarNumero(saldos.vazios)} />
-        <Indicador titulo="Pallets quebrados (atual)" valor={formatarNumero(saldos.quebrados)} cor="ouro" />
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <Indicador titulo="Pallets PBR (atual)" valor={formatarNumero(saldos.vazios)} />
+        <Indicador titulo="Pallets Quebrados (atual)" valor={formatarNumero(saldos.quebrados)} cor="ouro" />
         <Indicador titulo="Em trânsito (atual)" valor={formatarNumero(saldos.transito)} detalhe={`a receber: ${formatarNumero(saldos.aReceber)} · faltas em aberto: ${formatarNumero(saldos.ocorrencias)}`} cor="neutro" />
         <Indicador
           titulo="Variação líquida no período"

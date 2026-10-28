@@ -69,7 +69,7 @@ export default async function DetalheValePage({ params }: { params: Promise<{ id
             {vale.fornecedor && dado("Fornecedor", vale.fornecedor.nome)}
             {vale.fornecedor && dado("CNPJ", <span className="num">{formatarCnpj(vale.fornecedor.cnpj)}</span>)}
             {vale.unidade && dado(`${vale.tipo === "OCORRENCIA" ? "Recebedor" : "Destino"} (${rotuloTipoUnidade[vale.unidade.tipo]})`, `${vale.unidade.codigo} - ${vale.unidade.nome}`)}
-            {vale.tipo !== "FORNECEDOR" && dado("Bons / quebrados", <span className="num">{formatarNumero(vale.quantidadeBons)} / {formatarNumero(vale.quantidadeQuebrados)}</span>)}
+            {vale.tipo !== "FORNECEDOR" && dado("Pallets PBR / Pallets Quebrados", <span className="num">{formatarNumero(vale.quantidadeBons)} / {formatarNumero(vale.quantidadeQuebrados)}</span>)}
             {vale.tipo === "FORNECEDOR" && dado("Nota fiscal", <span className={vale.semNotaFiscal ? "font-semibold text-ouro" : "num"}>{rotuloNf(vale)}</span>)}
             {vale.tipo === "FORNECEDOR" && dado("Conferente", vale.conferente ?? "—")}
             {vale.chaveNfe && dado("Chave de acesso NF-e", <span className="num break-all text-[11px]">{vale.chaveNfe}</span>)}

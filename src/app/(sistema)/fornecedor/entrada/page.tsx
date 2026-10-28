@@ -19,7 +19,7 @@ export default async function EntradaFornecedorPage() {
     <>
       <Cabecalho
         titulo="Recebimento Pallet Fornecedor"
-        descricao={`Bipe o código de barras da NF-e (ou use a opção Sem Nota Fiscal). Gera o Vale-Pallet de Fornecedor e sobe o saldo de ${usuario.cd.codigo} com o fornecedor (pendente de devolução/pagamento). Os vazios só saem na baixa/pagamento.`}
+        descricao={`Bipe o código de barras da NF-e (ou use a opção Sem Nota Fiscal). Gera o Vale-Pallet de Fornecedor e sobe o saldo de ${usuario.cd.codigo} com o fornecedor (pendente de devolução/pagamento). Os Pallets PBR só saem na baixa/pagamento.`}
       />
       <SaldosEstoques cdId={usuario.cd.id} />
       <Painel titulo="Recebimento pallet fornecedor">

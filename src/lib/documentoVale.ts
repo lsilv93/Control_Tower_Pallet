@@ -108,8 +108,8 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
     { rotulo: "Situação", valor: situacao, colunas: 2 },
   ];
   const composicao: Celula[] = [
-    { rotulo: "Pallets bons", valor: formatarNumero(v.quantidadeBons), colunas: 2 },
-    { rotulo: "Pallets quebrados", valor: formatarNumero(v.quantidadeQuebrados), colunas: 2 },
+    { rotulo: "Pallets PBR", valor: formatarNumero(v.quantidadeBons), colunas: 2 },
+    { rotulo: "Pallets Quebrados", valor: formatarNumero(v.quantidadeQuebrados), colunas: 2 },
   ];
 
   if (v.tipo === "FORNECEDOR") {
@@ -187,8 +187,8 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
       [
         { rotulo: "Conferência de origem", valor: c ? numeroConferencia(c.numero) : "—", colunas: 1 },
         { rotulo: "Declarado nos vales", valor: c ? formatarNumero(c.totalDeclarado) : "—", colunas: 1 },
-        { rotulo: "Bons recebidos", valor: c ? formatarNumero(c.recebidoBons) : "—", colunas: 1 },
-        { rotulo: "Quebrados recebidos", valor: c ? formatarNumero(c.recebidoQuebrados) : "—", colunas: 1 },
+        { rotulo: "Pallets PBR recebidos", valor: c ? formatarNumero(c.recebidoBons) : "—", colunas: 1 },
+        { rotulo: "Pallets Quebrados recebidos", valor: c ? formatarNumero(c.recebidoQuebrados) : "—", colunas: 1 },
       ],
       transporte,
       emissao,

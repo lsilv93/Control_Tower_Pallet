@@ -101,7 +101,7 @@ export async function registrarCompra(_: Estado, form: FormData): Promise<Estado
     });
     revalidatePath("/", "layout");
     return sucesso(
-      `Compra registrada: ${formatarNumero(compra.quantidade)} pallet(s) da NF ${compra.notaFiscal} (${compra.fornecedor.nome}) adicionados ao Estoque de Vazios.`,
+      `Compra registrada: ${formatarNumero(compra.quantidade)} pallet(s) da NF ${compra.notaFiscal} (${compra.fornecedor.nome}) adicionados ao estoque de Pallets PBR.`,
     );
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
@@ -113,8 +113,8 @@ export async function registrarCompra(_: Estado, form: FormData): Promise<Estado
 
 // ---------------- Inclusão / remoção manual de saldo (MASTER / ADMIN) ----------------
 
-const estoque = z.enum(["VAZIOS", "QUEBRADOS"], { message: "Selecione o estoque (bons ou quebrados)." });
-const rotuloEstoque = (e: "VAZIOS" | "QUEBRADOS") => (e === "VAZIOS" ? "pallets bons" : "pallets quebrados");
+const estoque = z.enum(["VAZIOS", "QUEBRADOS"], { message: "Selecione o estoque (Pallets PBR ou Pallets Quebrados)." });
+const rotuloEstoque = (e: "VAZIOS" | "QUEBRADOS") => (e === "VAZIOS" ? "Pallets PBR" : "Pallets Quebrados");
 
 const schemaInclusao = z.object({
   unidadeId: z.string().min(1, "Selecione o CD ou Ponto de Cross."),

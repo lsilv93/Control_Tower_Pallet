@@ -49,7 +49,7 @@ export default async function RecebimentoPage({ searchParams }: { searchParams: 
     <>
       <Cabecalho
         titulo="Recebimento / Conferência"
-        descricao={`Selecione os vales recebidos em ${u.cd.codigo}, informe a contagem física de pallets bons e quebrados e registre. Bons entram no estoque de vazios e quebrados no de quebrados. Falta gera Vale de Ocorrência devolvido ao remetente; sobra é registrada.`}
+        descricao={`Selecione os vales recebidos em ${u.cd.codigo}, informe a contagem física de Pallets PBR e Pallets Quebrados e registre. Cada tipo entra no seu estoque. Falta gera Vale de Ocorrência devolvido ao remetente; sobra é registrada.`}
       />
       {ok && (
         <div role="status" className="poco mb-6 flex items-start gap-2.5 px-4 py-3 text-[12px] font-medium text-lima" data-testid="conferencia-ok">
@@ -72,7 +72,7 @@ export default async function RecebimentoPage({ searchParams }: { searchParams: 
             ) : (
               <Tabela>
                 <table className="tabela" data-testid="vales-pendentes-recebimento">
-                  <thead><tr><th>Vale</th><th>Remetente</th><th className="text-right">Bons</th><th className="text-right">Quebrados</th><th>Faturamento</th><th>Emissão</th></tr></thead>
+                  <thead><tr><th>Vale</th><th>Remetente</th><th className="text-right">Pallets PBR</th><th className="text-right">Pallets Quebrados</th><th>Faturamento</th><th>Emissão</th></tr></thead>
                   <tbody>
                     {pendentes.map((v) => (
                       <tr key={v.id}>
@@ -95,7 +95,7 @@ export default async function RecebimentoPage({ searchParams }: { searchParams: 
             ) : (
               <Tabela>
                 <table className="tabela" data-testid="ultimas-conferencias">
-                  <thead><tr><th>Conferência</th><th>Data/hora</th><th>Remetente</th><th>Vales</th><th className="text-right">Declarado</th><th className="text-right">Bons</th><th className="text-right">Queb.</th><th className="text-right">Dif.</th><th>Ocorrência</th><th>Usuário</th></tr></thead>
+                  <thead><tr><th>Conferência</th><th>Data/hora</th><th>Remetente</th><th>Vales</th><th className="text-right">Declarado</th><th className="text-right">Pallets PBR</th><th className="text-right">Pallets Quebrados</th><th className="text-right">Dif.</th><th>Ocorrência</th><th>Usuário</th></tr></thead>
                   <tbody>
                     {conferencias.map((c) => (
                       <tr key={c.id}>

@@ -41,7 +41,7 @@ export default async function ExcluirValePage({ searchParams }: { searchParams: 
     <>
       <Cabecalho
         titulo="Excluir Vale Pallet"
-        descricao={`Cancelamento de vales emitidos incorretamente em ${u.cd.codigo}, antes da conferência. O vale é mantido para auditoria com status Cancelado e o lançamento é estornado: no vale de envio os pallets voltam do trânsito para o estoque de origem (bons e quebrados); no vale de fornecedor, reduz o saldo com o fornecedor. Vales de ocorrência são resolvidos em Ocorrências.`}
+        descricao={`Cancelamento de vales emitidos incorretamente em ${u.cd.codigo}, antes da conferência. O vale é mantido para auditoria com status Cancelado e o lançamento é estornado: no vale de envio os pallets voltam do trânsito para o estoque de origem (Pallets PBR e Pallets Quebrados); no vale de fornecedor, reduz o saldo com o fornecedor. Vales de ocorrência são resolvidos em Ocorrências.`}
       />
       <BannerOk mensagem={ok} />
 
@@ -80,7 +80,7 @@ export default async function ExcluirValePage({ searchParams }: { searchParams: 
             {vale.fornecedor && <div><dt className="label !mb-1">CNPJ</dt><dd className="num text-t2">{formatarCnpj(vale.fornecedor.cnpj)}</dd></div>}
             <div><dt className="label !mb-1">Transportadora</dt><dd className="text-t2">{vale.transportadora ?? "—"}{vale.placa && <> · <span className="num">{formatarPlaca(vale.placa)}</span></>}</dd></div>
             {vale.tipo === "FORNECEDOR" && <div><dt className="label !mb-1">Nota fiscal</dt><dd className="num text-t2">{rotuloNf(vale)}</dd></div>}
-            <div><dt className="label !mb-1">Quantidade</dt><dd className="num text-[22px] font-semibold text-t1">{formatarNumero(vale.quantidade)}</dd>{vale.tipo === "ENVIO" && <dd className="num text-[11px] text-t4">{formatarNumero(vale.quantidadeBons)} bons · {formatarNumero(vale.quantidadeQuebrados)} quebrados</dd>}</div>
+            <div><dt className="label !mb-1">Quantidade</dt><dd className="num text-[22px] font-semibold text-t1">{formatarNumero(vale.quantidade)}</dd>{vale.tipo === "ENVIO" && <dd className="num text-[11px] text-t4">{formatarNumero(vale.quantidadeBons)} PBR · {formatarNumero(vale.quantidadeQuebrados)} quebrados</dd>}</div>
             <div className="sm:col-span-2"><dt className="label !mb-1">Emissão</dt><dd className="text-t2"><span className="num">{formatarDataHora(vale.criadoEm)}</span> · {vale.criadoPor.login}</dd></div>
             <div className="sm:col-span-2"><dt className="label !mb-1">Documento</dt><dd><Link prefetch={false} href={`/imprimir/vale/${vale.id}`} className="text-lima hover:underline">Ver / reimprimir vale</Link></dd></div>
           </dl>

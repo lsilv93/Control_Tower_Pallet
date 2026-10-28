@@ -69,20 +69,20 @@ export function Indicador({
   destaque?: boolean;
 }) {
   return (
-    <div className="card-sm relative flex min-w-0 items-start gap-4 overflow-hidden p-5">
+    <div className="card-sm relative flex min-w-0 items-start gap-4 overflow-hidden p-4 sm:p-5">
       {destaque && icone && (
         <div className="pointer-events-none absolute -bottom-6 -right-4 text-lima opacity-[0.07] [&_svg]:h-32 [&_svg]:w-32">
           {icone}
         </div>
       )}
       {icone && (
-        <div className={clsx("poco flex h-11 w-11 flex-none items-center justify-center !rounded-2xl", coresIndicador[cor])}>
+        <div className={clsx("poco hidden h-11 w-11 flex-none items-center justify-center !rounded-2xl sm:flex", coresIndicador[cor])}>
           {icone}
         </div>
       )}
       <div className="relative min-w-0">
         <p className="label !mb-1">{titulo}</p>
-        <p className={clsx("num font-semibold leading-tight", destaque ? "text-[40px] text-lima" : "text-[26px] text-t1")}>
+        <p className={clsx("num font-semibold leading-tight", destaque ? "text-[32px] text-lima sm:text-[40px]" : "text-[22px] text-t1 sm:text-[26px]")}>
           {valor}
         </p>
         {detalhe && <p className="mt-1 text-[11px] leading-snug text-t3">{detalhe}</p>}

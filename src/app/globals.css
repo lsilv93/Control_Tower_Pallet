@@ -361,17 +361,23 @@
   .aba-ativa:hover {
     background: linear-gradient(145deg, #dcff72, #bef91b);
   }
+  /* Celular: abas numa linha só, com rolagem lateral (sem empilhar). */
   @media (max-width: 819px) {
     .abas {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      border-radius: 22px;
+      display: flex;
       width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
     }
-  }
-  @media (max-width: 519px) {
-    .abas {
-      grid-template-columns: 1fr;
+    .abas::-webkit-scrollbar {
+      display: none;
+    }
+    .aba {
+      flex: 0 0 auto;
+      min-height: 36px;
+      padding: 0 14px;
     }
   }
 

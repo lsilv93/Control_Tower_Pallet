@@ -54,7 +54,7 @@ export function FormAjusteSaldo({ modo, unidades, unidadeInicial }: { modo: "inc
           </select>
           {unidade && (
             <p className="mt-1 text-[11px] text-t4">
-              Saldo atual: <span className="num text-lima">{fmt(unidade.vazios)}</span> bons · <span className="num text-ouro">{fmt(unidade.quebrados)}</span> quebrados
+              Saldo atual: <span className="num text-lima">{fmt(unidade.vazios)}</span> Pallets PBR · <span className="num text-ouro">{fmt(unidade.quebrados)}</span> Pallets Quebrados
             </p>
           )}
         </div>
@@ -63,8 +63,8 @@ export function FormAjusteSaldo({ modo, unidades, unidadeInicial }: { modo: "inc
             <label className="label" htmlFor="estoque">Estoque *</label>
             <select id="estoque" name="estoque" className="input" required defaultValue="">
               <option value="" disabled>Selecione...</option>
-              <option value="VAZIOS">Pallets bons (vazios)</option>
-              <option value="QUEBRADOS">Pallets quebrados</option>
+              <option value="VAZIOS">Pallets PBR</option>
+              <option value="QUEBRADOS">Pallets Quebrados</option>
             </select>
           </div>
           <div>
@@ -103,7 +103,7 @@ export function FormAjusteSaldo({ modo, unidades, unidadeInicial }: { modo: "inc
           <p className="mb-3 text-[14px] font-semibold text-t1" data-testid="pergunta-remocao">Tem certeza?</p>
           <p className="mb-5 text-[12px] text-t2">
             Serão removidos <strong className="num text-t1">{fmt(Number(dados.get("quantidade") ?? 0))}</strong> pallet(s){" "}
-            {estoqueSel === "QUEBRADOS" ? "quebrados" : "bons"} de <strong className="text-t1">{unidade?.codigo}</strong>. A operação fica registrada na auditoria e não pode ser desfeita.
+            {estoqueSel === "QUEBRADOS" ? "(Pallets Quebrados)" : "(Pallets PBR)"} de <strong className="text-t1">{unidade?.codigo}</strong>. A operação fica registrada na auditoria e não pode ser desfeita.
           </p>
           <div className="flex gap-3">
             <button type="button" className="btn-secondary flex-1" onClick={() => setDados(null)}>Cancelar</button>

@@ -30,8 +30,8 @@ export function FormDescarte({ saldoVazios, saldoQuebrados }: { saldoVazios: num
 
   const qtd = Number(dados?.get("quantidade") ?? 0);
   const opcoes = [
-    { origem: "VAZIOS" as const, titulo: "Pallets bons (vazios)", saldo: saldoVazios, icone: Boxes },
-    { origem: "QUEBRADOS" as const, titulo: "Pallets quebrados", saldo: saldoQuebrados, icone: Hammer },
+    { origem: "VAZIOS" as const, titulo: "Pallets PBR", saldo: saldoVazios, icone: Boxes },
+    { origem: "QUEBRADOS" as const, titulo: "Pallets Quebrados", saldo: saldoQuebrados, icone: Hammer },
   ];
 
   return (

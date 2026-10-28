@@ -5,7 +5,7 @@ import { ehEstoque, obterSaldos, ROTULO_CONTA } from "@/lib/conta";
 import { formatarNumero } from "@/lib/formatos";
 
 const CURTO: Record<Conta, string> = {
-  VAZIOS: "Bons",
+  VAZIOS: "PBR",
   QUEBRADOS: "Quebrados",
   TRANSITO: "Trânsito",
   OCORRENCIA: "Ocorrência",
@@ -61,21 +61,21 @@ type Destaque = "VAZIOS" | "QUEBRADOS" | "TRANSITO" | "A_RECEBER";
 export async function SaldosEstoques({ cdId, destaque }: { cdId: string; destaque?: Destaque[] }) {
   const s = await obterSaldos(cdId);
   const itens: { chave: Destaque; rotulo: string; valor: number; detalhe?: string; icone: typeof Boxes; cor: string }[] = [
-    { chave: "VAZIOS", rotulo: "Pallets bons (vazios)", valor: s.vazios, icone: Boxes, cor: "text-lima" },
-    { chave: "QUEBRADOS", rotulo: "Pallets quebrados", valor: s.quebrados, icone: Hammer, cor: "text-ouro" },
+    { chave: "VAZIOS", rotulo: "Pallets PBR", valor: s.vazios, icone: Boxes, cor: "text-lima" },
+    { chave: "QUEBRADOS", rotulo: "Pallets Quebrados", valor: s.quebrados, icone: Hammer, cor: "text-ouro" },
     { chave: "TRANSITO", rotulo: "Enviados em trânsito", valor: s.transito, detalhe: "aguardando conferência no destino", icone: Truck, cor: "text-t1" },
     { chave: "A_RECEBER", rotulo: "A receber", valor: s.aReceber, detalhe: `${s.valesAReceber} vale(s) para conferir`, icone: PackageOpen, cor: "text-t1" },
   ];
   return (
-    <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="saldos-unidade">
+    <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" data-testid="saldos-unidade">
       {itens.map((i) => (
-        <div key={i.chave} className={clsx("card-sm flex items-center gap-4 p-5", destaque?.includes(i.chave) && "ring-1 ring-lima/40")}>
-          <span className={clsx("poco flex h-11 w-11 flex-none items-center justify-center !rounded-2xl", i.cor)}>
+        <div key={i.chave} className={clsx("card-sm flex min-w-0 items-center gap-4 p-4 sm:p-5", destaque?.includes(i.chave) && "ring-1 ring-lima/40")}>
+          <span className={clsx("poco hidden h-11 w-11 flex-none items-center justify-center !rounded-2xl sm:flex", i.cor)}>
             <i.icone className="h-5 w-5" />
           </span>
           <div className="min-w-0">
             <p className="label !mb-0.5">{i.rotulo}</p>
-            <p className="num text-[26px] font-semibold leading-tight text-t1" data-testid={`saldo-${i.chave.toLowerCase()}`}>{formatarNumero(i.valor)}</p>
+            <p className="num text-[22px] font-semibold leading-tight text-t1 sm:text-[26px]" data-testid={`saldo-${i.chave.toLowerCase()}`}>{formatarNumero(i.valor)}</p>
             {i.detalhe && <p className="truncate text-[11px] text-t4">{i.detalhe}</p>}
           </div>
         </div>

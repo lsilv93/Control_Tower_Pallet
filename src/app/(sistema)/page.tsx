@@ -68,7 +68,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const crosses = posicaoCross.filter((p) => p.vazios + p.quebrados > 0);
   const totalCross = crosses.reduce((s, p) => s + p.vazios + p.quebrados, 0);
   const barrasCross = crosses.map((p) => ({ id: p.unidade.id, codigo: p.unidade.codigo, nome: p.unidade.nome, saldo: p.vazios + p.quebrados, bons: p.vazios, quebrados: p.quebrados, aReceber: p.aReceber }));
-  const fatiasCross = paraFatias(crosses.map((p) => ({ id: p.unidade.id, rotulo: p.unidade.codigo, valor: p.vazios + p.quebrados, detalhe: `${p.unidade.nome} · ${p.vazios} bons · ${p.quebrados} quebrados` })));
+  const fatiasCross = paraFatias(crosses.map((p) => ({ id: p.unidade.id, rotulo: p.unidade.codigo, valor: p.vazios + p.quebrados, detalhe: `${p.unidade.nome} · ${p.vazios} PBR · ${p.quebrados} quebrados` })));
   const fatiasFornecedor = paraFatias(pendencias.map((p) => ({ id: p.fornecedor.id, rotulo: p.fornecedor.nome, valor: p.total, detalhe: `${p.vales} vale(s)` })), 6);
   const abertos = valesTodos ?? vales;
   const faixa = (min: number, max: number) => abertos.filter((v) => v.idade >= min && v.idade <= max);
@@ -85,7 +85,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <>
       <Cabecalho
         titulo={`Painel · ${tipoUnidade} ${cd.codigo}`}
-        descricao={`${cd.nome} · Pallets bons e quebrados em tempo real, envios em trânsito, recebimentos a conferir e ocorrências.${usuario.global ? " Visão Nível Brasil disponível na Torre de Controle." : ""}`}
+        descricao={`${cd.nome} · Pallets PBR e Pallets Quebrados em tempo real, envios em trânsito, recebimentos a conferir e ocorrências.${usuario.global ? " Visão Nível Brasil disponível na Torre de Controle." : ""}`}
       >
         {usuario.global && tem(usuario, "tv") && (
           <Link href="/tv" className="btn-secondary" target="_blank">
@@ -105,16 +105,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       />
 
       {/* KPIs superiores · posição atual da unidade */}
-      <div className="entrada grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5" data-testid="cards-saldos">
-        <Kpi titulo="Pallets bons" valor={saldos.vazios} legenda="Estoque de vazios" icone={Warehouse} cor="lima" testid="saldo-vazios">
+      <div className="entrada grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5" data-testid="cards-saldos">
+        <Kpi titulo="Pallets PBR" valor={saldos.vazios} legenda="Estoque disponível" icone={Warehouse} cor="lima" testid="saldo-vazios" className="col-span-2 sm:col-span-1">
           <BarraComposicao
             itens={[
-              { rotulo: "Bons", valor: saldos.vazios, cor: "var(--viz-vazios)" },
-              { rotulo: "Quebrados", valor: saldos.quebrados, cor: "var(--viz-quebrados)" },
+              { rotulo: "Pallets PBR", valor: saldos.vazios, cor: "var(--viz-vazios)" },
+              { rotulo: "Pallets Quebrados", valor: saldos.quebrados, cor: "var(--viz-quebrados)" },
             ]}
           />
         </Kpi>
-        <Kpi titulo="Quebrados" valor={saldos.quebrados} legenda={cd.hub ? "Aguardando conserto" : "Enviar ao CDJC para conserto"} icone={Hammer} cor="ouro" testid="saldo-quebrados" rodape={`${fisicos ? Math.round((saldos.quebrados / fisicos) * 100) : 0}% do estoque físico`} />
+        <Kpi titulo="Pallets Quebrados" valor={saldos.quebrados} legenda={cd.hub ? "Aguardando conserto" : "Enviar ao CDJC para conserto"} icone={Hammer} cor="ouro" testid="saldo-quebrados" rodape={`${fisicos ? Math.round((saldos.quebrados / fisicos) * 100) : 0}% do estoque físico`} />
         <Kpi titulo="Em trânsito" valor={saldos.transito} legenda="Enviados, aguardando conferência" icone={Truck} cor="neutro" testid="saldo-transito" rodape={`${transito.filter((v) => v.cdId === cd.id).length} vale(s) de envio`} />
         <Kpi titulo="A receber" valor={saldos.aReceber} legenda="Vales destinados a esta unidade" icone={PackageOpen} cor="neutro" testid="saldo-a-receber" rodape={`${saldos.valesAReceber} vale(s) para conferir`} />
         <Kpi titulo="Faltas em aberto" valor={saldos.ocorrencias} legenda="Ocorrências a apurar" icone={TriangleAlert} cor="erro" testid="saldo-ocorrencias" rodape={`${saldos.ocorrenciasAbertas} ocorrência(s) envolvendo a unidade`} />
@@ -160,7 +160,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           ) : (
             <Tabela className="max-h-[22rem] overflow-auto">
               <table className="tabela" data-testid="tabela-transito">
-                <thead className="sticky top-0"><tr><th>Vale</th><th>Sentido</th><th>Origem → Destino</th><th className="text-right">Bons</th><th className="text-right">Quebrados</th><th>Emissão</th></tr></thead>
+                <thead className="sticky top-0"><tr><th>Vale</th><th>Sentido</th><th>Origem → Destino</th><th className="text-right">Pallets PBR</th><th className="text-right">Pallets Quebrados</th><th>Emissão</th></tr></thead>
                 <tbody>
                   {transito.map((v) => (
                     <tr key={v.id}>
@@ -181,7 +181,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
       {/* Indicadores do período */}
       <h2 className="secao mb-3 mt-8 flex items-center gap-2">Movimentação no período · {periodo.rotulo}</h2>
-      <div className="entrada grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="entrada grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
         {moduloFornecedor ? (
           <Indicador titulo="Entradas de fornecedor" valor={n(porTipo("RECEBIMENTO_FORNECEDOR"))} detalhe={periodo.rotulo} icone={<PackagePlus className="h-5 w-5" />} />
         ) : (
@@ -243,7 +243,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
       {/* Extrato dos estoques físicos */}
       <div className="mt-6">
-        <Painel titulo={`Extrato dos estoques físicos (bons + quebrados) · entradas x saídas${sufixo}`} acoes={<span className="text-[11px] text-t3">{periodo.rotulo} · por {granularidade}</span>}>
+        <Painel titulo={`Extrato dos estoques físicos (Pallets PBR + Pallets Quebrados) · entradas x saídas${sufixo}`} acoes={<span className="text-[11px] text-t3">{periodo.rotulo} · por {granularidade}</span>}>
           <GraficoFluxo serie={serie} granularidade={granularidade} saldoInicial={saldoInicial} />
           <p className="mt-3 text-[11px] text-t3">
             Entradas: recebimentos conferidos, sobras, compras e inclusões. Saídas: envios, descartes e remoções.
@@ -339,6 +339,7 @@ function Kpi({
   cor,
   rodape,
   testid,
+  className,
   children,
 }: {
   titulo: string;
@@ -348,13 +349,14 @@ function Kpi({
   cor: keyof typeof CORES_KPI;
   rodape?: string;
   testid?: string;
+  className?: string;
   children?: React.ReactNode;
 }) {
   return (
-    <section className="card-sm relative flex min-w-0 flex-col overflow-hidden p-5">
+    <section className={`card-sm relative flex min-w-0 flex-col overflow-hidden p-4 sm:p-5 ${className ?? ""}`}>
       <Icone className={`pointer-events-none absolute -bottom-5 -right-4 h-28 w-28 opacity-[0.06] ${CORES_KPI[cor]}`} aria-hidden />
       <div className="mb-3 flex items-center gap-3">
-        <span className={`poco flex h-10 w-10 flex-none items-center justify-center !rounded-2xl ${CORES_KPI[cor]}`}>
+        <span className={`poco hidden h-10 w-10 flex-none items-center justify-center !rounded-2xl sm:flex ${CORES_KPI[cor]}`}>
           <Icone className="h-5 w-5" />
         </span>
         <div className="min-w-0">
@@ -362,8 +364,8 @@ function Kpi({
           <p className="mt-0.5 text-[11px] leading-tight text-t4">{legenda}</p>
         </div>
       </div>
-      <p className={`num text-[34px] font-semibold leading-none ${cor === "lima" ? "text-lima" : "text-t1"}`} data-testid={testid}>{n(valor)}</p>
-      <p className="mt-1 text-[11px] text-t3">pallets PBR</p>
+      <p className={`num text-[28px] font-semibold leading-none sm:text-[34px] ${cor === "lima" ? "text-lima" : "text-t1"}`} data-testid={testid}>{n(valor)}</p>
+      <p className="mt-1 text-[11px] text-t3">pallets</p>
       {children && <div className="mt-3">{children}</div>}
       {rodape && <p className="mt-auto pt-3 text-[11px] text-t3">{rodape}</p>}
     </section>

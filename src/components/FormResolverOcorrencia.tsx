@@ -18,8 +18,8 @@ export function FormResolverOcorrencia({ valeId, codigo }: { valeId: string; cod
       {resolucao === "LOCALIZADA" && (
         <select name="estoque" className="input" required defaultValue="" aria-label="Estoque">
           <option value="" disabled>Estoque de destino...</option>
-          <option value="VAZIOS">Pallets bons (vazios)</option>
-          <option value="QUEBRADOS">Pallets quebrados</option>
+          <option value="VAZIOS">Pallets PBR</option>
+          <option value="QUEBRADOS">Pallets Quebrados</option>
         </select>
       )}
       <textarea name="observacao" rows={2} className="input" required minLength={5} maxLength={500} placeholder="Justificativa *" aria-label="Justificativa" />

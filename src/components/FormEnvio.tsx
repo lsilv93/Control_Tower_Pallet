@@ -48,7 +48,7 @@ export function FormEnvio({
     if (total <= 0) return setErro("Informe a quantidade de pallets a enviar.");
     if (faltaBons || faltaQuebrados) {
       return setErro(
-        `Saldo insuficiente em ${origem}: ${faltaBons ? `bons disponíveis ${fmt(saldo.vazios)}, solicitado ${fmt(qBons)}` : ""}${faltaBons && faltaQuebrados ? " · " : ""}${faltaQuebrados ? `quebrados disponíveis ${fmt(saldo.quebrados)}, solicitado ${fmt(qQuebrados)}` : ""}. Envio bloqueado.`,
+        `Saldo insuficiente em ${origem}: ${faltaBons ? `Pallets PBR disponíveis ${fmt(saldo.vazios)}, solicitado ${fmt(qBons)}` : ""}${faltaBons && faltaQuebrados ? " · " : ""}${faltaQuebrados ? `Pallets Quebrados disponíveis ${fmt(saldo.quebrados)}, solicitado ${fmt(qQuebrados)}` : ""}. Envio bloqueado.`,
       );
     }
     setDados(new FormData(e.currentTarget));
@@ -79,13 +79,13 @@ export function FormEnvio({
         <div className={modo === "HUB" ? "" : "grid grid-cols-2 gap-4"}>
           {modo !== "HUB" && (
             <div>
-              <label className="label" htmlFor="quantidadeBons">Pallets bons</label>
+              <label className="label" htmlFor="quantidadeBons">Pallets PBR</label>
               <input id="quantidadeBons" name="quantidadeBons" type="number" min={0} step={1} className="input" value={bons} onChange={(e) => setBons(e.target.value)} placeholder="0" />
               <p className={`mt-1 text-[11px] ${faltaBons ? "font-semibold text-erro" : "text-t4"}`}>Disponível: <span className="num">{fmt(saldo.vazios)}</span></p>
             </div>
           )}
           <div>
-            <label className="label" htmlFor="quantidadeQuebrados">Pallets quebrados{modo === "HUB" ? " *" : ""}</label>
+            <label className="label" htmlFor="quantidadeQuebrados">Pallets Quebrados{modo === "HUB" ? " *" : ""}</label>
             <input id="quantidadeQuebrados" name="quantidadeQuebrados" type="number" min={0} step={1} className="input" value={quebrados} onChange={(e) => setQuebrados(e.target.value)} placeholder="0" required={modo === "HUB"} />
             <p className={`mt-1 text-[11px] ${faltaQuebrados ? "font-semibold text-erro" : "text-t4"}`}>Disponível: <span className="num">{fmt(saldo.quebrados)}</span></p>
           </div>
@@ -121,7 +121,7 @@ export function FormEnvio({
         )}
         <Mensagem estado={estado} />
         <BotaoEnviar enviando={enviando} className="btn-primary w-full" textoEnviando="Enviando...">
-          <Send className="h-4 w-4" /> {modo === "HUB" ? "Enviar quebrados ao CDJC" : "Gerar vale de envio"}
+          <Send className="h-4 w-4" /> {modo === "HUB" ? "Enviar Pallets Quebrados ao CDJC" : "Gerar vale de envio"}
         </BotaoEnviar>
       </form>
 
@@ -133,8 +133,8 @@ export function FormEnvio({
           <dl className="poco mb-5 grid grid-cols-2 gap-3 p-4 text-[12px]">
             <div><dt className="text-t4">Origem</dt><dd className="num font-semibold text-t1">{origem}</dd></div>
             <div><dt className="text-t4">Destino</dt><dd className="font-semibold text-t1"><span className="num">{destino.codigo}</span> · {destino.nome}</dd></div>
-            {modo !== "HUB" && <div><dt className="text-t4">Pallets bons</dt><dd className="num text-[18px] font-semibold text-lima">{fmt(qBons)}</dd></div>}
-            <div><dt className="text-t4">Pallets quebrados</dt><dd className="num text-[18px] font-semibold text-ouro">{fmt(qQuebrados)}</dd></div>
+            {modo !== "HUB" && <div><dt className="text-t4">Pallets PBR</dt><dd className="num text-[18px] font-semibold text-lima">{fmt(qBons)}</dd></div>}
+            <div><dt className="text-t4">Pallets Quebrados</dt><dd className="num text-[18px] font-semibold text-ouro">{fmt(qQuebrados)}</dd></div>
           </dl>
           <p className="mb-4 text-[11px] text-t3">Os pallets saem do estoque de {origem} e ficam em trânsito até a conferência em {destino.codigo}.</p>
           <div className="flex gap-3">

@@ -54,8 +54,8 @@ export async function PaginaUnidades({ tipo, editar, ok }: { tipo: "CD" | "CROSS
               )}
               <p className="text-[11px] text-t4">
                 {tipo === "CD"
-                  ? "Cada CD tem estoque próprio de pallets bons e quebrados. Vincule os usuários em Usuários e Permissões."
-                  : "O Ponto de Cross tem estoque próprio (bons e quebrados), recebe envios dos CDs e devolve pallets ao CD."}
+                  ? "Cada CD tem estoque próprio de Pallets PBR e Pallets Quebrados. Vincule os usuários em Usuários e Permissões."
+                  : "O Ponto de Cross tem estoque próprio (Pallets PBR e Pallets Quebrados), recebe envios dos CDs e devolve pallets ao CD."}
               </p>
               <RodapeForm editando={!!editando} caminho={c.caminho} />
             </FormAcao>

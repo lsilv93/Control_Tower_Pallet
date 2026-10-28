@@ -24,7 +24,7 @@ export async function registrarQuebra(_: Estado, form: FormData): Promise<Estado
       lancar(tx, { tipo: "QUEBRA", quantidade: d.quantidade, observacao: d.observacao, usuarioId: u.id, cdId: u.cd.id }, u.cd.codigo),
     );
     revalidatePath("/", "layout");
-    return sucesso(`${formatarNumero(d.quantidade)} pallet(s) lançados como quebrados em ${u.cd.codigo}: bons → quebrados.`);
+    return sucesso(`${formatarNumero(d.quantidade)} pallet(s) lançados como quebrados em ${u.cd.codigo}: Pallets PBR → Pallets Quebrados.`);
   } catch (e) {
     return tratarErro(e);
   }
@@ -87,8 +87,8 @@ export async function registrarReparo(_: Estado, form: FormData): Promise<Estado
     revalidatePath("/", "layout");
     return sucesso(
       utilizados
-        ? `Reparo registrado: ${formatarNumero(d.recuperados)} recuperado(s) voltaram aos Vazios e ${formatarNumero(utilizados)} utilizado(s) foram para Descartados. Quebrados −${formatarNumero(d.recuperados + utilizados)}.`
-        : `${formatarNumero(d.recuperados)} pallet(s) consertados: Estoque de Quebrados → Estoque de Vazios.`,
+        ? `Reparo registrado: ${formatarNumero(d.recuperados)} recuperado(s) voltaram aos Pallets PBR e ${formatarNumero(utilizados)} utilizado(s) foram para Descartados. Quebrados −${formatarNumero(d.recuperados + utilizados)}.`
+        : `${formatarNumero(d.recuperados)} pallet(s) consertados: Pallets Quebrados → Pallets PBR.`,
     );
   } catch (e) {
     return tratarErro(e);
@@ -111,7 +111,7 @@ export async function registrarDescarte(_: Estado, form: FormData): Promise<Esta
     );
     revalidatePath("/", "layout");
     return sucesso(
-      `${formatarNumero(d.quantidade)} pallet(s) ${origem === "VAZIOS" ? "bons" : "quebrados"} descartados em ${u.cd.codigo}. Registro definitivo (consulte em Pallets Descartados).`,
+      `${formatarNumero(d.quantidade)} pallet(s) ${origem === "VAZIOS" ? "PBR" : "quebrados"} descartados em ${u.cd.codigo}. Registro definitivo (consulte em Pallets Descartados).`,
     );
   } catch (e) {
     return tratarErro(e);

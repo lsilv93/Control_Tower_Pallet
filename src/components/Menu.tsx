@@ -160,7 +160,7 @@ export function Menu({
           aberto ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="card flex h-full flex-col overflow-hidden">
+        <div className="card flex h-full flex-col overflow-y-auto lg:overflow-hidden">
           <div className="flex items-center justify-between gap-2 px-5 pb-4 pt-5">
             <div className="flex items-center gap-3">
               <span className="fill-lima flex h-10 w-10 items-center justify-center rounded-2xl">
@@ -193,7 +193,7 @@ export function Menu({
             </div>
           )}
 
-          <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4">
+          <nav className="flex-1 space-y-4 px-3 pb-4 lg:overflow-y-auto">
             {grupos.map((g) => {
               const itens = g.itens.filter((i) => visivel(i, usuario, cd));
               if (!itens.length) return null;

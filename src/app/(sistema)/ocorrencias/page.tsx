@@ -67,7 +67,7 @@ export default async function OcorrenciasPage({ searchParams }: { searchParams: 
           </form>
         )}
       </Cabecalho>
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <Indicador titulo="Faltas em aberto" valor={n(abertas._sum.quantidade ?? 0)} detalhe={`${abertas._count} vale(s) de ocorrência`} cor="erro" />
         <Indicador titulo="Faltas (total)" valor={n(faltas._sum.quantidade ?? 0)} detalhe={`${faltas._count} ocorrência(s)`} cor="ouro" />
         <Indicador titulo="Sobras registradas" valor={n(sobras._sum.quantidade ?? 0)} detalhe={`${sobras._count} ocorrência(s)`} cor="neutro" />

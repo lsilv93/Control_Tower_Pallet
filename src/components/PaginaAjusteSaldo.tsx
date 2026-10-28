@@ -28,7 +28,7 @@ export async function PaginaAjusteSaldo({ modo }: { modo: "inclusao" | "remocao"
     <>
       <Cabecalho
         titulo="Ajuste de Saldo"
-        descricao="Exclusivo de administradores. Inclusão manual de pallets bons ou quebrados (Compra, Devolução, Ajuste Estoque ou Inventário) e remoção com justificativa, em qualquer CD ou Ponto de Cross. O saldo nunca fica negativo e tudo é registrado na auditoria."
+        descricao="Exclusivo de administradores. Inclusão manual de Pallets PBR ou Pallets Quebrados (Compra, Devolução, Ajuste Estoque ou Inventário) e remoção com justificativa, em qualquer CD ou Ponto de Cross. O saldo nunca fica negativo e tudo é registrado na auditoria."
       />
       <Abas
         ativo={`/estoque/${modo}`}

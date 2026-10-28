@@ -163,8 +163,8 @@ export type NovoLancamento = {
 };
 
 export const ROTULO_CONTA: Record<Conta, string> = {
-  VAZIOS: "Pallets bons (vazios)",
-  QUEBRADOS: "Pallets quebrados",
+  VAZIOS: "Pallets PBR",
+  QUEBRADOS: "Pallets Quebrados",
   TRANSITO: "Em trânsito",
   OCORRENCIA: "Ocorrência (falta a devolver)",
   ENVIADO: "Enviado a outra unidade",
@@ -178,7 +178,7 @@ export const ROTULO_CONTA: Record<Conta, string> = {
   CARGA: "Carga de fornecedor",
 };
 
-const ROTULO_CURTO: Partial<Record<Conta, string>> = { VAZIOS: "pallets bons", QUEBRADOS: "pallets quebrados", TRANSITO: "trânsito", OCORRENCIA: "ocorrência" };
+const ROTULO_CURTO: Partial<Record<Conta, string>> = { VAZIOS: "Pallets PBR", QUEBRADOS: "Pallets Quebrados", TRANSITO: "trânsito", OCORRENCIA: "ocorrência" };
 
 function resolverConta(permitidas: readonly Conta[], informada: Conta | undefined, papel: string): Conta {
   if (informada) {

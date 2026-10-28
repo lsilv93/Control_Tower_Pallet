@@ -14,17 +14,17 @@ import { Abas, Cabecalho, Painel } from "./ui";
 const config = {
   quebras: {
     titulo: "Lançar Quebrado",
-    descricao: "Origem: Estoque de Vazios (subtrai) → Destino: Estoque de Quebrados (soma).",
+    descricao: "Origem: Pallets PBR (subtrai) → Destino: Pallets Quebrados (soma).",
     tipo: "QUEBRA",
   },
   recuperados: {
     titulo: "Conserto / Reparo de Pallets",
-    descricao: "Exclusivo do CD Hub (CDJC). Recuperados: Quebrados → Vazios. Pallets quebrados desmontados para o reparo: Quebrados → Descartados. A soma nunca ultrapassa o saldo de quebrados.",
+    descricao: "Exclusivo do CD Hub (CDJC). Recuperados: Pallets Quebrados → Pallets PBR. Pallets Quebrados desmontados para o reparo: Pallets Quebrados → Descartados. A soma nunca ultrapassa o saldo de quebrados.",
     tipo: "RECUPERADO",
   },
   descarte: {
     titulo: "Descarte / Destruição de Pallets",
-    descricao: "Baixa definitiva e imutável, disponível a todos os usuários. Ao confirmar, escolha de qual estoque os pallets saem: bons (vazios) ou quebrados.",
+    descricao: "Baixa definitiva e imutável, disponível a todos os usuários. Ao confirmar, escolha de qual estoque os pallets saem: Pallets PBR ou Pallets Quebrados.",
     tipo: "DESCARTE",
   },
 } as const;
@@ -52,7 +52,7 @@ export async function PaginaAvaria({ modo }: { modo: keyof typeof config }) {
           <p className="mb-4">
             {modo === "quebras" && <Fluxo origem="VAZIOS" destino="QUEBRADOS" />}
             {modo === "recuperados" && <Fluxo origem="QUEBRADOS" destino="VAZIOS" />}
-            {modo === "descarte" && <span className="text-[12px] text-t3">Vazios ou Quebrados → Descarte</span>}
+            {modo === "descarte" && <span className="text-[12px] text-t3">Pallets PBR ou Pallets Quebrados → Descarte</span>}
           </p>
           {modo === "descarte" ? (
             <FormDescarte saldoVazios={saldos.vazios} saldoQuebrados={saldos.quebrados} />

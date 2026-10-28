@@ -13,8 +13,8 @@ export const metadata = { title: "Envio de Pallets" };
 
 const MODOS = {
   CROSS: { rotulo: "Enviar para Ponto de Cross", descricao: "Gera o Vale-Pallet de Envio para um Ponto de Cross." },
-  CD: { rotulo: "Enviar para CD", descricao: "Gera o Vale-Pallet de Envio para outro CD (ex.: CDJC devolvendo pallets bons às filiais)." },
-  HUB: { rotulo: "Quebrados para o CDJC", descricao: "Gera o Vale de Pallets Quebrados para conserto no CD Hub (CDJC)." },
+  CD: { rotulo: "Enviar para CD", descricao: "Gera o Vale-Pallet de Envio para outro CD (ex.: CDJC devolvendo Pallets PBR às filiais)." },
+  HUB: { rotulo: "Pallets Quebrados para o CDJC", descricao: "Gera o Vale de Pallets Quebrados para conserto no CD Hub (CDJC)." },
 } as const;
 
 /** Envio de pallets: sai do estoque da unidade e fica em trânsito até a conferência no destino. */
@@ -69,7 +69,7 @@ export default async function EnvioPage({ searchParams }: { searchParams: Promis
             ) : (
               <Tabela>
                 <table className="tabela" data-testid="envios-transito">
-                  <thead><tr><th>Vale</th><th>Destino</th><th className="text-right">Bons</th><th className="text-right">Quebrados</th><th>Emissão</th></tr></thead>
+                  <thead><tr><th>Vale</th><th>Destino</th><th className="text-right">Pallets PBR</th><th className="text-right">Pallets Quebrados</th><th>Emissão</th></tr></thead>
                   <tbody>
                     {pendentes.map((v) => (
                       <tr key={v.id}>

@@ -21,7 +21,7 @@ export default async function SelecionarCDPage({ searchParams }: { searchParams:
   if (u.cds.length === 1 || (u.cd && !trocar)) redirect("/");
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center bg-[#000814]/60 p-[14px]">
+    <main className="relative flex min-h-screen items-center justify-center bg-[#000814]/60 p-[14px] pt-20 sm:pt-[14px]">
       <div className="absolute right-[14px] top-[14px]">
         <BotaoTema inicial={tema} />
       </div>

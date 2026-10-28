@@ -36,7 +36,7 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
     <>
       <Cabecalho
         titulo="Baixa de Pagamento"
-        descricao={`Valide as agendas de devolução realizadas em ${u.cd.codigo}. A baixa finaliza os vales, subtrai do Estoque de Vazios e reduz a dívida com o fornecedor.`}
+        descricao={`Valide as agendas de devolução realizadas em ${u.cd.codigo}. A baixa finaliza os vales, subtrai do estoque de Pallets PBR e reduz a dívida com o fornecedor.`}
       >
         <Link href="/vales" className="btn-secondary">Gerar nova agenda</Link>
       </Cabecalho>
@@ -47,7 +47,7 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
         </div>
       )}
       <p className="mb-5 flex flex-wrap items-center gap-2 text-[12px] text-t3">
-        A baixa dá saída oficial: <Fluxo origem="VAZIOS" destino="FORNECEDOR" /> · Saldo do Estoque de Vazios:{" "}
+        A baixa dá saída oficial: <Fluxo origem="VAZIOS" destino="FORNECEDOR" /> · Saldo do estoque de Pallets PBR:{" "}
         <strong className="num text-t1">{formatarNumero(saldos.vazios)}</strong>
       </p>
 
@@ -100,7 +100,7 @@ export default async function AgendasPage({ searchParams }: { searchParams: Prom
                   <FormAcao
                     acao={validarAgenda}
                     className="flex flex-1 flex-col gap-2"
-                    confirmar={`Confirmar a baixa da ${numeroAgenda(a.numero)}? ${total} pallet(s) sairão do Estoque de Vazios.`}
+                    confirmar={`Confirmar a baixa da ${numeroAgenda(a.numero)}? ${total} pallet(s) sairão do estoque de Pallets PBR.`}
                     botao={<><CircleCheck className="h-4 w-4" /> Validar e dar baixa</>}
                     classeBotao="btn-success"
                   >

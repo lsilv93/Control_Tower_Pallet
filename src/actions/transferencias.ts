@@ -31,8 +31,8 @@ const placaOpcional = z
 const schemaEnvio = z.object({
   modo: z.enum(["CROSS", "CD", "HUB"]),
   unidadeId: z.string().min(1, "Selecione a unidade de destino."),
-  quantidadeBons: inteiro("a quantidade de pallets bons").default(0),
-  quantidadeQuebrados: inteiro("a quantidade de pallets quebrados").default(0),
+  quantidadeBons: inteiro("a quantidade de Pallets PBR").default(0),
+  quantidadeQuebrados: inteiro("a quantidade de Pallets Quebrados").default(0),
   transportadoraId: z.string().min(1, "Selecione o transportador."),
   placa: placaOpcional,
   rota: opcional(60),
@@ -56,7 +56,7 @@ export async function enviarPallets(_: Estado, form: FormData): Promise<Estado> 
     const d = schemaEnvio.parse(Object.fromEntries(form));
     const total = d.quantidadeBons + d.quantidadeQuebrados;
     if (total <= 0) throw new ErroNegocio("Informe a quantidade de pallets a enviar.");
-    if (d.modo === "HUB" && d.quantidadeBons > 0) throw new ErroNegocio("Para o CDJC (Hub) são enviados somente pallets quebrados.");
+    if (d.modo === "HUB" && d.quantidadeBons > 0) throw new ErroNegocio("Para o CDJC (Hub) são enviados somente Pallets Quebrados.");
     const dataFaturamento = d.dataFaturamento ? new Date(`${d.dataFaturamento}T00:00:00Z`) : null;
 
     valeId = await comContaBloqueada(async (tx) => {
@@ -130,8 +130,8 @@ export async function enviarPallets(_: Estado, form: FormData): Promise<Estado> 
 const schemaConferencia = z.object({
   remetenteId: z.string().min(1, "Selecione a unidade remetente."),
   valeIds: z.array(z.string()).min(1, "Selecione ao menos um vale recebido."),
-  recebidoBons: inteiro("a quantidade de pallets bons recebidos"),
-  recebidoQuebrados: inteiro("a quantidade de pallets quebrados recebidos"),
+  recebidoBons: inteiro("a quantidade de Pallets PBR recebidos"),
+  recebidoQuebrados: inteiro("a quantidade de Pallets Quebrados recebidos"),
   confirmarDivergencia: z.boolean(),
   placa: placaOpcional,
   transportadora: opcional(200),
@@ -238,7 +238,7 @@ export async function conferirRecebimento(_: Estado, form: FormData): Promise<Es
             ...dadosOcorrencia,
             ocorrencia: "FALTA",
             quantidade: falta,
-            observacao: `FALTA na conferência ${rc} em ${u.cd.codigo}: ${codigos} somam ${declarado}, recebidos ${recebido} (bons ${d.recebidoBons}, quebrados ${d.recebidoQuebrados}). ${d.observacao}`,
+            observacao: `FALTA na conferência ${rc} em ${u.cd.codigo}: ${codigos} somam ${declarado}, recebidos ${recebido} (PBR ${d.recebidoBons}, quebrados ${d.recebidoQuebrados}). ${d.observacao}`,
           },
           select: { id: true, numero: true },
         });
@@ -306,7 +306,7 @@ const schemaResolucao = z
     estoque: z.enum(["VAZIOS", "QUEBRADOS"]).optional(),
     observacao: z.string().trim().min(5, "A justificativa é obrigatória (mínimo 5 caracteres).").max(500),
   })
-  .refine((d) => d.resolucao === "PERDA" || !!d.estoque, { message: "Informe se os pallets localizados são bons ou quebrados." });
+  .refine((d) => d.resolucao === "PERDA" || !!d.estoque, { message: "Informe se os pallets localizados são Pallets PBR ou Pallets Quebrados." });
 
 /**
  * Resolve uma falta: pallets localizados voltam ao estoque da unidade remetente, ou a
