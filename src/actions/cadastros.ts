@@ -257,10 +257,14 @@ export async function salvarUsuario(_: Estado, form: FormData): Promise<Estado> 
     const existente = await prisma.usuario.findUnique({ where: { login: d.login } });
     if (existente && existente.id !== id) throw new ErroNegocio(`O login "${d.login}" já está em uso.`);
 
-    // Unidade (CD ou Ponto de Cross) obrigatória para todos os usuários.
-    const unidadeId = String(form.get("unidadeId") ?? "");
-    const unidade = unidadeId ? await prisma.centroDistribuicao.findUnique({ where: { id: unidadeId }, select: { id: true, codigo: true } }) : null;
-    if (!unidade) return falha("Vincule o usuário a um CD ou Ponto de Cross.");
+    // Unidades vinculadas (CDs e/ou Pontos de Cross): ao menos uma. A principal é mantida se
+    // continuar marcada; senão passa a ser a primeira marcada.
+    const unidadeIds = [...new Set(form.getAll("unidadeIds").map(String).filter(Boolean))];
+    if (unidadeIds.length === 0) return falha("Vincule o usuário a pelo menos um CD ou Ponto de Cross.");
+    const unidades = await prisma.centroDistribuicao.findMany({ where: { id: { in: unidadeIds } }, select: { id: true, codigo: true } });
+    if (unidades.length !== unidadeIds.length) return falha("Uma ou mais unidades selecionadas são inválidas.");
+    const atual = id ? await prisma.usuario.findUnique({ where: { id }, select: { unidadeId: true } }) : null;
+    const unidade = unidades.find((x) => x.id === atual?.unidadeId) ?? unidades.find((x) => x.id === unidadeIds[0])!;
 
     const dados = {
       nome: d.nome,
@@ -270,15 +274,18 @@ export async function salvarUsuario(_: Estado, form: FormData): Promise<Estado> 
       unidadeId: unidade.id,
       ...(senha ? { senhaHash: await bcrypt.hash(senha, 10) } : {}),
     };
-    const u = id
-      ? await prisma.usuario.update({ where: { id }, data: dados })
-      : await prisma.usuario.create({ data: { ...dados, senhaHash: dados.senhaHash! } });
+    const u = await prisma.$transaction(async (tx) => {
+      const u = id ? await tx.usuario.update({ where: { id }, data: dados }) : await tx.usuario.create({ data: { ...dados, senhaHash: dados.senhaHash! } });
+      await tx.usuarioUnidade.deleteMany({ where: { usuarioId: u.id, unidadeId: { notIn: unidadeIds } } });
+      await tx.usuarioUnidade.createMany({ data: unidadeIds.map((unidadeId) => ({ usuarioId: u.id, unidadeId })), skipDuplicates: true });
+      return u;
+    });
     await auditar(prisma, {
       acao: id ? "EDITAR_USUARIO" : "CRIAR_USUARIO",
       entidade: "Usuario",
       entidadeId: u.id,
       usuarioId: admin.id,
-      detalhes: { login: d.login, perfil: d.perfil, permissoes, unidade: unidade.codigo, senhaAlterada: !!senha },
+      detalhes: { login: d.login, perfil: d.perfil, permissoes, unidadePrincipal: unidade.codigo, unidades: unidades.map((x) => x.codigo), senhaAlterada: !!senha },
     });
     msg = `Usuário ${u.login} ${id ? "atualizado" : "criado"}.`;
   } catch (e) {

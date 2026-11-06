@@ -20,6 +20,8 @@ import { formatarDataHora } from "@/lib/datas";
 import { formatarNumero as n, numeroVale, rotuloStatusVale } from "@/lib/formatos";
 import { filtroData, lerPeriodo } from "@/lib/periodo";
 import { prisma } from "@/lib/prisma";
+import { filtroAguardandoUsuario } from "@/lib/ocorrencias";
+import { ArrowRight } from "lucide-react";
 
 type Busca = { periodo?: string; dia?: string; ano?: string; semana?: string; mes?: string; de?: string; ate?: string; fornecedor?: string };
 
@@ -43,7 +45,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const filtroCross = usuario.global ? {} : cd.tipo === "CROSS" ? { id: cd.id } : { cdsAtendidos: { some: { cdId: cd.id } } };
   const idsCross = (await prisma.centroDistribuicao.findMany({ where: { tipo: "CROSS", ativo: true, ...filtroCross }, select: { id: true } })).map((c) => c.id);
 
-  const [saldos, fluxoPeriodo, porTipo, serie, saldoAntes, pendencias, vales, excluidos, transporte, conferencias, posicaoCross, transito, valesTodos] = await Promise.all([
+  const [aguardandoAcao, saldos, fluxoPeriodo, porTipo, serie, saldoAntes, pendencias, vales, excluidos, transporte, conferencias, posicaoCross, transito, valesTodos] = await Promise.all([
+    prisma.valePallet.findMany({
+      where: filtroAguardandoUsuario(usuario),
+      include: { cd: { select: { codigo: true } }, unidade: { select: { codigo: true } }, aguardando: { select: { codigo: true } } },
+      orderBy: { criadoEm: "asc" },
+      take: 6,
+    }),
     obterSaldos(cd.id),
     fluxo(cd.id, intervalo, fornecedorId),
     totaisPorTipo(cd.id, intervalo),
@@ -118,6 +126,39 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Kpi titulo="Em trânsito" valor={saldos.transito} legenda="Enviados, aguardando conferência" icone={Truck} cor="neutro" testid="saldo-transito" rodape={`${transito.filter((v) => v.cdId === cd.id).length} vale(s) de envio`} />
         <Kpi titulo="A receber" valor={saldos.aReceber} legenda="Vales destinados a esta unidade" icone={PackageOpen} cor="neutro" testid="saldo-a-receber" rodape={`${saldos.valesAReceber} vale(s) para conferir`} />
         <Kpi titulo="Faltas em aberto" valor={saldos.ocorrencias} legenda="Ocorrências a apurar" icone={TriangleAlert} cor="erro" testid="saldo-ocorrencias" rodape={`${saldos.ocorrenciasAbertas} ocorrência(s) envolvendo a unidade`} />
+      </div>
+
+      {/* Ocorrências que exigem ação do usuário */}
+      <div className="mt-6">
+        <Painel
+          titulo={
+            <span className="flex items-center gap-2">
+              <TriangleAlert className={aguardandoAcao.length ? "h-4 w-4 text-erro" : "h-4 w-4 text-lima"} /> Ocorrências aguardando sua ação
+            </span>
+          }
+          acoes={<Link href="/ocorrencias?f=acao" className="text-[11px] font-semibold text-lima hover:underline">Abrir ocorrências</Link>}
+        >
+          {aguardandoAcao.length === 0 ? (
+            <p className="poco px-4 py-3 text-[12px] text-t3" data-testid="widget-ocorrencias">Nenhuma divergência aguardando a sua resposta.</p>
+          ) : (
+            <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3" data-testid="widget-ocorrencias">
+              {aguardandoAcao.map((o) => (
+                <li key={o.id}>
+                  <Link href="/ocorrencias?f=acao" className="poco flex items-center gap-3 px-4 py-3 transition hover:ring-1 hover:ring-erro/50">
+                    <span className={o.ocorrencia === "FALTA" ? "pill text-erro bg-erro/10" : "pill text-t2 bg-t2/10"}>{o.ocorrencia === "FALTA" ? "Falta" : "Sobra"}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="num block text-[12px] font-semibold text-t1">{numeroVale(o.numero, "OCORRENCIA")}</span>
+                      <span className="num flex items-center gap-1 text-[11px] text-t4">
+                        {o.cd.codigo} <ArrowRight className="h-3 w-3" /> {o.unidade?.codigo} · aguardando {o.aguardando?.codigo}
+                      </span>
+                    </span>
+                    <span className="num text-[18px] font-semibold text-t1">{n(o.quantidade)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Painel>
       </div>
 
       {/* Gráficos gerenciais · Pontos de Cross */}

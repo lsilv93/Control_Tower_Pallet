@@ -61,7 +61,7 @@ const grupos: { titulo: string; itens: Item[] }[] = [
     itens: [
       { href: "/envio", rotulo: "Envio de Pallets", icone: ArrowUpFromLine, permissao: "envio" },
       { href: "/recebimento", rotulo: "Recebimento / Conferência", icone: ClipboardCheck, permissao: "recebimento" },
-      { href: "/ocorrencias", rotulo: "Ocorrências", icone: TriangleAlert, requer: "naoCross" },
+      { href: "/ocorrencias", rotulo: "Ocorrências", icone: TriangleAlert },
     ],
   },
   {
@@ -120,11 +120,14 @@ function visivel(i: Item, u: UsuarioMenu, cd: CDMenu | null) {
 export function Menu({
   usuario,
   cd,
+  pendencias = 0,
   podeTrocarCD,
   tema,
 }: {
   usuario: UsuarioMenu;
   cd: CDMenu | null;
+  /** Ocorrências aguardando resposta de uma das unidades do usuário (badge no menu). */
+  pendencias?: number;
   podeTrocarCD: boolean;
   tema: Tema;
 }) {
@@ -213,7 +216,12 @@ export function Menu({
                         )}
                       >
                         <i.icone className="h-4 w-4 flex-none" />
-                        {i.rotulo}
+                        <span className="flex-1">{i.rotulo}</span>
+                        {i.href === "/ocorrencias" && pendencias > 0 && (
+                          <span className="num rounded-full bg-erro px-2 py-0.5 text-[10px] font-bold text-white" data-testid="badge-ocorrencias" title="Ocorrências aguardando sua ação">
+                            {pendencias}
+                          </span>
+                        )}
                       </Link>
                     ))}
                   </div>
@@ -229,7 +237,13 @@ export function Menu({
                 {usuario.login} · {ROTULO_PERFIL[usuario.perfil]}
               </p>
               <p className="mt-0.5 text-[10px] text-t4" data-testid="escopo-usuario">
-                {usuario.global ? "Acesso a todas as unidades" : usuario.unidade.tipo === "CROSS" ? "Ponto de Cross" : "Visão da unidade"}
+                {usuario.global
+                  ? "Acesso a todas as unidades"
+                  : podeTrocarCD
+                    ? "Várias unidades vinculadas"
+                    : usuario.unidade.tipo === "CROSS"
+                      ? "Ponto de Cross"
+                      : "Visão da unidade"}
               </p>
             </div>
             <div className="mt-3">

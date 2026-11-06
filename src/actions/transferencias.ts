@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { exigir, exigirAdmin } from "./guarda";
+import { exigir } from "./guarda";
+import { requireUsuario } from "@/lib/auth";
 import { auditar, comContaBloqueada, ErroNegocio, lancar } from "@/lib/conta";
 import { formatarNumero, normalizarPlaca, numeroConferencia, numeroVale, placaValida, rotuloUnidade } from "@/lib/formatos";
-import { sucesso, tratarErro, type Estado } from "./estado";
+import { tratarErro, type Estado } from "./estado";
 
 const inteiro = (rotulo: string) =>
   z.coerce
@@ -245,12 +246,19 @@ export async function conferirRecebimento(_: Estado, form: FormData): Promise<Es
         conferenciaOrigemId: conferencia.id,
         criadoPorId: u.id,
       };
+      // A divergência vira ocorrência pendente na unidade remetente, que aceita ou recusa.
       if (falta > 0) {
+        // Quanto da falta é de Pallets PBR e quanto de Quebrados (pelo declarado nos vales).
+        const declaradoBons = vales.reduce((s, v) => s + v.quantidadeBons, 0);
+        const faltaBons = Math.min(falta, Math.max(0, declaradoBons - d.recebidoBons));
         ocorrencia = await tx.valePallet.create({
           data: {
             ...dadosOcorrencia,
             ocorrencia: "FALTA",
             quantidade: falta,
+            quantidadeBons: faltaBons,
+            quantidadeQuebrados: falta - faltaBons,
+            aguardandoId: remetente.id,
             observacao: `FALTA na conferência ${rc} em ${u.cd.codigo}: ${codigos} somam ${declarado}, recebidos ${recebido} (PBR ${d.recebidoBons}, quebrados ${d.recebidoQuebrados}). ${d.observacao}`,
           },
           select: { id: true, numero: true },
@@ -265,8 +273,7 @@ export async function conferirRecebimento(_: Estado, form: FormData): Promise<Es
             quantidade: sobra,
             quantidadeBons: sobraBons,
             quantidadeQuebrados: sobraQuebrados,
-            status: "FINALIZADO",
-            finalizadoEm: agora,
+            aguardandoId: remetente.id,
             observacao: `SOBRA na conferência ${rc} em ${u.cd.codigo}: ${codigos} somam ${declarado}, recebidos ${recebido}. ${d.observacao}`,
           },
           select: { id: true, numero: true },
@@ -286,6 +293,9 @@ export async function conferirRecebimento(_: Estado, form: FormData): Promise<Es
         detalhes: { numero: conferencia.numero, remetente: remetente.codigo, vales: codigos, declarado, recebidoBons: d.recebidoBons, recebidoQuebrados: d.recebidoQuebrados, diferenca },
       });
       if (ocorrencia) {
+        await tx.ocorrenciaInteracao.create({
+          data: { valeId: ocorrencia.id, acao: "ABERTURA", unidadeId: u.cd.id, usuarioId: u.id, justificativa: d.observacao },
+        });
         await auditar(tx, {
           acao: falta > 0 ? "GERAR_OCORRENCIA_FALTA" : "GERAR_OCORRENCIA_SOBRA",
           entidade: "ValePallet",
@@ -310,58 +320,136 @@ export async function conferirRecebimento(_: Estado, form: FormData): Promise<Es
   redirect(destinoUrl);
 }
 
-// ---------------- Resolução de ocorrência de falta (administrador) ----------------
+// ---------------- Ocorrência: aceite ou recusa (ciclo entre remetente e recebedor) ----------------
 
-const schemaResolucao = z
+const schemaResposta = z
   .object({
     valeId: z.string().min(1),
-    resolucao: z.enum(["LOCALIZADA", "PERDA"], { message: "Selecione como a ocorrência foi resolvida." }),
-    estoque: z.enum(["VAZIOS", "QUEBRADOS"]).optional(),
-    observacao: z.string().trim().min(5, "A justificativa é obrigatória (mínimo 5 caracteres).").max(500),
+    acao: z.enum(["ACEITAR", "RECUSAR"], { message: "Escolha aceitar ou recusar a ocorrência." }),
+    justificativa: z
+      .string()
+      .trim()
+      .max(500)
+      .optional()
+      .transform((v) => v || null),
   })
-  .refine((d) => d.resolucao === "PERDA" || !!d.estoque, { message: "Informe se os pallets localizados são Pallets PBR ou Pallets Quebrados." });
+  .refine((d) => d.acao === "ACEITAR" || (d.justificativa?.length ?? 0) >= 10, {
+    message: "Para recusar, a justificativa é obrigatória (mínimo 10 caracteres).",
+  });
 
 /**
- * Resolve uma falta: pallets localizados voltam ao estoque da unidade remetente, ou a
- * falta é baixada como perda. Exclusivo de administradores.
+ * Resposta da unidade da vez a uma ocorrência de divergência. Recusar (com justificativa)
+ * devolve a pendência à outra unidade; o ciclo se repete até um aceite. O aceite encerra a
+ * ocorrência e ajusta a conta corrente em definitivo:
+ * - FALTA aceita pelo remetente: Ocorrência → Perda no remetente.
+ * - FALTA aceita pelo recebedor: remetente Ocorrência → Enviado; recebedor Recebido → estoque.
+ * - SOBRA aceita pelo remetente: remetente estoque → Enviado (bloqueia sem saldo);
+ *   recebedor Recebido → Sobra (o físico já entrou no estoque na conferência).
+ * - SOBRA aceita pelo recebedor: a sobra fica incorporada ao estoque do recebedor.
+ * Somente usuários operando a unidade da vez (ou administradores) respondem.
  */
-export async function resolverOcorrencia(_: Estado, form: FormData): Promise<Estado> {
+export async function responderOcorrencia(_: Estado, form: FormData): Promise<Estado> {
+  let mensagem: string;
+  const aba = String(form.get("aba") ?? "acao").replace(/[^a-z]/g, "") || "acao";
   try {
-    const u = await exigirAdmin();
-    const d = schemaResolucao.parse(Object.fromEntries(form));
-    const vale = await comContaBloqueada(async (tx) => {
-      const vale = await tx.valePallet.findUnique({ where: { id: d.valeId }, include: { cd: true } });
-      if (!vale || vale.tipo !== "OCORRENCIA" || vale.ocorrencia !== "FALTA") throw new ErroNegocio("Ocorrência de falta não encontrada.");
-      const { count } = await tx.valePallet.updateMany({
-        where: { id: vale.id, status: "PENDENTE" },
-        data: { status: "FINALIZADO", finalizadoEm: new Date(), resolucao: d.resolucao, resolvidoEm: new Date(), resolvidoPorId: u.id, observacaoResolucao: d.observacao },
-      });
-      if (count !== 1) throw new ErroNegocio("Esta ocorrência já foi resolvida.");
+    const u = await requireUsuario();
+    const d = schemaResposta.parse(Object.fromEntries(form));
+    const r = await comContaBloqueada(async (tx) => {
+      const vale = await tx.valePallet.findUnique({ where: { id: d.valeId }, include: { cd: true, unidade: true } });
+      if (!vale || vale.tipo !== "OCORRENCIA" || !vale.ocorrencia || !vale.unidade) throw new ErroNegocio("Ocorrência não encontrada.");
+      if (vale.status !== "PENDENTE" || !vale.aguardandoId) throw new ErroNegocio("Esta ocorrência já foi encerrada.");
+      const daVez = vale.aguardandoId === vale.cdId ? vale.cd : vale.unidade;
+      const outra = daVez.id === vale.cdId ? vale.unidade : vale.cd;
+      // Responde quem tem acesso à unidade da vez (ou administrador, que age em nome dela).
+      if (!u.global && !u.cds.some((c) => c.id === daVez.id)) {
+        throw new ErroNegocio(`Esta ocorrência aguarda resposta de ${daVez.codigo}. Somente usuários dessa unidade podem responder.`);
+      }
       const codigo = numeroVale(vale.numero, "OCORRENCIA");
-      await lancar(
-        tx,
-        d.resolucao === "LOCALIZADA"
-          ? { tipo: "OCORRENCIA_LOCALIZADA", destino: d.estoque, quantidade: vale.quantidade, usuarioId: u.id, cdId: vale.cdId, unidadeId: vale.unidadeId, valeId: vale.id, observacao: `${codigo} localizada - ${d.observacao}` }
-          : { tipo: "OCORRENCIA_PERDA", quantidade: vale.quantidade, usuarioId: u.id, cdId: vale.cdId, unidadeId: vale.unidadeId, valeId: vale.id, observacao: `${codigo} baixada como perda - ${d.observacao}` },
-        vale.cd.codigo,
-      );
+      const agora = new Date();
+
+      if (d.acao === "RECUSAR") {
+        const { count } = await tx.valePallet.updateMany({
+          where: { id: vale.id, status: "PENDENTE", aguardandoId: daVez.id },
+          data: { aguardandoId: outra.id, recusas: { increment: 1 } },
+        });
+        if (count !== 1) throw new ErroNegocio("A ocorrência foi respondida por outro usuário. Atualize a página.");
+        await tx.ocorrenciaInteracao.create({ data: { valeId: vale.id, acao: "RECUSA", unidadeId: daVez.id, usuarioId: u.id, justificativa: d.justificativa } });
+        await auditar(tx, {
+          acao: "RECUSAR_OCORRENCIA",
+          entidade: "ValePallet",
+          entidadeId: vale.id,
+          usuarioId: u.id,
+          cdId: daVez.id,
+          quantidade: vale.quantidade,
+          observacao: d.justificativa,
+          detalhes: { numero: vale.numero, recusadaPor: daVez.codigo, devolvidaPara: outra.codigo },
+        });
+        return `${codigo} recusada por ${daVez.codigo}: a pendência voltou para ${outra.codigo} com a justificativa.`;
+      }
+
+      const peloRemetente = daVez.id === vale.cdId;
+      const { count } = await tx.valePallet.updateMany({
+        where: { id: vale.id, status: "PENDENTE", aguardandoId: daVez.id },
+        data: {
+          status: "FINALIZADO",
+          finalizadoEm: agora,
+          aguardandoId: null,
+          resolucao: peloRemetente ? "ACEITA_REMETENTE" : "ACEITA_RECEBEDOR",
+          resolvidoEm: agora,
+          resolvidoPorId: u.id,
+          observacaoResolucao: d.justificativa,
+        },
+      });
+      if (count !== 1) throw new ErroNegocio("A ocorrência foi respondida por outro usuário. Atualize a página.");
+      const base = { usuarioId: u.id, valeId: vale.id, conferenciaId: vale.conferenciaOrigemId };
+      const obs = `${codigo} aceita por ${daVez.codigo}${d.justificativa ? ` - ${d.justificativa}` : ""}`;
+      const remetente = { ...base, cdId: vale.cdId, unidadeId: vale.unidadeId };
+      const recebedor = { ...base, cdId: vale.unidade.id, unidadeId: vale.cdId };
+      const partes = [
+        ["VAZIOS", vale.quantidadeBons],
+        ["QUEBRADOS", vale.quantidadeQuebrados],
+      ] as const;
+      if (vale.ocorrencia === "FALTA") {
+        if (peloRemetente) {
+          await lancar(tx, { ...remetente, tipo: "OCORRENCIA_PERDA", quantidade: vale.quantidade, observacao: `${obs} (baixada como perda)` }, vale.cd.codigo);
+        } else {
+          await lancar(tx, { ...remetente, tipo: "DIVERGENCIA_ENVIADO", origem: "OCORRENCIA", quantidade: vale.quantidade, observacao: obs }, vale.cd.codigo);
+          for (const [estoque, qtd] of partes) {
+            if (qtd > 0) await lancar(tx, { ...recebedor, tipo: "DIVERGENCIA_RECEBIDO", destino: estoque, quantidade: qtd, observacao: obs }, vale.unidade.codigo);
+          }
+        }
+      } else if (peloRemetente) {
+        for (const [estoque, qtd] of partes) {
+          if (qtd > 0) await lancar(tx, { ...remetente, tipo: "DIVERGENCIA_ENVIADO", origem: estoque, quantidade: qtd, observacao: obs }, vale.cd.codigo);
+        }
+        await lancar(tx, { ...recebedor, tipo: "DIVERGENCIA_RECEBIDO", destino: "SOBRA", quantidade: vale.quantidade, observacao: obs }, vale.unidade.codigo);
+      }
+      await tx.ocorrenciaInteracao.create({ data: { valeId: vale.id, acao: "ACEITE", unidadeId: daVez.id, usuarioId: u.id, justificativa: d.justificativa } });
       await auditar(tx, {
-        acao: "RESOLVER_OCORRENCIA",
+        acao: "ACEITAR_OCORRENCIA",
         entidade: "ValePallet",
         entidadeId: vale.id,
         usuarioId: u.id,
-        cdId: vale.cdId,
+        cdId: daVez.id,
         quantidade: vale.quantidade,
-        observacao: d.observacao,
-        detalhes: { numero: vale.numero, resolucao: d.resolucao, estoque: d.estoque ?? null },
+        observacao: d.justificativa,
+        detalhes: { numero: vale.numero, ocorrencia: vale.ocorrencia, aceitaPor: daVez.codigo, recusas: vale.recusas },
       });
-      return vale;
+      const efeito =
+        vale.ocorrencia === "FALTA"
+          ? peloRemetente
+            ? `${vale.quantidade} pallet(s) baixados como perda de ${vale.cd.codigo}`
+            : `${vale.quantidade} pallet(s) assumidos no estoque de ${vale.unidade.codigo}`
+          : peloRemetente
+            ? `${vale.quantidade} pallet(s) baixados do estoque de ${vale.cd.codigo} como enviados`
+            : `${vale.quantidade} pallet(s) incorporados ao estoque de ${vale.unidade.codigo}`;
+      return `${codigo} aceita por ${daVez.codigo} e encerrada: ${efeito}.`;
     });
-    revalidatePath("/", "layout");
-    return sucesso(
-      `${numeroVale(vale.numero, "OCORRENCIA")} resolvida: ${d.resolucao === "LOCALIZADA" ? `${vale.quantidade} pallet(s) devolvidos ao estoque de ${vale.cd.codigo}` : `${vale.quantidade} pallet(s) baixados como perda`}.`,
-    );
+    mensagem = r;
   } catch (e) {
     return tratarErro(e);
   }
+  // A ocorrência sai da lista "aguardando" ao ser respondida: a confirmação aparece no topo da página.
+  revalidatePath("/", "layout");
+  redirect(`/ocorrencias?f=${aba}&ok=${encodeURIComponent(mensagem)}`);
 }

@@ -52,11 +52,11 @@ export async function PaginaUnidades({ tipo, editar, ok }: { tipo: "CD" | "CROSS
               />
               {tipo === "CROSS" && (
                 <fieldset className="poco p-4" data-testid="cds-atendidos">
-                  <legend className="label !mb-2">CDs atendidos * <span className="normal-case tracking-normal text-t4">(marque um ou mais)</span></legend>
+                  <legend className="label float-left !mb-3 w-full">CDs atendidos * <span className="normal-case tracking-normal text-t4">(marque um ou mais)</span></legend>
                   {cds.length === 0 ? (
                     <p className="text-[11px] text-erro">Cadastre um CD antes de cadastrar o Ponto de Cross.</p>
                   ) : (
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="clear-both grid gap-2 sm:grid-cols-2">
                       {cds.map((cd) => (
                         <label key={cd.id} className="flex cursor-pointer items-center gap-2 text-[12px] text-t2">
                           <input type="checkbox" name="cdIds" value={cd.id} defaultChecked={editando?.cdsAtendidos.some((v) => v.cdId === cd.id) ?? cds.length === 1} />

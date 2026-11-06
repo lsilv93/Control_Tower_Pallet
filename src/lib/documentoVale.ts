@@ -77,9 +77,7 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
       : v.tipo === "OCORRENCIA"
         ? v.resolucao
           ? `${rotuloResolucao[v.resolucao]} em ${formatarDataHora(v.resolvidoEm)}`
-          : v.ocorrencia === "SOBRA"
-            ? "Sobra registrada no estoque do recebedor"
-            : "Em aberto · aguardando apuração"
+          : "Pendente · aguardando aceite ou recusa"
         : v.status === "FINALIZADO"
           ? `${v.tipo === "ENVIO" ? "Conferido" : "Baixado"} em ${formatarDataHora(v.finalizadoEm)}${v.agenda ? ` · ${numeroAgenda(v.agenda.numero)}` : ""}${v.conferencia ? ` · ${numeroConferencia(v.conferencia.numero)}` : ""}`
           : v.status === "AGENDADO" && v.agenda
@@ -107,9 +105,11 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
     { rotulo: "ID único do documento", valor: `${codigo} · ${v.id}`, colunas: 2 },
     { rotulo: "Situação", valor: situacao, colunas: 2 },
   ];
+  // Envio e ocorrência: Pallets PBR, Pallets Quebrados e o total geral, sempre separados.
   const composicao: Celula[] = [
-    { rotulo: "Pallets PBR", valor: formatarNumero(v.quantidadeBons), colunas: 2 },
-    { rotulo: "Pallets Quebrados", valor: formatarNumero(v.quantidadeQuebrados), colunas: 2 },
+    { rotulo: "Total de Pallets PBR (bons)", valor: formatarNumero(v.quantidadeBons), colunas: 1 },
+    { rotulo: "Total de Pallets Quebrados", valor: formatarNumero(v.quantidadeQuebrados), colunas: 1 },
+    { rotulo: "Total geral (PBR + Quebrados)", valor: formatarNumero(v.quantidadeBons + v.quantidadeQuebrados), colunas: 2 },
   ];
 
   if (v.tipo === "FORNECEDOR") {
@@ -164,7 +164,7 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
         emissao,
         rodape,
       ],
-      rotuloQuantidade: "Total de pallets PBR enviados",
+      rotuloQuantidade: "Total geral enviado (Pallets PBR + Pallets Quebrados)",
       destaque: null,
       declaracao: `Os pallets acima saíram do estoque de ${v.cd.codigo} e permanecem em trânsito até a conferência física em ${v.unidade?.codigo ?? "destino"}. Divergências na conferência geram Vale de Ocorrência.`,
       assinaturas: ["Expedição (remetente)", "Transportador"],
@@ -196,11 +196,9 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
     ],
     rotuloQuantidade: falta ? "Quantidade de pallets em falta" : "Quantidade de pallets em sobra",
     destaque: falta
-      ? { titulo: "OCORRÊNCIA DE FALTA", texto: `A contagem física foi menor que a soma dos vales. A diferença fica em ocorrência no livro de ${v.cd.codigo} até ser localizada ou baixada como perda.` }
-      : { titulo: "OCORRÊNCIA DE SOBRA", texto: `A contagem física foi maior que a soma dos vales. O excedente entrou no estoque de ${v.unidade?.codigo ?? "recebedor"}.` },
-    declaracao: falta
-      ? `Vale devolutivo à unidade remetente ${v.cd.codigo} para apuração. Registrado com data, hora e número do vale, auditável pelas duas unidades.`
-      : "Sobra registrada com data, hora e número do vale, auditável pelas duas unidades.",
+      ? { titulo: "OCORRÊNCIA DE FALTA", texto: `A contagem física foi menor que a soma dos vales. A diferença fica em ocorrência no livro de ${v.cd.codigo} até uma das unidades aceitar: o remetente (baixa como perda) ou o recebedor (assume os pallets).` }
+      : { titulo: "OCORRÊNCIA DE SOBRA", texto: `A contagem física foi maior que a soma dos vales. O excedente entrou no estoque de ${v.unidade?.codigo ?? "recebedor"} e a ocorrência segue pendente até uma das unidades aceitar.` },
+    declaracao: `Ocorrência pendente na unidade remetente ${v.cd.codigo}, que aceita ou recusa com justificativa; a recusa devolve a pendência ao recebedor, até um aceite. Registrada com data, hora e número do vale, auditável pelas duas unidades.`,
     assinaturas: ["Conferente (recebedor)", "Transportador"],
   };
 }

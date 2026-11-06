@@ -30,7 +30,10 @@ export const REGRAS: Record<TipoMovimentacao, { origem: readonly Conta[]; destin
   RECEBIMENTO: { origem: ["RECEBIDO"], destino: EST },
   FALTA: { origem: ["TRANSITO"], destino: ["OCORRENCIA"] },
   SOBRA: { origem: ["SOBRA"], destino: EST },
-  OCORRENCIA_LOCALIZADA: { origem: ["OCORRENCIA"], destino: EST },
+  // Divergência aceita: o remetente assume (falta reconhecida pelo recebedor sai da ocorrência;
+  // sobra reconhecida pelo remetente sai do seu estoque) e o recebedor reclassifica o recebido.
+  DIVERGENCIA_ENVIADO: { origem: ["OCORRENCIA", "VAZIOS", "QUEBRADOS"], destino: ["ENVIADO"] },
+  DIVERGENCIA_RECEBIDO: { origem: ["RECEBIDO"], destino: ["VAZIOS", "QUEBRADOS", "SOBRA"] },
   OCORRENCIA_PERDA: { origem: ["OCORRENCIA"], destino: ["PERDA"] },
   ESTORNO_ENVIO: { origem: ["TRANSITO"], destino: EST },
   QUEBRA: { origem: ["VAZIOS"], destino: ["QUEBRADOS"] },
@@ -116,7 +119,7 @@ export async function obterSaldos(cdId: string, db: Db = prisma) {
       _sum: { quantidade: true },
       _count: true,
     }),
-    db.valePallet.count({ where: { tipo: "OCORRENCIA", ocorrencia: "FALTA", status: "PENDENTE", OR: [{ cdId }, { unidadeId: cdId }] } }),
+    db.valePallet.count({ where: { tipo: "OCORRENCIA", status: "PENDENTE", OR: [{ cdId }, { unidadeId: cdId }] } }),
   ]);
   return {
     vazios: contas.VAZIOS,

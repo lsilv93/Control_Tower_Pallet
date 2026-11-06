@@ -52,7 +52,8 @@ enum TipoMovimentacao {
   RECEBIMENTO // unidade destino: Recebido → Vazios/Quebrados
   FALTA // unidade origem: Trânsito → Ocorrência
   SOBRA // unidade destino: Sobra → Vazios/Quebrados
-  OCORRENCIA_LOCALIZADA // unidade origem: Ocorrência → Vazios/Quebrados
+  DIVERGENCIA_ENVIADO // remetente assume a divergência aceita: Ocorrência/Vazios/Quebrados → Enviado
+  DIVERGENCIA_RECEBIDO // recebedor assume a divergência aceita: Recebido → Vazios/Quebrados/Sobra
   OCORRENCIA_PERDA // unidade origem: Ocorrência → Perda
   ESTORNO_ENVIO // unidade origem: Trânsito → Vazios/Quebrados (vale excluído antes da conferência)
   QUEBRA // Vazios → Quebrados
@@ -78,9 +79,17 @@ enum TipoOcorrencia {
   SOBRA
 }
 
+/// Quem aceitou a divergência (a pendência só termina com um aceite).
 enum ResolucaoOcorrencia {
-  LOCALIZADA // pallets localizados e devolvidos à unidade remetente
-  PERDA // baixada como perda
+  ACEITA_REMETENTE // falta: baixada como perda do remetente; sobra: remetente reconhece o envio a mais
+  ACEITA_RECEBEDOR // falta: recebedor assume ter recebido; sobra: fica incorporada ao recebedor
+}
+
+/// Histórico do ciclo da ocorrência (abertura, recusas com justificativa, aceite).
+enum AcaoOcorrencia {
+  ABERTURA
+  RECUSA
+  ACEITE
 }
 
 enum StatusVale {
@@ -112,23 +121,39 @@ model Usuario {
   perfil       Perfil   @default(OPERADOR)
   /// Permissões granulares por tela/funcionalidade (perfil OPERADOR).
   permissoes   String[] @default([])
-  /// Unidade (CD ou Ponto de Cross) à qual o usuário pertence.
+  /// Unidade principal (CD ou Ponto de Cross) do usuário; as demais ficam em `unidades`.
   unidadeId    String
   ativo        Boolean  @default(true)
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  unidade          CentroDistribuicao @relation("UsuarioUnidade", fields: [unidadeId], references: [id])
-  movimentacoes    Movimentacao[]
-  conferencias     Conferencia[]
-  valesCriados     ValePallet[]       @relation("ValeCriadoPor")
-  valesCancelados  ValePallet[]       @relation("ValeCanceladoPor")
-  valesResolvidos  ValePallet[]       @relation("ValeResolvidoPor")
-  agendasCriadas   AgendaDevolucao[]  @relation("AgendaCriadaPor")
-  agendasValidadas AgendaDevolucao[]  @relation("AgendaValidadaPor")
-  auditorias       Auditoria[]
-  compras          Compra[]
+  unidade              CentroDistribuicao    @relation("UsuarioUnidade", fields: [unidadeId], references: [id])
+  /// Todas as unidades em que o operador atua (inclui a principal).
+  unidades             UsuarioUnidade[]
+  interacoesOcorrencia OcorrenciaInteracao[]
+  movimentacoes        Movimentacao[]
+  conferencias         Conferencia[]
+  valesCriados         ValePallet[]          @relation("ValeCriadoPor")
+  valesCancelados      ValePallet[]          @relation("ValeCanceladoPor")
+  valesResolvidos      ValePallet[]          @relation("ValeResolvidoPor")
+  agendasCriadas       AgendaDevolucao[]     @relation("AgendaCriadaPor")
+  agendasValidadas     AgendaDevolucao[]     @relation("AgendaValidadaPor")
+  auditorias           Auditoria[]
+  compras              Compra[]
 
+  @@index([unidadeId])
+}
+
+/// Vínculo N:N entre usuário e as unidades (CDs e Pontos de Cross) que ele pode operar.
+model UsuarioUnidade {
+  usuarioId String
+  unidadeId String
+  criadoEm  DateTime @default(now())
+
+  usuario Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  unidade CentroDistribuicao @relation(fields: [unidadeId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, unidadeId])
   @@index([unidadeId])
 }
 
@@ -150,16 +175,19 @@ model CentroDistribuicao {
   criadoEm              DateTime    @default(now())
 
   /// Ponto de Cross: CDs que ele atende (um Cross pode atender vários CDs).
-  cdsAtendidos          CrossCD[]         @relation("CrossDoVinculo")
+  cdsAtendidos          CrossCD[]             @relation("CrossDoVinculo")
   /// CD: Pontos de Cross vinculados a ele.
-  crossesAtendidos      CrossCD[]         @relation("CDDoVinculo")
-  usuarios              Usuario[]         @relation("UsuarioUnidade")
-  movimentacoes         Movimentacao[]    @relation("MovimentacaoCD")
-  movimentacoesUnidade  Movimentacao[]    @relation("MovimentacaoUnidade")
-  vales                 ValePallet[]      @relation("ValeCD")
-  valesDestino          ValePallet[]      @relation("ValeUnidade")
-  conferencias          Conferencia[]     @relation("ConferenciaCD")
-  conferenciasRemetente Conferencia[]     @relation("ConferenciaRemetente")
+  crossesAtendidos      CrossCD[]             @relation("CDDoVinculo")
+  usuarios              Usuario[]             @relation("UsuarioUnidade")
+  usuariosVinculados    UsuarioUnidade[]
+  ocorrenciasAguardando ValePallet[]          @relation("ValeAguardando")
+  interacoesOcorrencia  OcorrenciaInteracao[]
+  movimentacoes         Movimentacao[]        @relation("MovimentacaoCD")
+  movimentacoesUnidade  Movimentacao[]        @relation("MovimentacaoUnidade")
+  vales                 ValePallet[]          @relation("ValeCD")
+  valesDestino          ValePallet[]          @relation("ValeUnidade")
+  conferencias          Conferencia[]         @relation("ConferenciaCD")
+  conferenciasRemetente Conferencia[]         @relation("ConferenciaRemetente")
   agendas               AgendaDevolucao[]
   compras               Compra[]
   auditorias            Auditoria[]
@@ -263,6 +291,10 @@ model ValePallet {
   conferenciaId          String?
   /// Conferência que gerou o vale de ocorrência.
   conferenciaOrigemId    String?
+  /// Ocorrência pendente: unidade que precisa aceitar ou recusar (começa pela remetente).
+  aguardandoId           String?
+  /// Quantas vezes a ocorrência foi recusada (vai e volta entre as unidades).
+  recusas                Int                  @default(0)
   resolucao              ResolucaoOcorrencia?
   resolvidoEm            DateTime?
   resolvidoPorId         String?
@@ -272,21 +304,42 @@ model ValePallet {
   motivoCancelamento     MotivoCancelamento?
   observacaoCancelamento String?
 
-  cd                CentroDistribuicao  @relation("ValeCD", fields: [cdId], references: [id])
-  unidade           CentroDistribuicao? @relation("ValeUnidade", fields: [unidadeId], references: [id])
-  fornecedor        Fornecedor?         @relation(fields: [fornecedorId], references: [id])
-  criadoPor         Usuario             @relation("ValeCriadoPor", fields: [criadoPorId], references: [id])
-  canceladoPor      Usuario?            @relation("ValeCanceladoPor", fields: [canceladoPorId], references: [id])
-  resolvidoPor      Usuario?            @relation("ValeResolvidoPor", fields: [resolvidoPorId], references: [id])
-  agenda            AgendaDevolucao?    @relation(fields: [agendaId], references: [id])
-  conferencia       Conferencia?        @relation("ValesConferencia", fields: [conferenciaId], references: [id])
-  conferenciaOrigem Conferencia?        @relation("OcorrenciasConferencia", fields: [conferenciaOrigemId], references: [id])
+  cd                CentroDistribuicao    @relation("ValeCD", fields: [cdId], references: [id])
+  unidade           CentroDistribuicao?   @relation("ValeUnidade", fields: [unidadeId], references: [id])
+  fornecedor        Fornecedor?           @relation(fields: [fornecedorId], references: [id])
+  criadoPor         Usuario               @relation("ValeCriadoPor", fields: [criadoPorId], references: [id])
+  canceladoPor      Usuario?              @relation("ValeCanceladoPor", fields: [canceladoPorId], references: [id])
+  resolvidoPor      Usuario?              @relation("ValeResolvidoPor", fields: [resolvidoPorId], references: [id])
+  aguardando        CentroDistribuicao?   @relation("ValeAguardando", fields: [aguardandoId], references: [id])
+  interacoes        OcorrenciaInteracao[]
+  agenda            AgendaDevolucao?      @relation(fields: [agendaId], references: [id])
+  conferencia       Conferencia?          @relation("ValesConferencia", fields: [conferenciaId], references: [id])
+  conferenciaOrigem Conferencia?          @relation("OcorrenciasConferencia", fields: [conferenciaOrigemId], references: [id])
   movimentacoes     Movimentacao[]
 
   @@index([status])
   @@index([cdId, tipo, status])
   @@index([unidadeId, tipo, status])
   @@index([fornecedorId, status])
+  @@index([aguardandoId, status])
+}
+
+/// Histórico imutável do ciclo de uma ocorrência: quem abriu, recusou (com justificativa) ou aceitou.
+model OcorrenciaInteracao {
+  id            String         @id @default(cuid())
+  valeId        String
+  acao          AcaoOcorrencia
+  /// Unidade que agiu.
+  unidadeId     String
+  usuarioId     String
+  justificativa String?
+  criadoEm      DateTime       @default(now())
+
+  vale    ValePallet         @relation(fields: [valeId], references: [id])
+  unidade CentroDistribuicao @relation(fields: [unidadeId], references: [id])
+  usuario Usuario            @relation(fields: [usuarioId], references: [id])
+
+  @@index([valeId, criadoEm])
 }
 
 /// Conferência de recebimento: vales de um remetente x contagem física (bons e quebrados).

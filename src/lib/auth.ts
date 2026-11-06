@@ -3,7 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "./prisma";
-import { ehAdmin, ehMaster, ehUsuarioCross, tem, temVisaoBrasil, temVisaoGlobal, type Perfil, type Permissao } from "./permissoes";
+import { ehAdmin, ehMaster, tem, temVisaoBrasil, temVisaoGlobal, type Perfil, type Permissao } from "./permissoes";
 import { CD_COOKIE, SESSION_COOKIE, verifySession } from "./session";
 
 export type CDResumo = {
@@ -21,13 +21,16 @@ export type UsuarioAtual = {
   login: string;
   perfil: Perfil;
   permissoes: string[];
-  /** Unidade (CD ou Ponto de Cross) à qual o usuário pertence. */
+  /**
+   * Unidade que define as regras de acesso da sessão: a unidade de operação escolhida (ou a
+   * principal, antes da escolha). Ex.: operando um Ponto de Cross, valem as restrições de Cross.
+   */
   unidade: CDResumo;
   /** Acesso cruzado a todas as unidades: somente Master e Administrador. */
   global: boolean;
   /** TV Nível Brasil (somente leitura): administradores e usuários do Hub CDJC. */
   visaoBrasil: boolean;
-  /** Unidades em que pode operar: todas (administradores) ou só a própria. */
+  /** Unidades em que pode operar: todas (administradores) ou as vinculadas ao usuário. */
   cds: CDResumo[];
   /** Unidade de operação da sessão (a própria; na visão global, a escolhida no modal). */
   cd: CDResumo | null;
@@ -48,20 +51,36 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioAtual | null> => {
   }
   const usuario = await prisma.usuario.findUnique({
     where: { id: sessao.sub },
-    select: { id: true, nome: true, login: true, perfil: true, ativo: true, permissoes: true, unidade: { select: { ...CAMPOS_UNIDADE, ativo: true } } },
+    select: {
+      id: true,
+      nome: true,
+      login: true,
+      perfil: true,
+      ativo: true,
+      permissoes: true,
+      unidade: { select: { ...CAMPOS_UNIDADE, ativo: true } },
+      unidades: { select: { unidade: { select: { ...CAMPOS_UNIDADE, ativo: true } } } },
+    },
   });
   if (!usuario || !usuario.ativo) return null;
-  const { ativo: unidadeAtiva, ...unidade } = usuario.unidade;
-  const global = temVisaoGlobal({ perfil: usuario.perfil, unidade });
-  const visaoBrasil = temVisaoBrasil({ perfil: usuario.perfil, unidade });
-  // Administrador: escolhe entre todas as unidades ativas. Demais: somente a própria (se ativa).
+  const { ativo: principalAtiva, ...principal } = usuario.unidade;
+  const global = temVisaoGlobal({ perfil: usuario.perfil, unidade: principal });
+  // Administrador: todas as unidades ativas. Demais: as unidades vinculadas (CDs e/ou Cross) ativas.
+  const ordem = (a: CDResumo, b: CDResumo) => Number(b.hub) - Number(a.hub) || a.tipo.localeCompare(b.tipo) || a.codigo.localeCompare(b.codigo);
+  const vinculadas = new Map<string, CDResumo>();
+  if (principalAtiva) vinculadas.set(principal.id, principal);
+  for (const { unidade: v } of usuario.unidades) {
+    const { ativo, ...resumo } = v;
+    if (ativo) vinculadas.set(resumo.id, resumo);
+  }
   const cds = global
     ? await prisma.centroDistribuicao.findMany({ where: { ativo: true }, select: CAMPOS_UNIDADE, orderBy: [{ hub: "desc" }, { tipo: "asc" }, { codigo: "asc" }] })
-    : unidadeAtiva
-      ? [unidade]
-      : [];
+    : [...vinculadas.values()].sort(ordem);
   const escolhido = jar.get(CD_COOKIE)?.value;
   const cd = cds.length === 1 ? cds[0] : (cds.find((c) => c.id === escolhido) ?? null);
+  // As regras de acesso seguem a unidade em operação (ex.: operando um Cross valem as restrições de Cross).
+  const unidade = cd ?? principal;
+  const visaoBrasil = temVisaoBrasil({ perfil: usuario.perfil, unidade }) || cds.some((c) => c.hub);
   return {
     id: usuario.id,
     nome: usuario.nome,
@@ -138,14 +157,7 @@ export async function requireMaster(): Promise<UsuarioAtual> {
   return usuario;
 }
 
-/** Tela fora do escopo do usuário de Ponto de Cross (ex.: descarte, ocorrências). */
-export async function requireNaoCross(): Promise<UsuarioComCD> {
-  const usuario = await requireCD();
-  if (ehUsuarioCross(usuario)) redirect("/sem-acesso?modulo=cross");
-  return usuario;
-}
-
 /** Vale visível ao usuário: visão global ou a unidade dele é a emissora ou a destinatária. */
 export function podeVerVale(u: UsuarioAtual, v: { cdId: string; unidadeId: string | null }) {
-  return u.global || v.cdId === u.unidade.id || v.unidadeId === u.unidade.id;
+  return u.global || u.cds.some((c) => c.id === v.cdId || c.id === v.unidadeId);
 }

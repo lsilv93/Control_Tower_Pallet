@@ -29,7 +29,9 @@ export default async function ConsultaValesPage({ searchParams }: { searchParams
 
   // Escopo: visão global vê todos os vales; regional, os emitidos ou destinados à sua unidade.
   const escopo: Prisma.ValePalletWhereInput[] = [];
-  if (!u.global) escopo.push({ OR: [{ cdId: u.cd.id }, { unidadeId: u.cd.id }] });
+  // Visão integrada: o operador vê os vales de todas as unidades vinculadas a ele.
+  const minhas = u.cds.map((c) => c.id);
+  if (!u.global) escopo.push({ OR: [{ cdId: { in: minhas } }, { unidadeId: { in: minhas } }] });
   if (f.unidade) escopo.push({ OR: [{ cdId: f.unidade }, { unidadeId: f.unidade }] });
   const where: Prisma.ValePalletWhereInput = {
     ...(escopo.length ? { AND: escopo } : {}),
@@ -50,7 +52,7 @@ export default async function ConsultaValesPage({ searchParams }: { searchParams
 
   return (
     <>
-      <Cabecalho titulo="Consulta de Vales-Pallet" descricao={`${u.global ? "Visão Nível Brasil: todos os vales." : `Vales emitidos ou destinados a ${u.cd.codigo}.`} Envio (VE), ocorrência (VO) e fornecedor (VP). Busque por número, tipo, unidade, status ou período. Cada vale pode ser baixado em PDF ou impresso.`} />
+      <Cabecalho titulo="Consulta de Vales-Pallet" descricao={`${u.global ? "Visão Nível Brasil: todos os vales." : `Vales emitidos ou destinados a ${u.cds.map((c) => c.codigo).join(", ")}.`} Envio (VE), ocorrência (VO) e fornecedor (VP). Busque por número, tipo, unidade, status ou período. Cada vale pode ser baixado em PDF ou impresso.`} />
 
       <Painel className="mb-6">
         <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:items-end" action="/vales/consulta">

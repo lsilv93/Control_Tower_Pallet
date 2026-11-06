@@ -37,13 +37,19 @@ async function main() {
   const operador = ["dashboard", "envio", "recebimento", "quebras", "vales", "excluir_vale", "relatorios"];
   const unidades = await prisma.centroDistribuicao.findMany();
   const id = (codigo) => unidades.find((u) => u.codigo === codigo).id;
-  for (const [login, nome, codigo, permissoes] of [
-    ["hub", "Operador Hub CDJC", hub.codigo, [...operador, "reparo", "tv"]],
-    ["sp", "Operador CD São Paulo", "CDSP", operador],
-    ["rj", "Operador CD Rio", "CDRJ", operador],
-    ["campinas", "Operador Cross Campinas", "XCPS", operador],
+  for (const [login, nome, codigos, permissoes] of [
+    ["hub", "Operador Hub CDJC", [hub.codigo], [...operador, "reparo", "tv"]],
+    ["sp", "Operador CD São Paulo", ["CDSP"], operador],
+    ["rj", "Operador CD Rio", ["CDRJ"], operador],
+    ["campinas", "Operador Cross Campinas", ["XCPS"], operador],
+    // Operador com várias unidades (um CD e um Ponto de Cross): escolhe a unidade ao entrar.
+    ["multi", "Operador SP + Campinas", ["CDSP", "XCPS"], operador],
   ]) {
-    await prisma.usuario.upsert({ where: { login }, update: {}, create: { login, nome, senhaHash, unidadeId: id(codigo), permissoes } });
+    await prisma.usuario.upsert({
+      where: { login },
+      update: {},
+      create: { login, nome, senhaHash, unidadeId: id(codigos[0]), permissoes, unidades: { create: codigos.map((c) => ({ unidadeId: id(c) })) } },
+    });
   }
   console.log("[demo] Unidades, transportadoras e usuários de teste (senha teste123) criados.");
 }

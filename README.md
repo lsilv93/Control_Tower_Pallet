@@ -12,7 +12,7 @@ Sistema web da **Torre de Controle Nível Brasil** de pallets PBR: estoque de pa
 
 - **Unidades:** **CDs** e **Pontos de Cross**, todos com estoque próprio de **Pallets PBR** e **Pallets Quebrados**. O **CD Hub (CDJC)** recebe os quebrados das filiais, faz o conserto e devolve Pallets PBR. Cada Ponto de Cross é vinculado a **um ou mais CDs** (tabela `CrossCD`, N:N) e só troca pallets com os CDs vinculados.
 - **Cada usuário pertence a exatamente uma unidade.**
-  - **Operadores:** pertencem a 1 CD ou 1 Ponto de Cross e veem e operam somente essa unidade (fixa, com cadeado no menu).
+  - **Operadores:** vinculados a um ou mais CDs e/ou Pontos de Cross (tabela `UsuarioUnidade`). Veem e operam somente as unidades vinculadas; com mais de uma, escolhem a unidade ao entrar e alternam pelo menu (*Trocar unidade*). Consulta de vales e ocorrências mostram os dados integrados de todas as unidades do usuário. Operando um Ponto de Cross, valem as restrições de Cross.
   - **Master e Administrador:** únicos com acesso cruzado a todos os CDs e Pontos de Cross. Escolhem a unidade de operação no modal *"Em qual unidade você vai operar?"* e podem trocá-la no menu (*Trocar unidade*).
   - **Usuários do Hub (CDJC):** operam somente o CDJC; têm acesso de leitura à TV Nível Brasil.
   - **Usuários de Ponto de Cross:** exclusivamente o painel do próprio Cross, recebimento/conferência dos vales enviados pelos CDs, **retorno ao CD** (escolhendo na lista qual CD vinculado recebe a devolução) e lançar quebrado.
@@ -23,10 +23,10 @@ Sistema web da **Torre de Controle Nível Brasil** de pallets PBR: estoque de pa
 | Módulo | Rota | O que faz |
 |---|---|---|
 | Painel | `/` | KPIs da unidade: bons, quebrados, em trânsito, a receber e faltas em aberto. Mostra o estoque por Ponto de Cross (todos na visão global; os da região num CD regional) e os vales em trânsito. Indicadores do período: enviados, recebidos, faltas, recuperados e descartados. Inclui consolidação por transportadora e o extrato dos estoques. |
-| **Torre de Controle (TV)** | `/tv` | Somente visão global, sem dados de fornecedores. Mostra bons e quebrados por CD e Cross e os **ativos fora do Hub** de cada filial (bons, quebrados, em trânsito ao CDJC, recebidos x enviados e **acuracidade**). Tem tela cheia (Esc volta) e auto-refresh a cada nova movimentação em qualquer unidade. |
+| **Torre de Controle (TV)** | `/tv` | Gestão à vista em tabelas separadas de **CDs** e **Pontos de Cross**: Pallets PBR, Quebrados, total, composição, trânsito, a receber, ocorrências pendentes, SLA e acuracidade, com **farol** por unidade (vermelho: vale em trânsito há 7+ dias, saldo de Cross ≥ 500, 3+ ocorrências ou ocorrência há 3+ dias; amarelo: trânsito há 3+ dias, saldo de Cross ≥ 200 ou ocorrência pendente). Regras em `src/lib/farol.ts`. |
 | **Envio de Pallets** | `/envio` | Abas: *para Ponto de Cross*, *para CD* e *quebrados para o CDJC*. Informa bons e/ou quebrados, transportador, placa e, no envio a Cross, rota e data de faturamento. **Saldo nunca negativo:** a tela bloqueia e o servidor revalida com o saldo travado. Antes de gravar aparece a confirmação *"Tem certeza do [CD/Cross] selecionado e da quantidade informada (X pallets)?"*. Gera o **Vale-Pallet de Envio** (VE-) ou o **Vale de Pallets Quebrados**; os pallets ficam em trânsito. Um Ponto de Cross envia só para CDs. |
 | **Recebimento / Conferência** | `/recebimento` | Seleciona os vales pendentes do remetente (soma automática) e informa a contagem física de **bons** e **quebrados**. Bons entram nos vazios e quebrados nos quebrados. Uma divergência exige confirmação e justificativa. **Falta:** gera o **Vale de Ocorrência** (VO-) devolutivo ao remetente. **Sobra:** entra no estoque e é registrada num VO de sobra. Cada conferência recebe um número (RC-). |
-| **Ocorrências** | `/ocorrencias` | Auditoria de faltas e sobras com data/hora, vale, conferência, remetente e recebedor, visível às duas pontas. O administrador resolve cada falta: **localizada** (volta ao estoque do remetente) ou **perda**. |
+| **Ocorrências** | `/ocorrencias` | Toda divergência (falta ou sobra) abre uma ocorrência **pendente na unidade remetente**, que **aceita** ou **recusa com justificativa** (obrigatória). A recusa devolve a pendência à unidade recebedora; o ciclo se repete até um aceite. Histórico completo (abertura, recusas, aceite) com data, hora, unidade e usuário. Aviso no Painel ("aguardando sua ação") e contador no menu. |
 | Lançar Quebrado / Conserto / Descarte | `/avarias/*` | Quebra: bons → quebrados. **Conserto:** só no Hub, com trava matemática (recuperados + utilizados ≤ quebrados). **Descarte:** todos os usuários, com pop-up de confirmação, e lista imutável de **Pallets Descartados**. |
 | **Ajuste de Saldo (Admin)** | `/estoque/inclusao`, `/estoque/remocao` | Inclusão de bons ou quebrados em qualquer CD/Cross com motivo (**Compra, Devolução, Ajuste Estoque, Inventário**) e observação obrigatória. Remoção com justificativa e confirmação *"Tem certeza?"*. Nunca deixa saldo negativo e tudo vai para a auditoria. |
 | Recebimento Pallet Fornecedor | `/fornecedor/entrada`, `/vales`, `/agendas` | **Desligado por padrão**: o Master libera por CD em *Cadastros → CDs → Editar → Configurações do Master*. Inclui NF-e/Sem NF, Vale-Pallet de Fornecedor (VP-), agendas e baixa. |
@@ -44,7 +44,11 @@ Cada movimentação tem conta de origem e de destino com a mesma quantidade, no 
 - **Conferência:**
   - No livro do remetente: TRANSITO → ENVIADO, e a falta vai para TRANSITO → OCORRENCIA.
   - No livro do recebedor: RECEBIDO → VAZIOS/QUEBRADOS, e a sobra vai para SOBRA → estoque.
-- **Ocorrência resolvida:** OCORRENCIA → estoque (localizada) ou OCORRENCIA → PERDA.
+- **Ocorrência aceita** (conta corrente ajustada em definitivo, nunca negativa):
+  - Falta aceita pelo remetente: OCORRENCIA → PERDA no remetente.
+  - Falta aceita pelo recebedor: remetente OCORRENCIA → ENVIADO; recebedor RECEBIDO → estoque.
+  - Sobra aceita pelo remetente: remetente estoque → ENVIADO (bloqueado sem saldo); recebedor RECEBIDO → SOBRA.
+  - Sobra aceita pelo recebedor: a sobra fica incorporada ao estoque do recebedor.
 - **Invariantes:** ΣENVIADO = ΣRECEBIDO. Gatilhos no banco impedem UPDATE/DELETE em `Movimentacao` e `Auditoria`.
 
 ### Reset total (27/10/2026)
@@ -56,6 +60,8 @@ A migração `20261028120000_zerar_dados_para_testes` zera de novo **todos os da
 **Listas de seleção:** transportadora, CD, Ponto de Cross e fornecedor são sempre escolhidos em listas suspensas carregadas com os registros cadastrados e ativos (sem digitação livre). O servidor revalida cada escolha.
 
 **Sair:** apaga os cookies de sessão e de unidade antes de qualquer outra etapa, revoga o token no servidor, limpa o armazenamento do navegador e recarrega a tela de login (o botão Voltar não reexibe telas protegidas).
+
+A migração `20261106120000_ocorrencia_bidirecional_usuario_multiunidade_reset` **zera os dados operacionais** (saldos, movimentações, vales, conferências, ocorrências, agendas, compras e auditoria) para o início da operação oficial, mantendo usuários, CDs, Pontos de Cross (com seus vínculos), transportadoras e fornecedores.
 
 A migração `20261029120000_reset_senha_admin` redefine o usuário MASTER **`admin` / senha `admin123`** (o login não diferencia maiúsculas). Ela cria o usuário ou redefine a senha, reativa e garante o perfil MASTER, uma única vez. Troque a senha em *Minha Senha* depois do primeiro acesso.
 

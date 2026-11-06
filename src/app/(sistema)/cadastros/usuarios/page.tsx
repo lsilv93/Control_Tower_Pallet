@@ -15,8 +15,11 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
   const admin = await requireAdmin();
   const { editar, ok } = await searchParams;
   const [lista, editando, cds] = await Promise.all([
-    prisma.usuario.findMany({ include: { unidade: { select: { codigo: true, tipo: true, hub: true } } }, orderBy: [{ ativo: "desc" }, { nome: "asc" }] }),
-    editar ? prisma.usuario.findUnique({ where: { id: editar } }) : null,
+    prisma.usuario.findMany({
+      include: { unidade: { select: { codigo: true } }, unidades: { select: { unidade: { select: { codigo: true, tipo: true, hub: true } } }, orderBy: { unidade: { codigo: "asc" } } } },
+      orderBy: [{ ativo: "desc" }, { nome: "asc" }],
+    }),
+    editar ? prisma.usuario.findUnique({ where: { id: editar }, include: { unidades: { select: { unidadeId: true } } } }) : null,
     prisma.centroDistribuicao.findMany({ select: { id: true, codigo: true, nome: true, ativo: true, tipo: true, hub: true }, orderBy: [{ hub: "desc" }, { tipo: "asc" }, { codigo: "asc" }] }),
   ]);
 
@@ -34,22 +37,30 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
               permissoesIniciais={editando?.permissoes ?? ["dashboard"]}
               podeMaster={ehMaster(admin)}
             />
-            <div>
-              <label className="label" htmlFor="unidadeId">Unidade (CD ou Ponto de Cross) *</label>
-              <select id="unidadeId" name="unidadeId" className="input" required defaultValue={editando?.unidadeId ?? ""}>
-                <option value="" disabled>Selecione...</option>
+            <fieldset className="poco p-4" data-testid="unidades-usuario">
+              <legend className="label float-left !mb-3 w-full">Unidades vinculadas (CDs e Pontos de Cross) *</legend>
+              <div className="clear-both grid max-h-60 gap-2 overflow-y-auto sm:grid-cols-2">
                 {cds.map((cd) => (
-                  <option key={cd.id} value={cd.id}>
-                    {cd.tipo === "CROSS" ? "Cross" : cd.hub ? "Hub" : "CD"} · {cd.codigo} - {cd.nome}{cd.ativo ? "" : " (inativa)"}
-                  </option>
+                  <label key={cd.id} className={`flex cursor-pointer items-center gap-2 text-[12px] ${cd.ativo ? "text-t2" : "text-t4"}`}>
+                    <input
+                      type="checkbox"
+                      name="unidadeIds"
+                      value={cd.id}
+                      defaultChecked={editando ? editando.unidades.some((v) => v.unidadeId === cd.id) || editando.unidadeId === cd.id : false}
+                    />
+                    <span>
+                      <span className="num font-semibold">{cd.codigo}</span> · {cd.tipo === "CROSS" ? "Cross" : cd.hub ? "Hub" : "CD"}
+                      {cd.ativo ? "" : " (inativa)"}
+                    </span>
+                  </label>
                 ))}
-              </select>
-              <p className="mt-1.5 text-[11px] text-t4">
-                Operadores pertencem a um único CD ou Ponto de Cross e veem e operam somente essa unidade. Somente Administrador e Master
-                têm acesso cruzado a todos os CDs e Pontos de Cross (a unidade marcada é a de origem). Usuários de Ponto de Cross ficam
-                limitados a painel, recebimento/conferência, retorno ao CD e lançar quebrado.
+              </div>
+              <p className="mt-3 text-[11px] text-t4">
+                Operadores veem e operam somente as unidades marcadas (podem ser vários CDs e/ou Pontos de Cross; com mais de uma, o usuário
+                escolhe a unidade ao entrar e alterna pelo menu). Master e Administrador têm acesso a todas as unidades (Nível Brasil). Operando um
+                Ponto de Cross, valem as restrições de Cross: painel, recebimento/conferência, retorno ao CD, lançar quebrado e ocorrências.
               </p>
-            </div>
+            </fieldset>
             <Campo
               nome="senha"
               rotulo={editando ? "Nova senha (deixe em branco para manter)" : "Senha inicial"}
@@ -65,7 +76,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
           <Tabela>
             <table className="tabela">
               <thead>
-                <tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Unidade</th><th>Acessos</th><th>Situação</th><th>Criado em</th><th /></tr>
+                <tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Unidades</th><th>Acessos</th><th>Situação</th><th>Criado em</th><th /></tr>
               </thead>
               <tbody>
                 {lista.map((u) => (
@@ -74,8 +85,9 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
                     <td className="num">{u.login}</td>
                     <td className={u.perfil === "MASTER" ? "font-semibold text-lima" : undefined}>{ROTULO_PERFIL[u.perfil]}</td>
                     <td className="num whitespace-nowrap text-[11px]">
-                      <span className="font-semibold text-t1">{u.unidade.codigo}</span>{" "}
-                      <span className="text-t4">{u.unidade.tipo === "CROSS" ? "Cross" : u.unidade.hub ? "Hub" : "CD"}</span>
+                      <span className="block max-w-[12rem] whitespace-normal font-semibold text-t1">
+                        {(u.unidades.length ? u.unidades.map((v) => v.unidade.codigo) : [u.unidade.codigo]).join(", ")}
+                      </span>
                       {u.perfil !== "OPERADOR" && <span className="block text-lima">Todas as unidades</span>}
                     </td>
                     <td className="max-w-[16rem] whitespace-normal text-[11px] text-t3">

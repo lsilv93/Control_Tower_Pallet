@@ -122,7 +122,10 @@ export const rotuloTipoVale: Record<TipoVale, string> = {
 };
 
 export const rotuloOcorrencia: Record<TipoOcorrencia, string> = { FALTA: "Falta (enviado a menos)", SOBRA: "Sobra (enviado a mais)" };
-export const rotuloResolucao: Record<ResolucaoOcorrencia, string> = { LOCALIZADA: "Localizada e devolvida ao remetente", PERDA: "Baixada como perda" };
+export const rotuloResolucao: Record<ResolucaoOcorrencia, string> = {
+  ACEITA_REMETENTE: "Aceita pela unidade remetente",
+  ACEITA_RECEBEDOR: "Aceita pela unidade recebedora",
+};
 
 export const rotuloTipoUnidade: Record<TipoUnidade, string> = { CD: "CD", CROSS: "Ponto de Cross" };
 
@@ -143,8 +146,9 @@ export const rotuloTipo: Record<TipoMovimentacao, string> = {
   RECEBIMENTO: "Recebimento de outra unidade",
   FALTA: "Falta na conferência (ocorrência)",
   SOBRA: "Sobra na conferência",
-  OCORRENCIA_LOCALIZADA: "Ocorrência localizada (devolvida)",
-  OCORRENCIA_PERDA: "Ocorrência baixada como perda",
+  DIVERGENCIA_ENVIADO: "Divergência aceita (remetente)",
+  DIVERGENCIA_RECEBIDO: "Divergência aceita (recebedor)",
+  OCORRENCIA_PERDA: "Falta baixada como perda",
   ESTORNO_ENVIO: "Estorno de envio (vale excluído)",
   QUEBRA: "Lançamento de quebrado",
   RECUPERADO: "Conserto / Reparo",

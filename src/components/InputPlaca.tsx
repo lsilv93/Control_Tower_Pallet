@@ -13,14 +13,21 @@ export function InputPlaca({
   obrigatorio = false,
   rotulo = "Placa do veículo",
   valorInicial = "",
+  valor: valorControlado,
+  aoMudar,
 }: {
   id?: string;
   name?: string;
   obrigatorio?: boolean;
   rotulo?: string;
   valorInicial?: string;
+  /** Modo controlado (ex.: placa preenchida a partir do vale selecionado). */
+  valor?: string;
+  aoMudar?: (placa: string) => void;
 }) {
-  const [valor, setValor] = useState(mascaraPlaca(valorInicial));
+  const [interno, setInterno] = useState(mascaraPlaca(valorInicial));
+  const valor = valorControlado !== undefined ? mascaraPlaca(valorControlado) : interno;
+  const setValor = (v: string) => (aoMudar ? aoMudar(v) : setInterno(v));
   return (
     <div>
       <label className="label" htmlFor={id}>{rotulo}{obrigatorio ? " *" : ""}</label>

@@ -1,6 +1,7 @@
 import "server-only";
-import { enviosEmTransito, posicaoUnidades } from "./consultas";
-import { diaLocal, fimDoDia, inicioDoDia } from "./datas";
+import { enviosEmTransito, posicaoUnidades, type LinhaUnidade } from "./consultas";
+import { diaLocal, fimDoDia, idadeEmDias, inicioDoDia } from "./datas";
+import { farolUnidade, type FarolUnidade } from "./farol";
 import { prisma } from "./prisma";
 
 /**
@@ -11,17 +12,29 @@ function acuracidade(declarado: number, divergencia: number) {
   return declarado > 0 ? Math.max(0, 1 - divergencia / declarado) : null;
 }
 
-/** Indicadores da Torre de Controle Nível Brasil (sem dados de fornecedores). */
+export type LinhaTV = LinhaUnidade &
+  FarolUnidade & {
+    total: number;
+    enviadosConferidos: number;
+    recebidosConferidos: number;
+    acuracidade: number | null;
+    ocorrenciasPendentes: number;
+    diasTransitoMaisAntigo: number | null;
+    transitoHubQuebrados: number;
+    cdsAtendidos: string[];
+  };
+
+/** Indicadores da Torre de Controle Nível Brasil (gestão à vista; sem dados de fornecedores). */
 export async function dadosTV() {
   const hoje = diaLocal();
-  const [posicao, transito, conferencias, hoje_, ocorrencias] = await Promise.all([
+  const [posicao, transito, conferencias, hojeConf, ocorrencias, vinculos] = await Promise.all([
     posicaoUnidades(),
     enviosEmTransito(),
     prisma.conferencia.findMany({ select: { remetenteId: true, totalDeclarado: true, recebidoBons: true, recebidoQuebrados: true, diferenca: true } }),
     prisma.conferencia.aggregate({ where: { criadoEm: { gte: inicioDoDia(hoje), lt: fimDoDia(hoje) } }, _sum: { recebidoBons: true, recebidoQuebrados: true }, _count: true }),
-    prisma.valePallet.aggregate({ where: { tipo: "OCORRENCIA", ocorrencia: "FALTA", status: "PENDENTE" }, _sum: { quantidade: true }, _count: true }),
+    prisma.valePallet.findMany({ where: { tipo: "OCORRENCIA", status: "PENDENTE" }, select: { cdId: true, unidadeId: true, quantidade: true, criadoEm: true } }),
+    prisma.crossCD.findMany({ select: { crossId: true, cd: { select: { codigo: true } } }, orderBy: { cd: { codigo: "asc" } } }),
   ]);
-  const hub = posicao.find((p) => p.unidade.hub) ?? null;
 
   // Acuracidade por remetente.
   const porRemetente = new Map<string, { enviados: number; recebidos: number; divergencia: number }>();
@@ -32,65 +45,90 @@ export async function dadosTV() {
     a.divergencia += Math.abs(c.diferenca);
     porRemetente.set(c.remetenteId, a);
   }
-  const totalAcur = [...porRemetente.values()].reduce((s, a) => ({ enviados: s.enviados + a.enviados, recebidos: s.recebidos + a.recebidos, divergencia: s.divergencia + a.divergencia }), { enviados: 0, recebidos: 0, divergencia: 0 });
+  const geral = [...porRemetente.values()].reduce((s, a) => ({ enviados: s.enviados + a.enviados, recebidos: s.recebidos + a.recebidos, divergencia: s.divergencia + a.divergencia }), { enviados: 0, recebidos: 0, divergencia: 0 });
 
-  // Em trânsito para o Hub, por filial remetente.
-  const paraHub = new Map<string, { bons: number; quebrados: number; vales: number }>();
+  // SLA: vale em trânsito mais antigo envolvendo a unidade (enviado por ela ou destinado a ela).
+  const maisAntigo = new Map<string, Date>();
+  const quebradosAoHub = new Map<string, number>();
   for (const v of transito) {
-    if (!v.unidade?.hub) continue;
-    const t = paraHub.get(v.cdId) ?? { bons: 0, quebrados: 0, vales: 0 };
-    t.bons += v.quantidadeBons;
-    t.quebrados += v.quantidadeQuebrados;
-    t.vales += 1;
-    paraHub.set(v.cdId, t);
+    for (const id of [v.cdId, v.unidadeId]) {
+      if (!id) continue;
+      const atual = maisAntigo.get(id);
+      if (!atual || v.criadoEm < atual) maisAntigo.set(id, v.criadoEm);
+    }
+    if (v.unidade?.hub) quebradosAoHub.set(v.cdId, (quebradosAoHub.get(v.cdId) ?? 0) + v.quantidadeQuebrados);
   }
+  // Ocorrências pendentes por unidade envolvida (remetente ou recebedora).
+  const pendentes = new Map<string, { n: number; desde: Date }>();
+  for (const o of ocorrencias) {
+    for (const id of [o.cdId, o.unidadeId]) {
+      if (!id) continue;
+      const p = pendentes.get(id);
+      pendentes.set(id, { n: (p?.n ?? 0) + 1, desde: p && p.desde < o.criadoEm ? p.desde : o.criadoEm });
+    }
+  }
+  const atende = new Map<string, string[]>();
+  for (const v of vinculos) atende.set(v.crossId, [...(atende.get(v.crossId) ?? []), v.cd.codigo]);
 
-  const filiais = posicao
-    .filter((p) => !p.unidade.hub)
-    .map((p) => {
-      const a = porRemetente.get(p.unidade.id);
-      const t = paraHub.get(p.unidade.id);
-      return {
-        ...p,
-        transitoHubBons: t?.bons ?? 0,
-        transitoHubQuebrados: t?.quebrados ?? 0,
-        valesHub: t?.vales ?? 0,
-        enviadosConferidos: a?.enviados ?? 0,
-        recebidosConferidos: a?.recebidos ?? 0,
-        acuracidade: a ? acuracidade(a.enviados, a.divergencia) : null,
-      };
-    });
+  const linhas: LinhaTV[] = posicao.map((p) => {
+    const a = porRemetente.get(p.unidade.id);
+    const antigo = maisAntigo.get(p.unidade.id);
+    const oc = pendentes.get(p.unidade.id);
+    const diasTransitoMaisAntigo = antigo ? idadeEmDias(antigo) : null;
+    const total = p.vazios + p.quebrados;
+    return {
+      ...p,
+      total,
+      enviadosConferidos: a?.enviados ?? 0,
+      recebidosConferidos: a?.recebidos ?? 0,
+      acuracidade: a ? acuracidade(a.enviados, a.divergencia) : null,
+      ocorrenciasPendentes: oc?.n ?? 0,
+      diasTransitoMaisAntigo,
+      transitoHubQuebrados: quebradosAoHub.get(p.unidade.id) ?? 0,
+      cdsAtendidos: atende.get(p.unidade.id) ?? [],
+      ...farolUnidade({
+        tipo: p.unidade.tipo,
+        diasTransitoMaisAntigo,
+        saldo: total,
+        ocorrenciasPendentes: oc?.n ?? 0,
+        diasOcorrenciaMaisAntiga: oc ? idadeEmDias(oc.desde) : null,
+      }),
+    };
+  });
+  const cds = linhas.filter((l) => l.unidade.tipo === "CD");
+  const crosses = linhas.filter((l) => l.unidade.tipo === "CROSS");
+  const soma = (ls: LinhaTV[], f: (l: LinhaTV) => number) => ls.reduce((s, l) => s + f(l), 0);
+  const subtotal = (ls: LinhaTV[]) => ({ bons: soma(ls, (l) => l.vazios), quebrados: soma(ls, (l) => l.quebrados), transito: soma(ls, (l) => l.transito) });
 
-  const soma = (f: (p: (typeof posicao)[number]) => number) => posicao.reduce((s, p) => s + f(p), 0);
   return {
-    hub,
-    posicao,
-    filiais,
+    hub: cds.find((l) => l.unidade.hub) ?? null,
+    cds,
+    crosses,
     totais: {
-      bons: soma((p) => p.vazios),
-      quebrados: soma((p) => p.quebrados),
-      transito: soma((p) => p.transito),
-      unidades: posicao.length,
-      crosses: posicao.filter((p) => p.unidade.tipo === "CROSS").length,
-      foraHubBons: filiais.reduce((s, f) => s + f.vazios, 0),
-      foraHubQuebrados: filiais.reduce((s, f) => s + f.quebrados, 0),
-      transitoHubQuebrados: filiais.reduce((s, f) => s + f.transitoHubQuebrados, 0),
-      transitoHubBons: filiais.reduce((s, f) => s + f.transitoHubBons, 0),
-      valesHub: filiais.reduce((s, f) => s + f.valesHub, 0),
-      ocorrenciasAbertas: ocorrencias._sum.quantidade ?? 0,
-      valesOcorrencia: ocorrencias._count,
-      recebidosHoje: (hoje_._sum.recebidoBons ?? 0) + (hoje_._sum.recebidoQuebrados ?? 0),
-      conferenciasHoje: hoje_._count,
-      acuracidade: acuracidade(totalAcur.enviados, totalAcur.divergencia),
-      enviadosConferidos: totalAcur.enviados,
-      recebidosConferidos: totalAcur.recebidos,
+      bons: soma(linhas, (l) => l.vazios),
+      quebrados: soma(linhas, (l) => l.quebrados),
+      transito: soma(linhas, (l) => l.transito),
+      cds: subtotal(cds),
+      crosses: subtotal(crosses),
+      quebradosAoHub: soma(linhas, (l) => l.transitoHubQuebrados),
+      ocorrenciasPendentes: ocorrencias.length,
+      ocorrenciasQuantidade: ocorrencias.reduce((s, o) => s + o.quantidade, 0),
+      recebidosHoje: (hojeConf._sum.recebidoBons ?? 0) + (hojeConf._sum.recebidoQuebrados ?? 0),
+      conferenciasHoje: hojeConf._count,
+      acuracidade: acuracidade(geral.enviados, geral.divergencia),
+      enviadosConferidos: geral.enviados,
+      recebidosConferidos: geral.recebidos,
+      farois: { VERMELHO: linhas.filter((l) => l.farol === "VERMELHO").length, AMARELO: linhas.filter((l) => l.farol === "AMARELO").length, VERDE: linhas.filter((l) => l.farol === "VERDE").length },
     },
   };
 }
 
-/** "Versão" global dos dados: muda a cada nova movimentação em qualquer unidade (refresh da TV). */
+/** "Versão" global dos dados: muda a cada nova movimentação, vale ou resposta de ocorrência (refresh da TV). */
 export async function versaoTV(): Promise<string> {
-  const ultimo = await prisma.movimentacao.findFirst({ orderBy: { criadoEm: "desc" }, select: { id: true, criadoEm: true } });
-  const vales = await prisma.valePallet.count();
-  return ultimo ? `${ultimo.criadoEm.getTime()}-${ultimo.id}-${vales}` : `0-${vales}`;
+  const [ultimo, vales, interacoes] = await Promise.all([
+    prisma.movimentacao.findFirst({ orderBy: { criadoEm: "desc" }, select: { id: true, criadoEm: true } }),
+    prisma.valePallet.count(),
+    prisma.ocorrenciaInteracao.count(),
+  ]);
+  return `${ultimo ? `${ultimo.criadoEm.getTime()}-${ultimo.id}` : "0"}-${vales}-${interacoes}`;
 }

@@ -43,6 +43,8 @@ export default async function RecebimentoPage({ searchParams }: { searchParams: 
     quantidade: v.quantidade,
     data: formatarDataHora(v.criadoEm),
     transportadora: v.transportadora,
+    // O vale guarda o nome da transportadora do envio; localiza o cadastro para pré-preencher a conferência.
+    transportadoraId: transportadoras.find((t) => t.nome.trim().toUpperCase() === (v.transportadora ?? "").trim().toUpperCase())?.id ?? null,
     placa: v.placa,
   }));
 

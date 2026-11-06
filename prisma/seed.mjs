@@ -40,6 +40,7 @@ async function main() {
       senhaHash: await bcrypt.hash(senha, 10),
       perfil: "MASTER",
       unidadeId: hub.id,
+      unidades: { create: { unidadeId: hub.id } },
     },
   });
   await prisma.auditoria.create({

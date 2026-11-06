@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import clsx from "clsx";
 import { ClipboardCheck, TriangleAlert } from "lucide-react";
+import { Modal } from "./ModalFornecedor";
 import { conferirRecebimento } from "@/actions/transferencias";
 import { BotaoEnviar, Mensagem, useAcao } from "./FormAcao";
 import { InputPlaca } from "./InputPlaca";
@@ -17,6 +18,8 @@ export type ValeConferencia = {
   quantidade: number;
   data: string;
   transportadora: string | null;
+  /** Transportadora do envio no cadastro (para pré-preencher a conferência). */
+  transportadoraId: string | null;
   placa: string | null;
 };
 
@@ -24,9 +27,10 @@ const fmt = (v: number) => new Intl.NumberFormat("pt-BR").format(v);
 const inteiro = (v: string) => (v === "" ? null : Math.max(0, Math.trunc(Number(v) || 0)));
 
 /**
- * Conferência de recebimento: seleciona os vales de envio do remetente (soma automática),
- * informa a contagem física de pallets bons e quebrados e, havendo divergência, confirma
- * a falta/sobra com justificativa — o servidor gera o Vale de Ocorrência.
+ * Conferência de recebimento: seleciona os vales de envio do remetente (soma automática;
+ * placa e transportadora vêm preenchidas do envio), informa a contagem física de Pallets PBR
+ * e Quebrados e, havendo divergência, confirma a diferença exata com justificativa — o
+ * servidor gera a ocorrência pendente na unidade remetente.
  */
 export function FormConferencia({
   remetentes,
@@ -46,6 +50,9 @@ export function FormConferencia({
   const [quebrados, setQuebrados] = useState("");
   const [confirmada, setConfirmada] = useState(false);
   const [pedirConfirmacao, setPedirConfirmacao] = useState(false);
+  // Placa e transportadora vêm do envio (primeiro vale selecionado); o conferente pode corrigir.
+  const [placa, setPlaca] = useState("");
+  const [transportadoraId, setTransportadoraId] = useState("");
 
   const doRemetente = useMemo(() => vales.filter((v) => v.remetenteId === remetenteId), [vales, remetenteId]);
   const escolhidos = doRemetente.filter((v) => selecionados.has(v.id));
@@ -63,15 +70,25 @@ export function FormConferencia({
     setConfirmada(false);
     setPedirConfirmacao(false);
   };
-  const alternar = (id: string) => {
-    reiniciar();
-    setSelecionados((s) => {
-      const n = new Set(s);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
+  const preencherDoEnvio = (ids: Set<string>) => {
+    const primeiro = doRemetente.find((v) => ids.has(v.id));
+    setPlaca(primeiro?.placa ?? "");
+    setTransportadoraId(primeiro?.transportadoraId ?? "");
   };
+  const selecionar = (ids: Set<string>) => {
+    reiniciar();
+    setSelecionados(ids);
+    preencherDoEnvio(ids);
+  };
+  const alternar = (id: string) => {
+    const n = new Set(selecionados);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    selecionar(n);
+  };
+  const difBons = (qBons ?? 0) - declaradoBons;
+  const difQuebrados = (qQuebrados ?? 0) - declaradoQuebrados;
+  const sinal = (v: number) => (v > 0 ? `+${fmt(v)}` : fmt(v));
 
   function enviar(e: React.FormEvent<HTMLFormElement>) {
     if (divergente && !confirmada) {
@@ -96,8 +113,7 @@ export function FormConferencia({
           value={remetenteId}
           onChange={(e) => {
             setRemetenteId(e.target.value);
-            setSelecionados(new Set());
-            reiniciar();
+            selecionar(new Set());
           }}
         >
           <option value="" disabled>Selecione...</option>
@@ -117,10 +133,7 @@ export function FormConferencia({
               <button
                 type="button"
                 className="text-[11px] font-semibold text-lima hover:underline"
-                onClick={() => {
-                  reiniciar();
-                  setSelecionados(selecionados.size === doRemetente.length ? new Set() : new Set(doRemetente.map((v) => v.id)));
-                }}
+                onClick={() => selecionar(selecionados.size === doRemetente.length ? new Set() : new Set(doRemetente.map((v) => v.id)))}
               >
                 {selecionados.size === doRemetente.length ? "Limpar" : "Selecionar todos"}
               </button>
@@ -152,7 +165,7 @@ export function FormConferencia({
         </fieldset>
       )}
 
-      <div className="poco grid grid-cols-3 gap-3 px-4 py-3">
+      <div className="poco grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-4">
         <div>
           <p className="text-[10px] uppercase tracking-[0.12em] text-t4">Declarado</p>
           <p className="num text-[22px] font-semibold text-t1" data-testid="total-vales">{fmt(declarado)}</p>
@@ -165,7 +178,16 @@ export function FormConferencia({
           <p className="text-[10px] uppercase tracking-[0.12em] text-t4">Pallets Quebrados</p>
           <p className="num text-[16px] font-semibold text-ouro">{fmt(declaradoQuebrados)}</p>
         </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.12em] text-t4">Diferença</p>
+          <p className={clsx("num text-[16px] font-semibold", divergente ? "text-erro" : "text-t3")} data-testid="diferenca">{informado && declarado > 0 ? sinal(diferenca) : "—"}</p>
+        </div>
       </div>
+      {divergente && !confirmada && (
+        <p role="alert" className="poco-erro flex items-start gap-2 px-4 py-3 text-[12px] font-semibold text-erro-claro" data-testid="alerta-divergencia">
+          <TriangleAlert className="mt-0.5 h-4 w-4 flex-none" /> Divergência de {sinal(diferenca)} pallet(s) em relação ao enviado ({rotuloDiv}).
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -179,21 +201,27 @@ export function FormConferencia({
       </div>
 
       {pedirConfirmacao && !confirmada && (
-        <div role="alertdialog" aria-labelledby="aviso-divergencia" className="poco-erro space-y-3 px-4 py-4 text-[12px] text-erro-claro">
-          <p id="aviso-divergencia" className="flex items-start gap-2 font-semibold">
-            <TriangleAlert className="mt-0.5 h-4 w-4 flex-none" />
-            Recebido {fmt(recebido)} x declarado {fmt(declarado)}. Confirmar a {rotuloDiv} pallet(s)?
-          </p>
-          <p className="text-t2">
-            {diferenca < 0
-              ? "Será gerado um Vale de Ocorrência de falta, devolvido ao remetente para apuração."
-              : "A sobra entra no estoque desta unidade e fica registrada num Vale de Ocorrência de sobra."}
-          </p>
-          <div className="flex gap-2">
-            <button type="button" className="btn-danger btn-sm" onClick={() => setConfirmada(true)}>Confirmar divergência</button>
-            <button type="button" className="btn-secondary btn-sm" onClick={() => setPedirConfirmacao(false)}>Corrigir contagem</button>
+        <Modal titulo="Divergência na conferência" aoFechar={() => setPedirConfirmacao(false)}>
+          <div role="alertdialog" aria-labelledby="aviso-divergencia" className="space-y-4 text-[12px]">
+            <p id="aviso-divergencia" className="flex items-start gap-2 text-[14px] font-semibold text-erro-claro">
+              <TriangleAlert className="mt-0.5 h-5 w-5 flex-none text-erro" />
+              Recebido {fmt(recebido)} × enviado {fmt(declarado)}: {rotuloDiv} pallet(s). Confirmar a divergência?
+            </p>
+            <dl className="poco grid grid-cols-3 gap-3 p-4 text-center">
+              <div><dt className="text-t4">Pallets PBR</dt><dd className="num text-[16px] font-semibold text-t1">{sinal(difBons)}</dd></div>
+              <div><dt className="text-t4">Pallets Quebrados</dt><dd className="num text-[16px] font-semibold text-t1">{sinal(difQuebrados)}</dd></div>
+              <div><dt className="text-t4">Total</dt><dd className="num text-[16px] font-semibold text-erro">{sinal(diferenca)}</dd></div>
+            </dl>
+            <p className="text-t2">
+              Será gerada uma <strong>ocorrência de {diferenca < 0 ? "falta" : "sobra"}</strong> pendente na unidade remetente, que aceita ou recusa com justificativa.
+              {diferenca > 0 && " A sobra entra no estoque desta unidade agora."}
+            </p>
+            <div className="flex gap-3">
+              <button type="button" className="btn-secondary flex-1" onClick={() => setPedirConfirmacao(false)}>Corrigir contagem</button>
+              <button type="button" className="btn-danger flex-1" onClick={() => { setConfirmada(true); setPedirConfirmacao(false); }}>Confirmar divergência</button>
+            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {confirmada && divergente && (
@@ -205,10 +233,10 @@ export function FormConferencia({
 
       <div className={clsx("space-y-4", confirmada && divergente && "rounded-2xl p-3 ring-1 ring-erro/40")}>
         <div className="grid grid-cols-2 gap-4">
-          <InputPlaca rotulo="Placa do veículo" />
+          <InputPlaca rotulo="Placa do veículo" valor={placa} aoMudar={setPlaca} />
           <div>
             <label className="label" htmlFor="transportadoraId">Transportadora</label>
-            <select id="transportadoraId" name="transportadoraId" className="input" defaultValue="">
+            <select id="transportadoraId" name="transportadoraId" className="input" value={transportadoraId} onChange={(e) => setTransportadoraId(e.target.value)}>
               <option value="">Não informada</option>
               {transportadoras.map((t) => (
                 <option key={t.id} value={t.id}>{t.nome}</option>

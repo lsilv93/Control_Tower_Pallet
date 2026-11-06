@@ -33,7 +33,7 @@ export default async function SelecionarCDPage({ searchParams }: { searchParams:
           </span>
           <div>
             <h1 id="titulo-cd" className="text-[18px] font-semibold text-t1">Em qual unidade você vai operar?</h1>
-            <p className="text-[12px] text-t3">Olá, {u.nome.split(" ")[0]}. Seu perfil tem acesso a todas as unidades: as operações desta sessão serão registradas na unidade escolhida.</p>
+            <p className="text-[12px] text-t3">Olá, {u.nome.split(" ")[0]}. {u.global ? "Seu perfil tem acesso a todas as unidades" : `Você tem ${u.cds.length} unidades vinculadas`}: as operações desta sessão serão registradas na unidade escolhida.</p>
           </div>
         </div>
 
