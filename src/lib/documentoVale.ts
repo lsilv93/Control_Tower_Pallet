@@ -1,6 +1,8 @@
 import type { MotivoCancelamento, ResolucaoOcorrencia, StatusVale, TipoOcorrencia, TipoUnidade, TipoVale } from "@prisma/client";
+import { EMISSOR } from "./emissor";
 import { formatarDataHora } from "./datas";
 import {
+  enderecoCompleto,
   formatarCnpj,
   formatarNumero,
   formatarPlaca,
@@ -13,7 +15,17 @@ import {
   rotuloStatusVale,
 } from "./formatos";
 
-type UnidadeDoc = { codigo: string; nome: string; tipo: TipoUnidade; hub: boolean };
+type UnidadeDoc = {
+  codigo: string;
+  nome: string;
+  tipo: TipoUnidade;
+  hub: boolean;
+  cnpj: string | null;
+  endereco: string | null;
+  cidade: string | null;
+  uf: string | null;
+  cep: string | null;
+};
 
 /** Dados do vale necessários para montar o documento impresso / PDF. */
 export type ValeDoc = {
@@ -63,13 +75,34 @@ export type DocumentoVale = {
   declaracao: string;
   assinaturas: [string, string];
   nomeAssinatura: string | null;
+  /** Unidade que originou a operação, impressa como emitente no cabeçalho do vale. */
+  emitente: { rotulo: string; razaoSocial: string; cnpj: string; endereco: string };
 };
+
+/**
+ * Emitente do vale: a unidade (CD ou Cross) ativa do usuário que originou a operação — a
+ * unidade remetente no envio, a recebedora no vale de fornecedor e a que conferiu (recebedor)
+ * no vale de ocorrência —, com o seu endereço completo.
+ */
+function emitenteDoVale(v: ValeDoc): DocumentoVale["emitente"] {
+  const u = v.tipo === "OCORRENCIA" && v.unidade ? v.unidade : v.cd;
+  return {
+    rotulo: `Emitente · ${rotuloTipo(u)} ${u.codigo}`,
+    razaoSocial: `${EMISSOR.razaoSocial} · ${u.codigo} - ${u.nome}`,
+    cnpj: u.cnpj ? formatarCnpj(u.cnpj) : "não cadastrado",
+    endereco: enderecoCompleto(u) ?? "Endereço não cadastrado (complete em Cadastros)",
+  };
+}
 
 const rotuloTipo = (u: UnidadeDoc) => (u.tipo === "CROSS" ? "Ponto de Cross" : u.hub ? "CD Hub" : "CD");
 const unidadeTexto = (u: UnidadeDoc | null) => (u ? `${rotuloTipo(u)} ${u.codigo} - ${u.nome}` : "—");
 
 /** Monta o conteúdo do documento conforme o tipo do vale (fornecedor, envio ou ocorrência). */
 export function documentoVale(v: ValeDoc): DocumentoVale {
+  return { ...conteudoVale(v), emitente: emitenteDoVale(v) };
+}
+
+function conteudoVale(v: ValeDoc): Omit<DocumentoVale, "emitente"> {
   const codigo = numeroVale(v.numero, v.tipo);
   const situacao =
     v.status === "CANCELADO"
@@ -204,9 +237,9 @@ export function documentoVale(v: ValeDoc): DocumentoVale {
 }
 
 export const INCLUDE_VALE_DOC = {
-  cd: { select: { codigo: true, nome: true, tipo: true, hub: true } },
+  cd: { select: { codigo: true, nome: true, tipo: true, hub: true, cnpj: true, endereco: true, cidade: true, uf: true, cep: true } },
   fornecedor: { select: { nome: true, cnpj: true } },
-  unidade: { select: { codigo: true, nome: true, tipo: true, hub: true } },
+  unidade: { select: { codigo: true, nome: true, tipo: true, hub: true, cnpj: true, endereco: true, cidade: true, uf: true, cep: true } },
   criadoPor: { select: { login: true } },
   canceladoPor: { select: { login: true } },
   agenda: { select: { numero: true, dataPrevista: true } },

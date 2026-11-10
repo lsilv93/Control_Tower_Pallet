@@ -44,8 +44,8 @@ type Item = {
   icone: typeof Boxes;
   permissao?: Permissao;
   somente?: "admin" | "master";
-  /** hub: só no CD Hub; fornecedor: módulo liberado na unidade; brasil: TV Nível Brasil; naoCross: fora do escopo do usuário de Cross. */
-  requer?: "hub" | "fornecedor" | "brasil" | "naoCross";
+  /** hub: só no CD Hub; fornecedor: módulo liberado na unidade; naoCross: fora do escopo do usuário de Cross. */
+  requer?: "hub" | "fornecedor" | "naoCross";
 };
 
 const grupos: { titulo: string; itens: Item[] }[] = [
@@ -53,7 +53,7 @@ const grupos: { titulo: string; itens: Item[] }[] = [
     titulo: "",
     itens: [
       { href: "/", rotulo: "Painel", icone: LayoutDashboard, permissao: "dashboard" },
-      { href: "/tv", rotulo: "Torre de Controle (TV)", icone: MonitorPlay, permissao: "tv", requer: "brasil" },
+      { href: "/tv", rotulo: "Torre de Controle (TV)", icone: MonitorPlay },
     ],
   },
   {
@@ -103,7 +103,7 @@ const grupos: { titulo: string; itens: Item[] }[] = [
   },
 ];
 
-type UsuarioMenu = { nome: string; login: string; perfil: Perfil; permissoes: string[]; unidade: UnidadeAcesso; global: boolean; visaoBrasil: boolean };
+type UsuarioMenu = { nome: string; login: string; perfil: Perfil; permissoes: string[]; unidade: UnidadeAcesso; global: boolean };
 type CDMenu = { codigo: string; nome: string; tipo: "CD" | "CROSS"; hub: boolean; recebimentoFornecedor: boolean };
 
 function visivel(i: Item, u: UsuarioMenu, cd: CDMenu | null) {
@@ -112,7 +112,6 @@ function visivel(i: Item, u: UsuarioMenu, cd: CDMenu | null) {
   if (i.permissao && !tem(u, i.permissao)) return false;
   if (i.requer === "hub" && !cd?.hub) return false;
   if (i.requer === "fornecedor" && !cd?.recebimentoFornecedor) return false;
-  if (i.requer === "brasil" && !u.visaoBrasil) return false;
   if (i.requer === "naoCross" && ehUsuarioCross(u)) return false;
   return true;
 }

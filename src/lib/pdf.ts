@@ -67,10 +67,10 @@ function via(doc: PDFKit.PDFDocument, vale: ValePdf, d: DocumentoVale, topo: num
 
   // Cabeçalho: logotipo + emissor | código de barras + número
   logotipo(doc, x0, y);
-  doc.font("Helvetica-Bold").fontSize(7).fillColor(COR.cinza).text(`REMETENTE (EMISSOR) · CD ${vale.cd.codigo}`, x0, y + 36);
+  doc.font("Helvetica-Bold").fontSize(7).fillColor(COR.cinza).text(d.emitente.rotulo.toUpperCase(), x0, y + 36);
   const larguraEmissor = largura - 180;
-  doc.font("Helvetica-Bold").fontSize(7.5).fillColor(COR.tinta).text(`${EMISSOR.razaoSocial} · CNPJ ${EMISSOR.cnpj}`, x0, y + 45, { width: larguraEmissor, lineBreak: false });
-  textoAjustado(doc, `${EMISSOR.endereco}, ${EMISSOR.cidade}, CEP ${EMISSOR.cep}`, x0, y + 55, larguraEmissor, 7, "Helvetica");
+  textoAjustado(doc, `${d.emitente.razaoSocial} · CNPJ ${d.emitente.cnpj}`, x0, y + 45, larguraEmissor, 7.5, "Helvetica-Bold");
+  textoAjustado(doc, d.emitente.endereco, x0, y + 55, larguraEmissor, 7, "Helvetica");
 
   const xd = x0 + largura - 175;
   doc.fillColor(COR.tinta);

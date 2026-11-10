@@ -24,15 +24,20 @@ export type LinhaTV = LinhaUnidade &
     cdsAtendidos: string[];
   };
 
-/** Indicadores da Torre de Controle Nível Brasil (gestão à vista; sem dados de fornecedores). */
-export async function dadosTV() {
+/**
+ * Indicadores da Torre de Controle (gestão à vista; sem dados de fornecedores).
+ * `ids`: unidades selecionadas no filtro da TV; ausente = Visão Geral (todas as unidades).
+ */
+export async function dadosTV(ids?: string[]) {
   const hoje = diaLocal();
+  const sel = ids && ids.length > 0 ? ids : undefined;
+  const envolve = sel ? { OR: [{ cdId: { in: sel } }, { unidadeId: { in: sel } }] } : {};
   const [posicao, transito, conferencias, hojeConf, ocorrencias, vinculos] = await Promise.all([
-    posicaoUnidades(),
-    enviosEmTransito(),
-    prisma.conferencia.findMany({ select: { remetenteId: true, totalDeclarado: true, recebidoBons: true, recebidoQuebrados: true, diferenca: true } }),
-    prisma.conferencia.aggregate({ where: { criadoEm: { gte: inicioDoDia(hoje), lt: fimDoDia(hoje) } }, _sum: { recebidoBons: true, recebidoQuebrados: true }, _count: true }),
-    prisma.valePallet.findMany({ where: { tipo: "OCORRENCIA", status: "PENDENTE" }, select: { cdId: true, unidadeId: true, quantidade: true, criadoEm: true } }),
+    posicaoUnidades(sel),
+    enviosEmTransito(envolve),
+    prisma.conferencia.findMany({ where: sel ? { remetenteId: { in: sel } } : {}, select: { remetenteId: true, totalDeclarado: true, recebidoBons: true, recebidoQuebrados: true, diferenca: true } }),
+    prisma.conferencia.aggregate({ where: { criadoEm: { gte: inicioDoDia(hoje), lt: fimDoDia(hoje) }, ...(sel ? { cdId: { in: sel } } : {}) }, _sum: { recebidoBons: true, recebidoQuebrados: true }, _count: true }),
+    prisma.valePallet.findMany({ where: { tipo: "OCORRENCIA", status: "PENDENTE", ...envolve }, select: { cdId: true, unidadeId: true, quantidade: true, criadoEm: true } }),
     prisma.crossCD.findMany({ select: { crossId: true, cd: { select: { codigo: true } } }, orderBy: { cd: { codigo: "asc" } } }),
   ]);
 
@@ -101,6 +106,7 @@ export async function dadosTV() {
   const subtotal = (ls: LinhaTV[]) => ({ bons: soma(ls, (l) => l.vazios), quebrados: soma(ls, (l) => l.quebrados), transito: soma(ls, (l) => l.transito) });
 
   return {
+    filtrado: !!sel,
     hub: cds.find((l) => l.unidade.hub) ?? null,
     cds,
     crosses,
@@ -111,6 +117,7 @@ export async function dadosTV() {
       cds: subtotal(cds),
       crosses: subtotal(crosses),
       quebradosAoHub: soma(linhas, (l) => l.transitoHubQuebrados),
+      valesEmViagem: transito.length,
       ocorrenciasPendentes: ocorrencias.length,
       ocorrenciasQuantidade: ocorrencias.reduce((s, o) => s + o.quantidade, 0),
       recebidosHoje: (hojeConf._sum.recebidoBons ?? 0) + (hojeConf._sum.recebidoQuebrados ?? 0),
@@ -131,4 +138,13 @@ export async function versaoTV(): Promise<string> {
     prisma.ocorrenciaInteracao.count(),
   ]);
   return `${ultimo ? `${ultimo.criadoEm.getTime()}-${ultimo.id}` : "0"}-${vales}-${interacoes}`;
+}
+
+/** Unidades ativas oferecidas no filtro superior da TV (CDs e Pontos de Cross). */
+export function unidadesFiltroTV() {
+  return prisma.centroDistribuicao.findMany({
+    where: { ativo: true },
+    select: { id: true, codigo: true, nome: true, tipo: true, hub: true },
+    orderBy: [{ tipo: "asc" }, { hub: "desc" }, { codigo: "asc" }],
+  });
 }

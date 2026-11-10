@@ -200,3 +200,19 @@ export function parteVale(v: {
   if (v.unidade) return `${v.unidade.codigo} - ${v.unidade.nome}`;
   return "—";
 }
+
+/** Unidades da federação (UF), para o endereço das unidades. */
+export const UFS = ["AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"] as const;
+
+/** CEP: 00000-000 (digitação). */
+export function mascaraCep(valor: string): string {
+  const d = valor.replace(/\D/g, "").slice(0, 8);
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+}
+
+/** Endereço em uma linha: "Rua X, 10 · Cidade/UF · CEP 00000-000" (partes ausentes são omitidas). */
+export function enderecoCompleto(u: { endereco?: string | null; cidade?: string | null; uf?: string | null; cep?: string | null }): string | null {
+  const local = [u.cidade, u.uf].filter(Boolean).join("/");
+  const partes = [u.endereco, local, u.cep ? `CEP ${mascaraCep(u.cep)}` : null].filter(Boolean);
+  return partes.length ? partes.join(" · ") : null;
+}

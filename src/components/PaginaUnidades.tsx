@@ -1,10 +1,11 @@
 import { configurarUnidade, salvarCD } from "@/actions/cadastros";
 import { AcoesLinha, BannerOk, RodapeForm, Situacao } from "./Cadastro";
+import { CamposEndereco } from "./CamposEndereco";
 import { CamposPadrao } from "./CamposPadrao";
 import { FormAcao } from "./FormAcao";
 import { Painel, Tabela, Vazio } from "./ui";
 import { requirePermissaoGlobal } from "@/lib/auth";
-import { formatarCnpj } from "@/lib/formatos";
+import { enderecoCompleto, formatarCnpj } from "@/lib/formatos";
 import { ehMaster } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 
@@ -50,6 +51,7 @@ export async function PaginaUnidades({ tipo, editar, ok }: { tipo: "CD" | "CROSS
                 exemploSigla={tipo === "CD" ? "Ex.: CDFT" : "Ex.: XRJ01"}
                 rotuloNome={tipo === "CD" ? "Nome do CD" : "Nome do Ponto de Cross"}
               />
+              <CamposEndereco valores={editando ?? undefined} />
               {tipo === "CROSS" && (
                 <fieldset className="poco p-4" data-testid="cds-atendidos">
                   <legend className="label float-left !mb-3 w-full">CDs atendidos * <span className="normal-case tracking-normal text-t4">(marque um ou mais)</span></legend>
@@ -106,7 +108,7 @@ export async function PaginaUnidades({ tipo, editar, ok }: { tipo: "CD" | "CROSS
               <table className="tabela" data-testid="tabela-unidades">
                 <thead>
                   <tr>
-                    <th>Sigla</th><th>Nome / CNPJ</th><th>Contato responsável</th>
+                    <th>Sigla</th><th>Nome / CNPJ / endereço</th><th>Contato responsável</th>
                     {tipo === "CROSS" ? <th>CDs atendidos</th> : <th>Módulos</th>}
                     <th className="text-right">Usuários</th><th>Situação</th><th />
                   </tr>
@@ -118,6 +120,7 @@ export async function PaginaUnidades({ tipo, editar, ok }: { tipo: "CD" | "CROSS
                       <td>
                         <p className="text-t1">{x.nome}</p>
                         <p className="num text-[11px] text-t4">{x.cnpj ? formatarCnpj(x.cnpj) : "—"}</p>
+                        <p className="max-w-[18rem] text-[11px] text-t4">{enderecoCompleto(x) ?? <span className="text-ouro">Endereço não cadastrado</span>}</p>
                       </td>
                       <td>
                         <p>{x.contato ?? "—"}</p>

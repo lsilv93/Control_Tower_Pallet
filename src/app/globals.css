@@ -25,6 +25,8 @@
   --fundo: #0a1b29;
   --saliente: linear-gradient(150deg, #0e2434 0%, #081620 100%);
   --afundado: linear-gradient(150deg, #06121d 0%, #0c1e2c 100%);
+  /* linhas divisórias, trilhos e contornos discretos */
+  --groove: rgba(148, 178, 204, 0.16);
   --ouro-painel: linear-gradient(150deg, #2a2113 0%, #1a1509 100%);
   --erro-painel: linear-gradient(150deg, #2a1215 0%, #1a0b0d 100%);
   --cabecalho-tabela: #07131e;
@@ -74,6 +76,7 @@
   --fundo: #e2e8ef;
   --saliente: linear-gradient(150deg, #eef3f8 0%, #dbe2ea 100%);
   --afundado: linear-gradient(150deg, #d3dbe4 0%, #e6ecf2 100%);
+  --groove: rgba(40, 64, 88, 0.16);
   --ouro-painel: linear-gradient(150deg, #efe3bf 0%, #f6efd9 100%);
   --erro-painel: linear-gradient(150deg, #f3d5d5 0%, #f8e6e6 100%);
   --cabecalho-tabela: #d8e0e8;

@@ -44,6 +44,7 @@ enum Conta {
   COMPRA // compra de pallets novos (NF-e)
   FORNECEDOR // fornecedores (módulo Recebimento Pallet Fornecedor)
   CARGA // pallets carregados recebidos de fornecedores
+  REMESSA_CROSS // acumulador dos envios CD → Ponto de Cross (não consomem o estoque do CD)
 }
 
 enum TipoMovimentacao {
@@ -169,6 +170,11 @@ model CentroDistribuicao {
   contato               String?
   telefone              String?
   email                 String?
+  /// Endereço da unidade, impresso como emitente no Vale-Pallet.
+  endereco              String?
+  cidade                String?
+  uf                    String?
+  cep                   String?
   /// Módulo "Recebimento Pallet Fornecedor" liberado para este CD (configuração do Master).
   recebimentoFornecedor Boolean     @default(false)
   ativo                 Boolean     @default(true)
@@ -280,6 +286,9 @@ model ValePallet {
   serieNf                String?
   chaveNfe               String?              @unique
   semNotaFiscal          Boolean              @default(false)
+  /// Envio que sai do estoque da origem (CD → CD, Cross → CD). Envio CD → Cross não consome
+  /// estoque: sai do acumulador REMESSA_CROSS. Copiado para a ocorrência gerada na conferência.
+  consomeEstoque         Boolean              @default(true)
   conferente             String?
   status                 StatusVale           @default(PENDENTE)
   observacao             String?

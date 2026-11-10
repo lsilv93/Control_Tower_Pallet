@@ -5,6 +5,7 @@ import { UltimasMovimentacoes } from "@/components/UltimasMovimentacoes";
 import { Abas, Cabecalho, Painel, Tabela, Vazio } from "@/components/ui";
 import { requirePermissao } from "@/lib/auth";
 import { obterSaldos } from "@/lib/conta";
+import { acumuladoresEnvio } from "@/lib/consultas";
 import { formatarDataHora } from "@/lib/datas";
 import { formatarNumero as n, numeroVale } from "@/lib/formatos";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +13,7 @@ import { prisma } from "@/lib/prisma";
 export const metadata = { title: "Envio de Pallets" };
 
 const MODOS = {
-  CROSS: { rotulo: "Enviar para Ponto de Cross", descricao: "Gera o Vale-Pallet de Envio para um Ponto de Cross vinculado a esta unidade." },
+  CROSS: { rotulo: "Enviar para Ponto de Cross", descricao: "Gera o Vale-Pallet de Envio para um Ponto de Cross vinculado a esta unidade. Não exige nem consome o estoque do CD: soma no total enviado para Cross." },
   CD: { rotulo: "Enviar para CD", descricao: "Gera o Vale-Pallet de Envio para outro CD (ex.: CDJC devolvendo Pallets PBR às filiais)." },
   HUB: { rotulo: "Pallets Quebrados para o CDJC", descricao: "Gera o Vale de Pallets Quebrados para conserto no CD Hub (CDJC)." },
 } as const;
@@ -27,7 +28,7 @@ export default async function EnvioPage({ searchParams }: { searchParams: Promis
   const ehCross = u.cd.tipo === "CROSS";
   const disponiveis = (ehCross ? ["CD"] : u.cd.hub ? ["CROSS", "CD"] : ["CROSS", "CD", "HUB"]) as (keyof typeof MODOS)[];
   const modo = disponiveis.includes(pedido as keyof typeof MODOS) ? (pedido as keyof typeof MODOS) : disponiveis[0];
-  const [destinos, transportadoras, saldos, pendentes] = await Promise.all([
+  const [destinos, transportadoras, acumulado, saldos, pendentes] = await Promise.all([
     prisma.centroDistribuicao.findMany({
       where: {
         ativo: true,
@@ -45,6 +46,7 @@ export default async function EnvioPage({ searchParams }: { searchParams: Promis
       orderBy: [{ hub: "desc" }, { codigo: "asc" }],
     }),
     prisma.transportadora.findMany({ where: { ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
+    acumuladoresEnvio(u.cd.id),
     obterSaldos(u.cd.id),
     prisma.valePallet.findMany({
       where: { cdId: u.cd.id, tipo: "ENVIO", status: "PENDENTE" },
@@ -57,9 +59,23 @@ export default async function EnvioPage({ searchParams }: { searchParams: Promis
   const info = ehCross ? RETORNO_CROSS : MODOS[modo];
   return (
     <>
-      <Cabecalho titulo={ehCross ? "Retorno de Pallets ao CD" : "Envio de Pallets"} descricao={`${info.descricao} Os pallets saem do estoque de ${u.cd.codigo} (bloqueado se não houver saldo) e ficam em trânsito até a conferência no destino.`} />
+      <Cabecalho titulo={ehCross ? "Retorno de Pallets ao CD" : "Envio de Pallets"} descricao={`${info.descricao} ${modo === "CROSS" && !ehCross ? "" : `Os pallets saem do estoque de ${u.cd.codigo} (bloqueado se não houver saldo) e `}ficam em trânsito até a conferência no destino.`} />
       {disponiveis.length > 1 && <Abas ativo={`/envio?modo=${modo.toLowerCase()}`} itens={disponiveis.map((m) => ({ href: `/envio?modo=${m.toLowerCase()}`, rotulo: MODOS[m].rotulo }))} />}
       <SaldosEstoques cdId={u.cd.id} destaque={modo === "HUB" ? ["QUEBRADOS"] : ["VAZIOS", "TRANSITO"]} />
+      {!ehCross && (
+        <div className="-mt-2 mb-6 grid grid-cols-2 gap-3 sm:gap-4" data-testid="acumuladores-envio">
+          <div className="card-sm p-4 sm:p-5">
+            <p className="label !mb-0.5">Total de Pallets Enviados para Cross</p>
+            <p className="num text-[22px] font-semibold text-t1 sm:text-[26px]" data-testid="total-enviado-cross">{n(acumulado.paraCross)}</p>
+            <p className="text-[11px] text-t4">remessas sem consumo do estoque</p>
+          </div>
+          <div className="card-sm p-4 sm:p-5">
+            <p className="label !mb-0.5">Total de Pallets Enviados para CDs</p>
+            <p className="num text-[22px] font-semibold text-t1 sm:text-[26px]" data-testid="total-enviado-cds">{n(acumulado.paraCds)}</p>
+            <p className="text-[11px] text-t4">saem do estoque de {u.cd.codigo}</p>
+          </div>
+        </div>
+      )}
       <div className="grid gap-6 lg:grid-cols-5">
         <Painel titulo={info.rotulo} className="lg:col-span-2">
           {destinos.length === 0 ? (
@@ -78,7 +94,7 @@ export default async function EnvioPage({ searchParams }: { searchParams: Promis
               <Link href="/cadastros/transportadoras" className="font-semibold underline">Cadastrar transportadora</Link>
             </p>
           ) : (
-            <FormEnvio key={modo} modo={modo} destinos={destinos} transportadoras={transportadoras} saldo={{ vazios: saldos.vazios, quebrados: saldos.quebrados }} origem={u.cd.codigo} retorno={ehCross} />
+            <FormEnvio key={modo} modo={modo} destinos={destinos} transportadoras={transportadoras} saldo={{ vazios: saldos.vazios, quebrados: saldos.quebrados }} origem={u.cd.codigo} retorno={ehCross} consomeEstoque={!(modo === "CROSS" && !ehCross)} />
           )}
         </Painel>
         <div className="space-y-6 lg:col-span-3">

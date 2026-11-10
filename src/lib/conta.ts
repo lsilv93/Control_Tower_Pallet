@@ -25,17 +25,19 @@ const EST = ["VAZIOS", "QUEBRADOS"] as const;
 
 /** Regras de movimentação: origem e destino permitidos para cada tipo. */
 export const REGRAS: Record<TipoMovimentacao, { origem: readonly Conta[]; destino: readonly Conta[] }> = {
-  ENVIO: { origem: EST, destino: ["TRANSITO"] },
+  // CD → CD e Cross → CD: sai do estoque (com saldo). CD → Cross: sai do acumulador REMESSA_CROSS,
+  // sem exigir nem consumir o estoque do CD.
+  ENVIO: { origem: ["VAZIOS", "QUEBRADOS", "REMESSA_CROSS"], destino: ["TRANSITO"] },
   BAIXA_TRANSITO: { origem: ["TRANSITO"], destino: ["ENVIADO"] },
   RECEBIMENTO: { origem: ["RECEBIDO"], destino: EST },
   FALTA: { origem: ["TRANSITO"], destino: ["OCORRENCIA"] },
   SOBRA: { origem: ["SOBRA"], destino: EST },
   // Divergência aceita: o remetente assume (falta reconhecida pelo recebedor sai da ocorrência;
   // sobra reconhecida pelo remetente sai do seu estoque) e o recebedor reclassifica o recebido.
-  DIVERGENCIA_ENVIADO: { origem: ["OCORRENCIA", "VAZIOS", "QUEBRADOS"], destino: ["ENVIADO"] },
+  DIVERGENCIA_ENVIADO: { origem: ["OCORRENCIA", "VAZIOS", "QUEBRADOS", "REMESSA_CROSS"], destino: ["ENVIADO"] },
   DIVERGENCIA_RECEBIDO: { origem: ["RECEBIDO"], destino: ["VAZIOS", "QUEBRADOS", "SOBRA"] },
   OCORRENCIA_PERDA: { origem: ["OCORRENCIA"], destino: ["PERDA"] },
-  ESTORNO_ENVIO: { origem: ["TRANSITO"], destino: EST },
+  ESTORNO_ENVIO: { origem: ["TRANSITO"], destino: ["VAZIOS", "QUEBRADOS", "REMESSA_CROSS"] },
   QUEBRA: { origem: ["VAZIOS"], destino: ["QUEBRADOS"] },
   RECUPERADO: { origem: ["QUEBRADOS"], destino: ["VAZIOS"] },
   CANIBALIZACAO: { origem: ["QUEBRADOS"], destino: ["DESCARTE"] },
@@ -69,6 +71,7 @@ const zerado = (): Saldos => ({
   COMPRA: 0,
   FORNECEDOR: 0,
   CARGA: 0,
+  REMESSA_CROSS: 0,
 });
 
 /** Saldo de cada conta de uma unidade = entradas (destino) − saídas (origem). Opcionalmente até uma data. */
@@ -179,6 +182,7 @@ export const ROTULO_CONTA: Record<Conta, string> = {
   COMPRA: "Compra",
   FORNECEDOR: "Fornecedor",
   CARGA: "Carga de fornecedor",
+  REMESSA_CROSS: "Remessa a Ponto de Cross (sem consumo de estoque)",
 };
 
 const ROTULO_CURTO: Partial<Record<Conta, string>> = { VAZIOS: "Pallets PBR", QUEBRADOS: "Pallets Quebrados", TRANSITO: "trânsito", OCORRENCIA: "ocorrência" };

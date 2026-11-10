@@ -3,7 +3,6 @@
 /** Permissões granulares por tela/funcionalidade, atribuíveis a operadores. */
 export const PERMISSOES = [
   { chave: "dashboard", rotulo: "Painel da unidade" },
-  { chave: "tv", rotulo: "Tela TV · Torre de Controle (somente visão global)" },
   { chave: "envio", rotulo: "Envio de pallets (CD, Cross e quebrados ao CDJC)" },
   { chave: "recebimento", rotulo: "Recebimento / conferência de pallets" },
   { chave: "quebras", rotulo: "Lançar quebrado" },
@@ -48,8 +47,6 @@ export const ehUsuarioCross = (u: ComAcesso) => !ehAdmin(u) && u.unidade?.tipo =
  * exclusivo de Master e Administrador. Usuários comuns ficam na própria unidade.
  */
 export const temVisaoGlobal = (u: ComAcesso) => ehAdmin(u);
-/** Torre de Controle (TV) Nível Brasil, somente leitura: administradores e usuários do Hub CDJC. */
-export const temVisaoBrasil = (u: ComAcesso) => ehAdmin(u) || !!u.unidade?.hub;
 
 /**
  * MASTER e ADMIN têm todas as telas; OPERADOR só as permissões marcadas. Usuários de
@@ -64,7 +61,6 @@ export function tem(u: ComAcesso, p: Permissao): boolean {
 /** Tela inicial de cada permissão (para quem não tem acesso ao painel). */
 const ROTA_INICIAL: Record<Permissao, string> = {
   dashboard: "/",
-  tv: "/tv",
   envio: "/envio",
   recebimento: "/recebimento",
   quebras: "/avarias/quebras",
@@ -80,6 +76,6 @@ const ROTA_INICIAL: Record<Permissao, string> = {
 };
 
 export function primeiraRota(u: ComAcesso): string {
-  const p = CHAVES_PERMISSAO.find((c) => c !== "tv" && c !== "fornecedor" && c !== "reparo" && tem(u, c));
+  const p = CHAVES_PERMISSAO.find((c) => c !== "fornecedor" && c !== "reparo" && tem(u, c));
   return p ? ROTA_INICIAL[p] : ehUsuarioCross(u) ? "/conta" : "/avarias/descarte";
 }

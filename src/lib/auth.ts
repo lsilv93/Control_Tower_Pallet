@@ -3,7 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "./prisma";
-import { ehAdmin, ehMaster, tem, temVisaoBrasil, temVisaoGlobal, type Perfil, type Permissao } from "./permissoes";
+import { ehAdmin, ehMaster, tem, temVisaoGlobal, type Perfil, type Permissao } from "./permissoes";
 import { CD_COOKIE, SESSION_COOKIE, verifySession } from "./session";
 
 export type CDResumo = {
@@ -28,8 +28,6 @@ export type UsuarioAtual = {
   unidade: CDResumo;
   /** Acesso cruzado a todas as unidades: somente Master e Administrador. */
   global: boolean;
-  /** TV Nível Brasil (somente leitura): administradores e usuários do Hub CDJC. */
-  visaoBrasil: boolean;
   /** Unidades em que pode operar: todas (administradores) ou as vinculadas ao usuário. */
   cds: CDResumo[];
   /** Unidade de operação da sessão (a própria; na visão global, a escolhida no modal). */
@@ -80,7 +78,6 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioAtual | null> => {
   const cd = cds.length === 1 ? cds[0] : (cds.find((c) => c.id === escolhido) ?? null);
   // As regras de acesso seguem a unidade em operação (ex.: operando um Cross valem as restrições de Cross).
   const unidade = cd ?? principal;
-  const visaoBrasil = temVisaoBrasil({ perfil: usuario.perfil, unidade }) || cds.some((c) => c.hub);
   return {
     id: usuario.id,
     nome: usuario.nome,
@@ -89,7 +86,6 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioAtual | null> => {
     permissoes: usuario.permissoes,
     unidade,
     global,
-    visaoBrasil,
     cds,
     cd,
   };

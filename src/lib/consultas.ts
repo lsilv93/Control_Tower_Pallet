@@ -227,3 +227,21 @@ export async function consolidacaoTransporte(cdId: string, periodo: Intervalo = 
   }
   return [...mapa.values()].sort((a, b) => b.recebidosFornecedor + b.enviados + b.conferidos - (a.recebidosFornecedor + a.enviados + a.conferidos));
 }
+
+/**
+ * Acumuladores de envio da unidade (vales não cancelados): total de pallets enviados para
+ * Pontos de Cross (remessas que não consomem estoque) e para outros CDs (consomem estoque).
+ */
+export async function acumuladoresEnvio(cdId: string) {
+  const grupos = await prisma.valePallet.findMany({
+    where: { cdId, tipo: "ENVIO", status: { not: "CANCELADO" } },
+    select: { quantidade: true, unidade: { select: { tipo: true } } },
+  });
+  let paraCross = 0;
+  let paraCds = 0;
+  for (const g of grupos) {
+    if (g.unidade?.tipo === "CROSS") paraCross += g.quantidade;
+    else paraCds += g.quantidade;
+  }
+  return { paraCross, paraCds };
+}

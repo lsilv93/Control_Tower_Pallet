@@ -3,6 +3,7 @@ import { ArrowUpFromLine, ClipboardCheck, FileClock, FileX, Hammer, MonitorPlay,
 import { AtualizacaoAutomatica } from "@/components/AtualizacaoAutomatica";
 import { FiltroPeriodo } from "@/components/FiltroPeriodo";
 import { HistoricoExclusoes } from "@/components/HistoricoExclusoes";
+import { KanbanViagens } from "@/components/KanbanViagens";
 import { UltimasMovimentacoes } from "@/components/UltimasMovimentacoes";
 import { BarraComposicao } from "@/components/graficos/BarraComposicao";
 import { GraficoFluxo } from "@/components/graficos/GraficoFluxo";
@@ -14,9 +15,8 @@ import { redirect } from "next/navigation";
 import { requireCD } from "@/lib/auth";
 import { primeiraRota, tem } from "@/lib/permissoes";
 import { obterSaldos, saldosPorConta } from "@/lib/conta";
-import { consolidacaoTransporte, enviosEmTransito, fluxo, granularidadePara, pendenciasPorFornecedor, posicaoUnidades, serieFluxo, totaisPorTipo, valesEmAberto } from "@/lib/consultas";
+import { acumuladoresEnvio, consolidacaoTransporte, enviosEmTransito, fluxo, granularidadePara, pendenciasPorFornecedor, posicaoUnidades, serieFluxo, totaisPorTipo, valesEmAberto } from "@/lib/consultas";
 import { diaLocal, formatarData } from "@/lib/datas";
-import { formatarDataHora } from "@/lib/datas";
 import { formatarNumero as n, numeroVale, rotuloStatusVale } from "@/lib/formatos";
 import { filtroData, lerPeriodo } from "@/lib/periodo";
 import { prisma } from "@/lib/prisma";
@@ -45,7 +45,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const filtroCross = usuario.global ? {} : cd.tipo === "CROSS" ? { id: cd.id } : { cdsAtendidos: { some: { cdId: cd.id } } };
   const idsCross = (await prisma.centroDistribuicao.findMany({ where: { tipo: "CROSS", ativo: true, ...filtroCross }, select: { id: true } })).map((c) => c.id);
 
-  const [aguardandoAcao, saldos, fluxoPeriodo, porTipo, serie, saldoAntes, pendencias, vales, excluidos, transporte, conferencias, posicaoCross, transito, valesTodos] = await Promise.all([
+  const [divergentes, acumulado, aguardandoAcao, saldos, fluxoPeriodo, porTipo, serie, saldoAntes, pendencias, vales, excluidos, transporte, conferencias, posicaoCross, transito, valesTodos] = await Promise.all([
+    // Kanban: vales já conferidos com divergência ainda em aberto (saem quando a ocorrência é encerrada).
+    prisma.valePallet.findMany({
+      where: { tipo: "ENVIO", status: "FINALIZADO", OR: [{ cdId: cd.id }, { unidadeId: cd.id }], conferencia: { ocorrencias: { some: { status: "PENDENTE" } } } },
+      include: {
+        cd: { select: { codigo: true } },
+        unidade: { select: { codigo: true } },
+        conferencia: {
+          select: {
+            numero: true,
+            criadoEm: true,
+            diferenca: true,
+            ocorrencias: { where: { status: "PENDENTE" }, select: { numero: true, ocorrencia: true, quantidade: true, aguardando: { select: { codigo: true } } } },
+          },
+        },
+      },
+      orderBy: { criadoEm: "asc" },
+      take: 30,
+    }),
+    acumuladoresEnvio(cd.id),
     prisma.valePallet.findMany({
       where: filtroAguardandoUsuario(usuario),
       include: { cd: { select: { codigo: true } }, unidade: { select: { codigo: true } }, aguardando: { select: { codigo: true } } },
@@ -93,13 +112,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <>
       <Cabecalho
         titulo={`Painel · ${tipoUnidade} ${cd.codigo}`}
-        descricao={`${cd.nome} · Pallets PBR e Pallets Quebrados em tempo real, envios em trânsito, recebimentos a conferir e ocorrências.${usuario.global ? " Visão Nível Brasil disponível na Torre de Controle." : ""}`}
+        descricao={`${cd.nome} · Pallets PBR e Pallets Quebrados em tempo real, envios em trânsito, recebimentos a conferir e ocorrências. Visão consolidada na Torre de Controle.`}
       >
-        {usuario.visaoBrasil && tem(usuario, "tv") && (
-          <Link href="/tv" className="btn-secondary" target="_blank">
-            <MonitorPlay className="h-4 w-4" /> Torre de Controle (TV)
-          </Link>
-        )}
+        <Link href="/tv" className="btn-secondary" target="_blank" data-testid="link-tv">
+          <MonitorPlay className="h-4 w-4" /> Torre de Controle (TV)
+        </Link>
         <AtualizacaoAutomatica />
       </Cabecalho>
 
@@ -127,6 +144,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Kpi titulo="A receber" valor={saldos.aReceber} legenda="Vales destinados a esta unidade" icone={PackageOpen} cor="neutro" testid="saldo-a-receber" rodape={`${saldos.valesAReceber} vale(s) para conferir`} />
         <Kpi titulo="Faltas em aberto" valor={saldos.ocorrencias} legenda="Ocorrências a apurar" icone={TriangleAlert} cor="erro" testid="saldo-ocorrencias" rodape={`${saldos.ocorrenciasAbertas} ocorrência(s) envolvendo a unidade`} />
       </div>
+
+      {cd.tipo === "CD" && (
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4" data-testid="acumuladores-envio">
+          <Indicador titulo="Total de Pallets Enviados para Cross" valor={n(acumulado.paraCross)} detalhe="remessas sem consumo do estoque" icone={<Truck className="h-5 w-5" />} cor="neutro" />
+          <Indicador titulo="Total de Pallets Enviados para CDs" valor={n(acumulado.paraCds)} detalhe={`saem do estoque de ${cd.codigo}`} icone={<ArrowUpFromLine className="h-5 w-5" />} cor="neutro" />
+        </div>
+      )}
 
       {/* Ocorrências que exigem ação do usuário */}
       <div className="mt-6">
@@ -181,44 +205,28 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-5">
-        {moduloFornecedor && (
+      <Painel
+        className="mt-6"
+        titulo={<span className="flex items-center gap-2"><Truck className="h-4 w-4 text-lima" /> Acompanhamento de viagens · {cd.codigo}</span>}
+        acoes={
+          <span className="flex flex-wrap items-center gap-3 text-[11px]">
+            <span className="num text-t3">{transito.length} em viagem · {divergentes.length} com divergência</span>
+            <Link href="/recebimento" className="font-semibold text-lima hover:underline">Conferir recebimento</Link>
+          </span>
+        }
+      >
+        <KanbanViagens viagens={transito} divergentes={divergentes} cdAtual={cd.id} agora={Date.now()} />
+      </Painel>
+
+      {moduloFornecedor && (
           <Painel
-            className="xl:col-span-2"
+            className="mt-6"
             titulo={<span className="flex items-center gap-2"><FileClock className="h-4 w-4 text-lima" /> Vales pendentes de fornecedores</span>}
             acoes={<span className="num text-[12px] font-semibold text-t1">{n(saldos.fornecedores)} pallets</span>}
           >
             <PainelValesFornecedor porFornecedor={fatiasFornecedor} porIdade={fatiasIdade} />
           </Painel>
         )}
-        <Painel
-          className={moduloFornecedor ? "xl:col-span-3" : "xl:col-span-5"}
-          titulo={<span className="flex items-center gap-2"><Truck className="h-4 w-4 text-lima" /> Vales em trânsito (enviados e a receber)</span>}
-          acoes={<Link href="/recebimento" className="text-[11px] font-semibold text-lima hover:underline">Conferir recebimento</Link>}
-        >
-          {transito.length === 0 ? (
-            <Vazio>Nenhum vale em trânsito envolvendo {cd.codigo}.</Vazio>
-          ) : (
-            <Tabela className="max-h-[22rem] overflow-auto">
-              <table className="tabela" data-testid="tabela-transito">
-                <thead className="sticky top-0"><tr><th>Vale</th><th>Sentido</th><th>Origem → Destino</th><th className="text-right">Pallets PBR</th><th className="text-right">Pallets Quebrados</th><th>Emissão</th></tr></thead>
-                <tbody>
-                  {transito.map((v) => (
-                    <tr key={v.id}>
-                      <td><Link prefetch={false} href={`/vales/${v.id}`} className="num font-semibold text-lima hover:underline">{numeroVale(v.numero, v.tipo)}</Link></td>
-                      <td>{v.cdId === cd.id ? <span className="pill text-t2 bg-t2/10">Enviado</span> : <span className="pill text-lima bg-lima/10">A receber</span>}</td>
-                      <td className="num">{v.cd.codigo} → {v.unidade?.codigo ?? "—"}</td>
-                      <td className="num text-right">{n(v.quantidadeBons)}</td>
-                      <td className="num text-right">{n(v.quantidadeQuebrados)}</td>
-                      <td className="num">{formatarDataHora(v.criadoEm)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Tabela>
-          )}
-        </Painel>
-      </div>
 
       {/* Indicadores do período */}
       <h2 className="secao mb-3 mt-8 flex items-center gap-2">Movimentação no período · {periodo.rotulo}</h2>

@@ -14,7 +14,7 @@ export default async function SistemaLayout({ children }: { children: React.Reac
   return (
     <div className="min-h-screen">
       <Menu
-        usuario={{ nome: usuario.nome, login: usuario.login, perfil: usuario.perfil, permissoes: usuario.permissoes, unidade: usuario.unidade, global: usuario.global, visaoBrasil: usuario.visaoBrasil }}
+        usuario={{ nome: usuario.nome, login: usuario.login, perfil: usuario.perfil, permissoes: usuario.permissoes, unidade: usuario.unidade, global: usuario.global }}
         cd={usuario.cd}
         pendencias={pendencias}
         podeTrocarCD={usuario.cds.length > 1}

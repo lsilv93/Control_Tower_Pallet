@@ -6,7 +6,6 @@ import { ImpressaoAutomatica } from "@/components/ImpressaoAutomatica";
 import { podeVerVale, requireUsuario } from "@/lib/auth";
 import { codigo128Svg } from "@/lib/codigoBarras";
 import { documentoVale, INCLUDE_VALE_DOC, type DocumentoVale } from "@/lib/documentoVale";
-import { EMISSOR } from "@/lib/emissor";
 import { prisma } from "@/lib/prisma";
 import { formatarNumero } from "@/lib/formatos";
 
@@ -15,14 +14,13 @@ export const metadata = { title: "Vale-Pallet" };
 
 const SPAN = { 1: "col-span-1", 2: "col-span-2", 3: "col-span-3", 4: "col-span-4" } as const;
 
-function Via({ doc, via, barras, quantidade, cancelado, observacao, cd }: {
+function Via({ doc, via, barras, quantidade, cancelado, observacao }: {
   doc: DocumentoVale;
   via: string;
   barras: string;
   quantidade: number;
   cancelado: boolean;
   observacao: string | null;
-  cd: string;
 }) {
   return (
     <section className="via relative flex flex-col px-[12mm] py-[7mm]">
@@ -40,13 +38,11 @@ function Via({ doc, via, barras, quantidade, cancelado, observacao, cd }: {
           <h1 className="text-xl font-extrabold tracking-tight">{doc.titulo}</h1>
           <p className="text-[10px] text-slate-600">{doc.subtitulo}</p>
           <div className="mt-1.5 text-[9.5px] leading-snug">
-            <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Emissor do documento · {cd}</p>
+            <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500" data-testid="emitente-rotulo">{doc.emitente.rotulo}</p>
             <p>
-              <strong>{EMISSOR.razaoSocial}</strong> · {EMISSOR.nomeFantasia} · CNPJ {EMISSOR.cnpj}
+              <strong>{doc.emitente.razaoSocial}</strong> · CNPJ {doc.emitente.cnpj}
             </p>
-            <p>
-              {EMISSOR.endereco}, {EMISSOR.cidade}, CEP {EMISSOR.cep}
-            </p>
+            <p data-testid="emitente-endereco">{doc.emitente.endereco}</p>
           </div>
         </div>
         <div className="flex flex-none flex-col items-end text-right">
@@ -105,7 +101,7 @@ export default async function ImprimirValePage({
   const doc = documentoVale(vale);
   const barras = codigo128Svg(doc.codigo);
   const voltar = vale.tipo === "FORNECEDOR" ? "/fornecedor/entrada" : vale.tipo === "ENVIO" ? (vale.cdId === u.cd?.id ? "/envio" : "/recebimento") : "/ocorrencias";
-  const comum = { doc, barras, quantidade: vale.quantidade, cancelado: vale.status === "CANCELADO", observacao: vale.observacao, cd: vale.cd.codigo };
+  const comum = { doc, barras, quantidade: vale.quantidade, cancelado: vale.status === "CANCELADO", observacao: vale.observacao };
 
   return (
     <div className="min-h-screen bg-fundo px-[14px] py-6 print:bg-white print:p-0">

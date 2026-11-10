@@ -7,7 +7,7 @@ import { z } from "zod";
 import { CHAVES_PERMISSAO, ehMaster } from "@/lib/permissoes";
 import { exigirAdmin, exigirGlobal as exigir, exigirMaster } from "./guarda";
 import { auditar, ErroNegocio } from "@/lib/conta";
-import { cnpjValido, emailValido, normalizarCnpj, telefoneValido } from "@/lib/formatos";
+import { cnpjValido, emailValido, normalizarCnpj, telefoneValido, UFS } from "@/lib/formatos";
 import { prisma } from "@/lib/prisma";
 import { falha, tratarErro, type Estado } from "./estado";
 
@@ -133,6 +133,14 @@ const schemaCD = z.object({
   tipo: z.enum(["CD", "CROSS"]).default("CD"),
   codigo: sigla,
   ...camposPadrao,
+  // Endereço da unidade (emitente do Vale-Pallet): obrigatório em CDs e Pontos de Cross.
+  endereco: z.string({ message: "Informe o endereço." }).trim().min(3, "Informe o endereço.").max(200),
+  cidade: z.string({ message: "Informe a cidade." }).trim().min(2, "Informe a cidade.").max(120),
+  uf: z.enum(UFS, { message: "Selecione o estado (UF)." }),
+  cep: z
+    .string({ message: "Informe o CEP." })
+    .transform((v) => v.replace(/\D/g, ""))
+    .refine((v) => v.length === 8, "CEP inválido (use 00000-000)."),
 });
 
 /**
@@ -163,7 +171,19 @@ export async function salvarCD(_: Estado, form: FormData): Promise<Estado> {
       if (!atual) throw new ErroNegocio("Cadastro não encontrado.");
       if (atual.tipo !== d.tipo) throw new ErroNegocio("Não é possível transformar um CD em Ponto de Cross (ou o contrário).");
     }
-    const dados = { tipo: d.tipo, codigo: d.codigo, nome: d.nome, cnpj: d.cnpj, contato: d.contato, telefone: d.telefone, email: d.email };
+    const dados = {
+      tipo: d.tipo,
+      codigo: d.codigo,
+      nome: d.nome,
+      cnpj: d.cnpj,
+      contato: d.contato,
+      telefone: d.telefone,
+      email: d.email,
+      endereco: d.endereco,
+      cidade: d.cidade,
+      uf: d.uf,
+      cep: d.cep,
+    };
     const cd = await prisma.$transaction(async (tx) => {
       const cd = id ? await tx.centroDistribuicao.update({ where: { id }, data: dados }) : await tx.centroDistribuicao.create({ data: dados });
       if (d.tipo === "CROSS") {

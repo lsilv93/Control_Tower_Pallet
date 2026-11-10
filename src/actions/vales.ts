@@ -264,11 +264,14 @@ export async function excluirVale(_: Estado, form: FormData): Promise<Estado> {
           observacao: texto,
         });
       } else {
-        // Envio ainda não conferido: os pallets voltam do trânsito para o estoque da origem.
-        if (vale.quantidadeBons > 0) {
+        // Envio ainda não conferido: os pallets voltam do trânsito para o estoque da origem
+        // (ou para o acumulador de remessas, no envio CD → Cross, que não consumiu estoque).
+        if (!vale.consomeEstoque) {
+          await lancar(tx, { tipo: "ESTORNO_ENVIO", destino: "REMESSA_CROSS", quantidade: vale.quantidade, usuarioId: usuario.id, cdId: usuario.cd.id, unidadeId: vale.unidadeId, valeId: vale.id, observacao: texto });
+        } else if (vale.quantidadeBons > 0) {
           await lancar(tx, { tipo: "ESTORNO_ENVIO", destino: "VAZIOS", quantidade: vale.quantidadeBons, usuarioId: usuario.id, cdId: usuario.cd.id, unidadeId: vale.unidadeId, valeId: vale.id, observacao: texto });
         }
-        if (vale.quantidadeQuebrados > 0) {
+        if (vale.consomeEstoque && vale.quantidadeQuebrados > 0) {
           await lancar(tx, { tipo: "ESTORNO_ENVIO", destino: "QUEBRADOS", quantidade: vale.quantidadeQuebrados, usuarioId: usuario.id, cdId: usuario.cd.id, unidadeId: vale.unidadeId, valeId: vale.id, observacao: texto });
         }
       }

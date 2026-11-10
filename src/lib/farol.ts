@@ -56,3 +56,15 @@ export function farolUnidade(u: {
   const farol = avaliados.reduce<Farol>((pior, [f]) => (ordem[f] < ordem[pior] ? f : pior), "VERDE");
   return { farol, motivos: avaliados.sort((a, b) => ordem[a[0]] - ordem[b[0]]).map(([, m]) => m) };
 }
+
+/**
+ * SLA de viagem dos vales de envio (Kanban do Painel): verde até `amareloHoras`, amarelo até
+ * `vermelhoHoras` (o SLA) e vermelho a partir dele, enquanto o destino não confere o recebimento.
+ */
+export const REGRAS_VIAGEM = { amareloHoras: 24, vermelhoHoras: 48 } as const;
+
+export function farolViagem(horas: number): Farol {
+  if (horas >= REGRAS_VIAGEM.vermelhoHoras) return "VERMELHO";
+  if (horas >= REGRAS_VIAGEM.amareloHoras) return "AMARELO";
+  return "VERDE";
+}

@@ -21,6 +21,7 @@ export function FormEnvio({
   saldo,
   origem,
   retorno = false,
+  consomeEstoque = true,
 }: {
   modo: "CROSS" | "CD" | "HUB";
   destinos: Unidade[];
@@ -29,6 +30,8 @@ export function FormEnvio({
   origem: string;
   /** Ponto de Cross devolvendo pallets a um dos CDs vinculados. */
   retorno?: boolean;
+  /** false no envio CD → Cross: não exige nem consome o estoque do CD. */
+  consomeEstoque?: boolean;
 }) {
   const [estado, executar, enviando] = useActionState(enviarPallets, null);
   const [dados, setDados] = useState<FormData | null>(null);
@@ -42,8 +45,8 @@ export function FormEnvio({
   const qQuebrados = Math.max(0, Math.trunc(Number(quebrados) || 0));
   const total = qBons + qQuebrados;
   const destino = destinos.find((d) => d.id === unidadeId);
-  const faltaBons = qBons > saldo.vazios;
-  const faltaQuebrados = qQuebrados > saldo.quebrados;
+  const faltaBons = consomeEstoque && qBons > saldo.vazios;
+  const faltaQuebrados = consomeEstoque && qQuebrados > saldo.quebrados;
   const tipoDestino = modo === "CROSS" ? "Ponto de Cross" : modo === "HUB" ? "CD Hub" : "CD";
 
   function aoEnviar(e: React.FormEvent<HTMLFormElement>) {
@@ -85,15 +88,20 @@ export function FormEnvio({
             <div>
               <label className="label" htmlFor="quantidadeBons">Pallets PBR</label>
               <input id="quantidadeBons" name="quantidadeBons" type="number" min={0} step={1} className="input" value={bons} onChange={(e) => setBons(e.target.value)} placeholder="0" />
-              <p className={`mt-1 text-[11px] ${faltaBons ? "font-semibold text-erro" : "text-t4"}`}>Disponível: <span className="num">{fmt(saldo.vazios)}</span></p>
+              {consomeEstoque && <p className={`mt-1 text-[11px] ${faltaBons ? "font-semibold text-erro" : "text-t4"}`}>Disponível: <span className="num">{fmt(saldo.vazios)}</span></p>}
             </div>
           )}
           <div>
             <label className="label" htmlFor="quantidadeQuebrados">Pallets Quebrados{modo === "HUB" ? " *" : ""}</label>
             <input id="quantidadeQuebrados" name="quantidadeQuebrados" type="number" min={0} step={1} className="input" value={quebrados} onChange={(e) => setQuebrados(e.target.value)} placeholder="0" required={modo === "HUB"} />
-            <p className={`mt-1 text-[11px] ${faltaQuebrados ? "font-semibold text-erro" : "text-t4"}`}>Disponível: <span className="num">{fmt(saldo.quebrados)}</span></p>
+            {consomeEstoque && <p className={`mt-1 text-[11px] ${faltaQuebrados ? "font-semibold text-erro" : "text-t4"}`}>Disponível: <span className="num">{fmt(saldo.quebrados)}</span></p>}
           </div>
         </div>
+        {!consomeEstoque && (
+          <p className="poco px-4 py-3 text-[11px] text-t3" data-testid="aviso-remessa-cross">
+            Envio para Ponto de Cross <strong className="text-t1">não exige nem consome</strong> o estoque de {origem}: soma no total de Pallets Enviados para Cross.
+          </p>
+        )}
         <div>
           <label className="label" htmlFor="transportadoraId">Transportador *</label>
           <select id="transportadoraId" name="transportadoraId" className="input" required defaultValue="">
@@ -140,7 +148,11 @@ export function FormEnvio({
             {modo !== "HUB" && <div><dt className="text-t4">Pallets PBR</dt><dd className="num text-[18px] font-semibold text-lima">{fmt(qBons)}</dd></div>}
             <div><dt className="text-t4">Pallets Quebrados</dt><dd className="num text-[18px] font-semibold text-ouro">{fmt(qQuebrados)}</dd></div>
           </dl>
-          <p className="mb-4 text-[11px] text-t3">Os pallets saem do estoque de {origem} e ficam em trânsito até a conferência em {destino.codigo}.</p>
+          <p className="mb-4 text-[11px] text-t3">
+            {consomeEstoque
+              ? `Os pallets saem do estoque de ${origem} e ficam em trânsito até a conferência em ${destino.codigo}.`
+              : `Remessa sem consumo do estoque de ${origem}: fica em trânsito até a conferência em ${destino.codigo}.`}
+          </p>
           <div className="flex gap-3">
             <button type="button" className="btn-secondary flex-1" onClick={() => setDados(null)}>Corrigir</button>
             <button type="button" className="btn-primary flex-1" onClick={confirmar}>Confirmar envio</button>

@@ -80,9 +80,13 @@ export async function enviarPallets(_: Estado, form: FormData): Promise<Estado> 
       const transportadora = await tx.transportadora.findUnique({ where: { id: d.transportadoraId } });
       if (!transportadora || !transportadora.ativo) throw new ErroNegocio("Transportador inválido ou inativo. Selecione um transportador cadastrado.");
 
+      // Regra de saldo: CD → Cross não exige nem consome estoque (vai para o acumulador de remessas
+      // a Cross); CD → CD e Cross → CD exigem saldo e saem do estoque da origem.
+      const consomeEstoque = !(u.cd.tipo === "CD" && destino.tipo === "CROSS");
       const vale = await tx.valePallet.create({
         data: {
           tipo: "ENVIO",
+          consomeEstoque,
           cdId: u.cd.id,
           unidadeId: destino.id,
           quantidadeBons: d.quantidadeBons,
@@ -98,12 +102,17 @@ export async function enviarPallets(_: Estado, form: FormData): Promise<Estado> 
       });
       const codigo = numeroVale(vale.numero, "ENVIO");
       const obs = [codigo, `para ${rotuloUnidade(destino)}`, transportadora.nome, d.placa, d.rota && `Rota ${d.rota}`, d.observacao].filter(Boolean).join(" - ");
-      // Saem do estoque da origem (o lançamento bloqueia se não houver saldo).
-      if (d.quantidadeBons > 0) {
-        await lancar(tx, { tipo: "ENVIO", origem: "VAZIOS", quantidade: d.quantidadeBons, usuarioId: u.id, cdId: u.cd.id, unidadeId: destino.id, valeId: vale.id, observacao: obs }, u.cd.codigo);
-      }
-      if (d.quantidadeQuebrados > 0) {
-        await lancar(tx, { tipo: "ENVIO", origem: "QUEBRADOS", quantidade: d.quantidadeQuebrados, usuarioId: u.id, cdId: u.cd.id, unidadeId: destino.id, valeId: vale.id, observacao: obs }, u.cd.codigo);
+      // Consome estoque: saem de Vazios/Quebrados (o lançamento bloqueia se não houver saldo).
+      // CD → Cross: o total sai do acumulador REMESSA_CROSS, sem tocar no estoque do CD.
+      if (!consomeEstoque) {
+        await lancar(tx, { tipo: "ENVIO", origem: "REMESSA_CROSS", quantidade: total, usuarioId: u.id, cdId: u.cd.id, unidadeId: destino.id, valeId: vale.id, observacao: obs }, u.cd.codigo);
+      } else {
+        if (d.quantidadeBons > 0) {
+          await lancar(tx, { tipo: "ENVIO", origem: "VAZIOS", quantidade: d.quantidadeBons, usuarioId: u.id, cdId: u.cd.id, unidadeId: destino.id, valeId: vale.id, observacao: obs }, u.cd.codigo);
+        }
+        if (d.quantidadeQuebrados > 0) {
+          await lancar(tx, { tipo: "ENVIO", origem: "QUEBRADOS", quantidade: d.quantidadeQuebrados, usuarioId: u.id, cdId: u.cd.id, unidadeId: destino.id, valeId: vale.id, observacao: obs }, u.cd.codigo);
+        }
       }
       await auditar(tx, {
         acao: d.modo === "HUB" ? "GERAR_VALE_QUEBRADOS" : "GERAR_VALE_ENVIO",
@@ -245,6 +254,8 @@ export async function conferirRecebimento(_: Estado, form: FormData): Promise<Es
         placa: d.placa,
         conferenciaOrigemId: conferencia.id,
         criadoPorId: u.id,
+        // Remessa CD → Cross não consumiu estoque: o aceite de uma sobra pelo remetente também não consome.
+        consomeEstoque: vales.every((v) => v.consomeEstoque),
       };
       // A divergência vira ocorrência pendente na unidade remetente, que aceita ou recusa.
       if (falta > 0) {
@@ -419,8 +430,12 @@ export async function responderOcorrencia(_: Estado, form: FormData): Promise<Es
           }
         }
       } else if (peloRemetente) {
-        for (const [estoque, qtd] of partes) {
-          if (qtd > 0) await lancar(tx, { ...remetente, tipo: "DIVERGENCIA_ENVIADO", origem: estoque, quantidade: qtd, observacao: obs }, vale.cd.codigo);
+        if (!vale.consomeEstoque) {
+          await lancar(tx, { ...remetente, tipo: "DIVERGENCIA_ENVIADO", origem: "REMESSA_CROSS", quantidade: vale.quantidade, observacao: obs }, vale.cd.codigo);
+        } else {
+          for (const [estoque, qtd] of partes) {
+            if (qtd > 0) await lancar(tx, { ...remetente, tipo: "DIVERGENCIA_ENVIADO", origem: estoque, quantidade: qtd, observacao: obs }, vale.cd.codigo);
+          }
         }
         await lancar(tx, { ...recebedor, tipo: "DIVERGENCIA_RECEBIDO", destino: "SOBRA", quantidade: vale.quantidade, observacao: obs }, vale.unidade.codigo);
       }

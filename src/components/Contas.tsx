@@ -18,6 +18,7 @@ const CURTO: Record<Conta, string> = {
   COMPRA: "Compra",
   FORNECEDOR: "Fornecedor",
   CARGA: "Carga",
+  REMESSA_CROSS: "Remessa Cross",
 };
 
 const COR: Record<Conta, string> = {
@@ -34,6 +35,7 @@ const COR: Record<Conta, string> = {
   COMPRA: "text-t3 bg-t3/10",
   FORNECEDOR: "text-t3 bg-t3/10",
   CARGA: "text-t3 bg-t3/10",
+  REMESSA_CROSS: "text-t3 bg-t3/10",
 };
 
 export function ContaTag({ conta }: { conta: Conta }) {
