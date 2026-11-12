@@ -17,6 +17,10 @@ async function main() {
         hub: true,
         cnpj: "59568428001150",
         contato: "Administrador",
+        endereco: "Rua Harold Barnsley Holland, 2130, Galpão B, Sala 01, Rio Abaixo",
+        cidade: "Jacareí",
+        uf: "SP",
+        cep: "12334403",
       },
     });
     await prisma.auditoria.create({

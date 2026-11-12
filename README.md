@@ -74,6 +74,12 @@ A migração `20261029120000_reset_senha_admin` redefine o usuário MASTER **`ad
 
 O cadastro de CDs e Pontos de Cross exige **Endereço, Cidade, Estado e CEP**. Todo Vale-Pallet imprime no cabeçalho o endereço completo da unidade que originou a operação (ex.: envio do CDSP → endereço do CDSP). Unidades antigas sem endereço mostram "Endereço não cadastrado" até serem editadas.
 
+## Banco de dados para o servidor oficial
+
+A pasta `database/` traz o modelo do banco em SQL puro (estrutura + dados iniciais) e o script
+`scripts/exportar-banco.sh` exporta os valores atuais de qualquer banco em uso. Passo a passo em
+[`database/LEIAME.md`](database/LEIAME.md).
+
 ## Deploy na Vercel (passo a passo)
 
 1. **Importe o repositório** em [vercel.com/new](https://vercel.com/new). A Vercel detecta Next.js sozinha.
