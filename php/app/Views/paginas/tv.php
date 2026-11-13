@@ -75,8 +75,7 @@ $sel = array_column($escolhidas, 'codigo');
       <div class="min-w-0">
         <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-t3">Torre de Controle · Gestão à Vista · Pallets PBR</p>
         <h1 class="text-[clamp(20px,2.2vw,32px)] font-semibold leading-tight text-t1" data-testid="titulo-tv">
-          <?= $d['filtrado'] ? 'Visão <span class="text-lima">' . e(implode(' + ', $sel)) . '</span>' : 'Visão Geral · <span class="text-lima">Brasil</span>' ?>
-          <span class="ml-3 text-[clamp(12px,1vw,15px)] font-medium text-t3"><?= count($d['cds']) ?> CD(s) · <?= count($d['crosses']) ?> Ponto(s) de Cross</span>
+          <?= $d['filtrado'] ? 'Visão <span class="text-lima">' . e(implode(' + ', $sel)) . '</span>' : 'Visão Geral · <span class="text-lima">Brasil</span>' ?><span class="ml-3 text-[clamp(12px,1vw,15px)] font-medium text-t3"><?= count($d['cds']) ?> CD(s) · <?= count($d['crosses']) ?> Ponto(s) de Cross</span>
         </h1>
       </div>
     </div>
