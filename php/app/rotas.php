@@ -46,7 +46,7 @@ return [
         'auth' => ['entrar', 'sair', 'selecionar-cd', 'alterar-senha'],
         'cadastros' => ['salvar-transportadora', 'salvar-fornecedor', 'salvar-cd', 'configurar-unidade', 'salvar-usuario', 'alternar-ativo', 'criar-fornecedor-rapido'],
         'transferencias' => ['enviar', 'conferir', 'responder-ocorrencia'],
-        'vales' => ['gerar', 'excluir', 'agendar', 'validar-agenda', 'cancelar-agenda', 'buscar'],
+        'vales' => ['excluir', 'agendar', 'validar-agenda', 'cancelar-agenda', 'buscar'],
         'avarias' => ['quebra', 'reparo', 'descarte'],
         'pallets' => ['incluir', 'remover', 'ler-nfe', 'registrar-compra', 'simular-nfe'],
         'fornecedor' => ['ler-nfe', 'registrar-entrada'],

@@ -51,7 +51,7 @@ try {
         [, $grupo, $nome] = $m;
         if (!in_array($nome, $rotas['acoes'][$grupo] ?? [], true)) throw new NaoEncontrado();
         verificarOrigem();
-        require_once dirname(__DIR__) . "/app/Actions/$grupo.php";
+        foreach (glob(dirname(__DIR__) . '/app/Actions/[a-z]*.php') as $arq) require_once $arq;
         $funcao = 'acao_' . $grupo . '_' . str_replace('-', '_', $nome);
         $estado = executarAcao($funcao);
         if (pedidoJs()) json($estado);
