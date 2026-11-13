@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict tEyYgjJjsx5Dw963f6BoA968WMBoPhU7uewSmme3E7mqF6atxlAA8RvENFsK9vk
+\restrict z7egv5Jl4coi1MtwsR6Y4YJl0a5ONB5HEQyRl4l4Z7atoaXxjDySG2pesj5e3do
 
 -- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
@@ -572,16 +572,16 @@ ALTER TABLE ONLY public."ValePallet" ALTER COLUMN numero SET DEFAULT nextval('pu
 -- Data for Name: Auditoria; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-INSERT INTO public."Auditoria" (id, acao, entidade, "entidadeId", origem, destino, quantidade, observacao, detalhes, "criadoEm", "usuarioId", "cdId") VALUES ('auditoria_reset_operacao_20261106', 'RESET_DADOS_OPERACAO', 'Sistema', NULL, NULL, NULL, NULL, 'Banco zerado para início da operação oficial: mantidos usuários, CDs, Pontos de Cross, transportadoras e fornecedores.', NULL, '2026-11-12 17:53:51.434', NULL, NULL);
-INSERT INTO public."Auditoria" (id, acao, entidade, "entidadeId", origem, destino, quantidade, observacao, detalhes, "criadoEm", "usuarioId", "cdId") VALUES ('cmwduk5bc00027d95a7p7ng8f', 'SEED_HUB', 'CentroDistribuicao', 'cmwduk5b700007d95ff66lfaq', NULL, NULL, NULL, NULL, NULL, '2026-11-12 17:53:53.64', NULL, 'cmwduk5b700007d95ff66lfaq');
-INSERT INTO public."Auditoria" (id, acao, entidade, "entidadeId", origem, destino, quantidade, observacao, detalhes, "criadoEm", "usuarioId", "cdId") VALUES ('cmwduk5eb00067d95rfqspybd', 'SEED_ADMIN', 'Usuario', 'cmwduk5e400047d95i2y9sa4g', NULL, NULL, NULL, NULL, NULL, '2026-11-12 17:53:53.748', NULL, 'cmwduk5b700007d95ff66lfaq');
+INSERT INTO public."Auditoria" (id, acao, entidade, "entidadeId", origem, destino, quantidade, observacao, detalhes, "criadoEm", "usuarioId", "cdId") VALUES ('auditoria_reset_operacao_20261113', 'RESET_DADOS_OPERACAO', 'Sistema', NULL, NULL, NULL, NULL, 'Dados operacionais zerados: mantidos usuários, fornecedores, transportadoras, CDs e Pontos de Cross.', NULL, '2026-11-13 14:51:18.388', NULL, NULL);
+INSERT INTO public."Auditoria" (id, acao, entidade, "entidadeId", origem, destino, quantidade, observacao, detalhes, "criadoEm", "usuarioId", "cdId") VALUES ('cmwf3h7we00027dqwfx8z69ku', 'SEED_HUB', 'CentroDistribuicao', 'cmwf3h7wb00007dqwkkka7mvh', NULL, NULL, NULL, NULL, NULL, '2026-11-13 14:51:19.742', NULL, 'cmwf3h7wb00007dqwkkka7mvh');
+INSERT INTO public."Auditoria" (id, acao, entidade, "entidadeId", origem, destino, quantidade, observacao, detalhes, "criadoEm", "usuarioId", "cdId") VALUES ('cmwf3h7z900067dqwf7s2xoje', 'SEED_ADMIN', 'Usuario', 'cmwf3h7z300047dqw5ldiut1f', NULL, NULL, NULL, NULL, NULL, '2026-11-13 14:51:19.845', NULL, 'cmwf3h7wb00007dqwkkka7mvh');
 
 
 --
 -- Data for Name: CentroDistribuicao; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-INSERT INTO public."CentroDistribuicao" (id, codigo, nome, tipo, hub, cnpj, contato, telefone, email, "recebimentoFornecedor", ativo, "criadoEm", cep, cidade, endereco, uf) VALUES ('cmwduk5b700007d95ff66lfaq', 'CDJC', 'CD Jacareí (Hub Nível Brasil)', 'CD', true, '59568428001150', 'Administrador', NULL, NULL, false, true, '2026-11-12 17:53:53.635', '12334403', 'Jacareí', 'Rua Harold Barnsley Holland, 2130, Galpão B, Sala 01, Rio Abaixo', 'SP');
+INSERT INTO public."CentroDistribuicao" (id, codigo, nome, tipo, hub, cnpj, contato, telefone, email, "recebimentoFornecedor", ativo, "criadoEm", cep, cidade, endereco, uf) VALUES ('cmwf3h7wb00007dqwkkka7mvh', 'CDJC', 'CD Jacareí (Hub Nível Brasil)', 'CD', true, '59568428001150', 'Administrador', NULL, NULL, false, true, '2026-11-13 14:51:19.74', '12334403', 'Jacareí', 'Rua Harold Barnsley Holland, 2130, Galpão B, Sala 01, Rio Abaixo', 'SP');
 
 
 --
@@ -636,14 +636,14 @@ INSERT INTO public."CentroDistribuicao" (id, codigo, nome, tipo, hub, cnpj, cont
 -- Data for Name: Usuario; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-INSERT INTO public."Usuario" (id, nome, login, "senhaHash", perfil, permissoes, "unidadeId", ativo, "criadoEm", "atualizadoEm") VALUES ('cmwduk5e400047d95i2y9sa4g', 'Administrador', 'admin', '$2b$10$e7DWcumUxCdAer5Phs.mk.9z9OMf0XyarfHnw6Fd5wctdmhsduFhu', 'MASTER', '{}', 'cmwduk5b700007d95ff66lfaq', true, '2026-11-12 17:53:53.741', '2026-11-12 17:53:53.741');
+INSERT INTO public."Usuario" (id, nome, login, "senhaHash", perfil, permissoes, "unidadeId", ativo, "criadoEm", "atualizadoEm") VALUES ('cmwf3h7z300047dqw5ldiut1f', 'Administrador', 'admin', '$2b$10$A2ZkA4ZhKJbafHD.VdH5YeLUXOGPXRkeY0uM6oOKCXtOlxabswZZu', 'MASTER', '{}', 'cmwf3h7wb00007dqwkkka7mvh', true, '2026-11-13 14:51:19.839', '2026-11-13 14:51:19.839');
 
 
 --
 -- Data for Name: UsuarioUnidade; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-INSERT INTO public."UsuarioUnidade" ("usuarioId", "unidadeId", "criadoEm") VALUES ('cmwduk5e400047d95i2y9sa4g', 'cmwduk5b700007d95ff66lfaq', '2026-11-12 17:53:53.741');
+INSERT INTO public."UsuarioUnidade" ("usuarioId", "unidadeId", "criadoEm") VALUES ('cmwf3h7z300047dqw5ldiut1f', 'cmwf3h7wb00007dqwkkka7mvh', '2026-11-13 14:51:19.839');
 
 
 --
@@ -656,24 +656,25 @@ INSERT INTO public."UsuarioUnidade" ("usuarioId", "unidadeId", "criadoEm") VALUE
 -- Data for Name: _prisma_migrations; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('6cc3cd68-0b59-407a-91ba-7a9ac9a4de2e', 'e50f721b3e285d21f7840f0fa42b03ee8e97c8c2b88ad04ba8107b7897bd035a', '2026-11-12 17:53:51.140235+00', '20260924173451_init', NULL, NULL, '2026-11-12 17:53:51.110026+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('5ca33f02-e646-4da7-a2d6-f474d0f937e4', '42b8f75d45f8c717e4e2d29acb160f295aea1464d92d283141b144133706484e', '2026-11-12 17:53:51.416598+00', '20261028150000_usuario_admin_master', NULL, NULL, '2026-11-12 17:53:51.412755+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('888b11d0-805a-4e85-8eff-325a8a594849', '011856d687bd8004ae7570f4d1279740d777588f5a322bbbe3f1566b78a5b371', '2026-11-12 17:53:51.153582+00', '20260924202513_cadastros_compras_permissoes', NULL, NULL, '2026-11-12 17:53:51.142059+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('d66abd11-c382-456d-a402-97c44a2a4db7', 'ef34cbd416fcc9fdb2f1b2e79caa46e72805ab7138b40700120ec793d767fc22', '2026-11-12 17:53:51.158566+00', '20260930122924_cancelamento_vales', NULL, NULL, '2026-11-12 17:53:51.154473+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('9f526832-9ab2-4cd2-ac30-c9804ca471f6', '8a29042f0870880281eafea2062502eca31620225d6106d673a044d44bdc120b', '2026-11-12 17:53:51.166715+00', '20260930131543_sessao_revogada', NULL, NULL, '2026-11-12 17:53:51.159932+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('aa276d3b-edd8-4ce0-8a79-16c6748036e9', '55c8a147dfc55d19266e131674b37c8f83bb02b36089b912b38fb6564e4d44a9', '2026-11-12 17:53:51.427289+00', '20261028180000_cross_multiplos_cds_fornecedor_sigla', NULL, NULL, '2026-11-12 17:53:51.417582+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('816a3a1a-72cb-4905-8768-4af294f9d99c', 'a8eb1aabe79aa4b3d8c5e72f7f5a9b51a6ca310d648cc606465bbbe3bf9268a8', '2026-11-12 17:53:51.172336+00', '20261001120000_partida_dobrada_estrutura', NULL, NULL, '2026-11-12 17:53:51.167663+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('54680d89-af64-4953-aa4b-55d61a1b18ce', '94c1e29498f492c5749619b741471d549367afd2f08fb1a6ba9427e817699e2c', '2026-11-12 17:53:51.186082+00', '20261001120100_partida_dobrada_dados', NULL, NULL, '2026-11-12 17:53:51.173315+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('381ec699-ca99-4929-ac11-bede82fdc2d3', 'c316ada28d003d152e660b363e75af8c559283b0f4b0dbc0e56fec3b221ebf83', '2026-11-12 17:53:51.192398+00', '20261001150000_recebimento_nf_sem_nf', NULL, NULL, '2026-11-12 17:53:51.187588+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('1ba7c63d-5984-49bd-bf28-c44629cc5ee2', 'dd1f50376c1af14639c1338d4091fa84d802d81228e9e9d38a74f8c827a0a5bc', '2026-11-12 17:53:51.431295+00', '20261029120000_reset_senha_admin', NULL, NULL, '2026-11-12 17:53:51.428342+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('8c91da31-edbb-4972-b2ef-394742eab440', '05d9259e8555afc5efb9239f9e3def03d52b60df907db683c210f03e567c049a', '2026-11-12 17:53:51.23812+00', '20261001160000_zerar_dados', NULL, NULL, '2026-11-12 17:53:51.193931+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('cc584399-0e80-49c9-b727-a62870e7f2c0', '70a42df8771ca419c8a7e4a5babcc8f92cbd5309e7fefbec1067ac430652cfc4', '2026-11-12 17:53:51.265477+00', '20261015120000_multi_cd_estrutura', NULL, NULL, '2026-11-12 17:53:51.239046+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('689e458f-e077-47d3-947e-824e5e017abc', '918ab217f7c65f358625e38ba53b6dac03d555792e788c45465cc08be3c4d9c0', '2026-11-12 17:53:51.274036+00', '20261015120100_multi_cd_dados', NULL, NULL, '2026-11-12 17:53:51.26715+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('15e8836c-1d0b-462a-bfc4-8676530d8061', '9e796ca3dcfcb284db0f4b5f984661140a36a5140821d556bb01c288943602be', '2026-11-12 17:53:51.492641+00', '20261106120000_ocorrencia_bidirecional_usuario_multiunidade_reset', NULL, NULL, '2026-11-12 17:53:51.432085+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('168c8af4-6d67-42d2-b5aa-d76b2a1d949c', 'e117c96586e2f92a9d6315147ea2289b8bb2eee294d72101ee3002be37cf84ca', '2026-11-12 17:53:51.278116+00', '20261016120000_rota_faturamento_sem_motorista', NULL, NULL, '2026-11-12 17:53:51.274947+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('78d43175-eadd-4550-9dac-188d13fd00aa', 'b640038f76f40eb82fd852401ab3c622134f8fbff34654f70c137cf62c319d7a', '2026-11-12 17:53:51.366221+00', '20261027120000_torre_controle_reset_total', NULL, NULL, '2026-11-12 17:53:51.278712+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('c55853b1-9de9-4425-adc7-f9f1613f4118', 'ff78530e9b688d7d35b01a92894a0a1e0196d05f9f19dc72c032a1ffa167820c', '2026-11-12 17:53:51.411798+00', '20261028120000_zerar_dados_para_testes', NULL, NULL, '2026-11-12 17:53:51.367271+00', 1);
-INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('2629d2f2-80d6-4546-8989-321707b6c9b4', 'd3ac0c5129cbeeeef2ea511a5db4918feabafca7a02d18e56f20f1f8c9368a52', '2026-11-12 17:53:51.497252+00', '20261110120000_endereco_unidade_remessa_cross', NULL, NULL, '2026-11-12 17:53:51.493511+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('0ccb4833-bcad-4718-b9d4-061407390879', 'e50f721b3e285d21f7840f0fa42b03ee8e97c8c2b88ad04ba8107b7897bd035a', '2026-11-13 14:51:18.04778+00', '20260924173451_init', NULL, NULL, '2026-11-13 14:51:18.012684+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('800bdd9b-df13-42d0-8b5a-f5182c88518c', '42b8f75d45f8c717e4e2d29acb160f295aea1464d92d283141b144133706484e', '2026-11-13 14:51:18.307452+00', '20261028150000_usuario_admin_master', NULL, NULL, '2026-11-13 14:51:18.304496+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('1b1d9d34-ea5a-45b5-b032-52ec6a5a6569', '011856d687bd8004ae7570f4d1279740d777588f5a322bbbe3f1566b78a5b371', '2026-11-13 14:51:18.062082+00', '20260924202513_cadastros_compras_permissoes', NULL, NULL, '2026-11-13 14:51:18.049131+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('fa8880cd-2444-42d0-92c4-714b9b6a54d5', 'ef34cbd416fcc9fdb2f1b2e79caa46e72805ab7138b40700120ec793d767fc22', '2026-11-13 14:51:18.067856+00', '20260930122924_cancelamento_vales', NULL, NULL, '2026-11-13 14:51:18.063855+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('edbf75ee-c6f3-4424-b9f0-5f1654c24dcb', '8a29042f0870880281eafea2062502eca31620225d6106d673a044d44bdc120b', '2026-11-13 14:51:18.075787+00', '20260930131543_sessao_revogada', NULL, NULL, '2026-11-13 14:51:18.068924+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('ac2053ab-1f3c-453a-819c-30801b7904f6', '55c8a147dfc55d19266e131674b37c8f83bb02b36089b912b38fb6564e4d44a9', '2026-11-13 14:51:18.318356+00', '20261028180000_cross_multiplos_cds_fornecedor_sigla', NULL, NULL, '2026-11-13 14:51:18.308179+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('6859e90d-b13b-4770-b89c-fc84c11a5f8a', 'a8eb1aabe79aa4b3d8c5e72f7f5a9b51a6ca310d648cc606465bbbe3bf9268a8', '2026-11-13 14:51:18.082562+00', '20261001120000_partida_dobrada_estrutura', NULL, NULL, '2026-11-13 14:51:18.076646+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('25e9f858-b8da-4f66-ae3e-9b3eeb57767d', '94c1e29498f492c5749619b741471d549367afd2f08fb1a6ba9427e817699e2c', '2026-11-13 14:51:18.090787+00', '20261001120100_partida_dobrada_dados', NULL, NULL, '2026-11-13 14:51:18.083428+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('e2e6498d-8ad3-4d44-a567-732d3c470b3f', 'c316ada28d003d152e660b363e75af8c559283b0f4b0dbc0e56fec3b221ebf83', '2026-11-13 14:51:18.096114+00', '20261001150000_recebimento_nf_sem_nf', NULL, NULL, '2026-11-13 14:51:18.0917+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('1425d983-5dd7-4875-88a6-5a122173b11a', 'dd1f50376c1af14639c1338d4091fa84d802d81228e9e9d38a74f8c827a0a5bc', '2026-11-13 14:51:18.321733+00', '20261029120000_reset_senha_admin', NULL, NULL, '2026-11-13 14:51:18.319089+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('0fae6e2a-8eba-4bf3-9b1b-31fc639c2277', '05d9259e8555afc5efb9239f9e3def03d52b60df907db683c210f03e567c049a', '2026-11-13 14:51:18.133396+00', '20261001160000_zerar_dados', NULL, NULL, '2026-11-13 14:51:18.096941+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('76755ffd-3fcf-46e7-b39c-d9ae1aec75f4', '70a42df8771ca419c8a7e4a5babcc8f92cbd5309e7fefbec1067ac430652cfc4', '2026-11-13 14:51:18.158163+00', '20261015120000_multi_cd_estrutura', NULL, NULL, '2026-11-13 14:51:18.134211+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('ef869a6c-63be-437b-92a3-3bfd614e5b0c', '918ab217f7c65f358625e38ba53b6dac03d555792e788c45465cc08be3c4d9c0', '2026-11-13 14:51:18.164831+00', '20261015120100_multi_cd_dados', NULL, NULL, '2026-11-13 14:51:18.159103+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('2bf39b33-e09b-4f5a-89a6-d67edc6b6433', '9e796ca3dcfcb284db0f4b5f984661140a36a5140821d556bb01c288943602be', '2026-11-13 14:51:18.381214+00', '20261106120000_ocorrencia_bidirecional_usuario_multiunidade_reset', NULL, NULL, '2026-11-13 14:51:18.32248+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('afcf3edd-4db1-4675-be92-cd783f0d97fe', 'e117c96586e2f92a9d6315147ea2289b8bb2eee294d72101ee3002be37cf84ca', '2026-11-13 14:51:18.169451+00', '20261016120000_rota_faturamento_sem_motorista', NULL, NULL, '2026-11-13 14:51:18.165667+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('944dffe9-3a06-4676-bc30-86638fc75eb9', 'b640038f76f40eb82fd852401ab3c622134f8fbff34654f70c137cf62c319d7a', '2026-11-13 14:51:18.252729+00', '20261027120000_torre_controle_reset_total', NULL, NULL, '2026-11-13 14:51:18.170343+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('0d99d9b9-7b27-4908-8994-cb6448ac0ca3', 'ff78530e9b688d7d35b01a92894a0a1e0196d05f9f19dc72c032a1ffa167820c', '2026-11-13 14:51:18.303592+00', '20261028120000_zerar_dados_para_testes', NULL, NULL, '2026-11-13 14:51:18.253475+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('094eff12-36b3-476b-96ce-c1c66663aea3', 'd3ac0c5129cbeeeef2ea511a5db4918feabafca7a02d18e56f20f1f8c9368a52', '2026-11-13 14:51:18.386209+00', '20261110120000_endereco_unidade_remessa_cross', NULL, NULL, '2026-11-13 14:51:18.382052+00', 1);
+INSERT INTO public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES ('99c2b319-790e-48c0-9eec-3bae2ea430bc', 'd18c76b20ca545f0020a750bde556fe585fbdb4e20ee895908c4545c2e283138', '2026-11-13 14:51:18.426055+00', '20261113120000_reset_dados_operacionais', NULL, NULL, '2026-11-13 14:51:18.38699+00', 1);
 
 
 --
@@ -1384,5 +1385,5 @@ ALTER TABLE ONLY public."ValePallet"
 -- PostgreSQL database dump complete
 --
 
-\unrestrict tEyYgjJjsx5Dw963f6BoA968WMBoPhU7uewSmme3E7mqF6atxlAA8RvENFsK9vk
+\unrestrict z7egv5Jl4coi1MtwsR6Y4YJl0a5ONB5HEQyRl4l4Z7atoaXxjDySG2pesj5e3do
 

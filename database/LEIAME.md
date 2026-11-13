@@ -2,7 +2,7 @@
 
 | Arquivo | Conteúdo |
 |---|---|
-| `control_tower_pallet.sql` | Estrutura completa (15 tabelas, enums, índices, chaves, triggers de imutabilidade) **+ dados iniciais** + histórico das 18 migrações (`_prisma_migrations`). |
+| `control_tower_pallet.sql` | Estrutura completa (15 tabelas, enums, índices, chaves, triggers de imutabilidade) **+ dados iniciais** + histórico das 19 migrações (`_prisma_migrations`). |
 | `control_tower_pallet_schema.sql` | Somente a estrutura, sem nenhum dado. |
 
 Dados iniciais incluídos no `control_tower_pallet.sql`:
