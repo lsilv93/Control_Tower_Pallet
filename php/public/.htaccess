@@ -1,0 +1,12 @@
+# Apache (mod_rewrite): arquivos de /assets são servidos direto; o resto vai ao front controller.
+Options -Indexes
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+RewriteRule ^ index.php [L,QSA]
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.(css|js|svg)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>

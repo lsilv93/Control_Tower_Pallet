@@ -1,0 +1,6 @@
+tests
+assets-src
+scripts
+database/*.php
+tailwind.config.js
+.env

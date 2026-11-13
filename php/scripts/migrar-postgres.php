@@ -25,6 +25,11 @@ const TABELAS = [
 $args = array_slice($argv, 1);
 $apagar = in_array('--apagar', $args, true);
 $simular = in_array('--simular', $args, true);
+// TRUNCATE não pode ser desfeito: a simulação só roda sobre um destino vazio.
+if ($apagar && $simular) {
+    fwrite(STDERR, "[migrar] --simular não pode ser combinado com --apagar (use um banco MySQL vazio para simular).\n");
+    exit(1);
+}
 
 function sair(string $msg): never
 {
