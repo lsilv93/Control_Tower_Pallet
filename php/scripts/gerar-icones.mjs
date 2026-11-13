@@ -28,4 +28,6 @@ for (const nome of usados) {
 const php = "<?php\n// Gerado por php/scripts/gerar-icones.mjs a partir do pacote lucide (licença ISC).\nreturn " +
   "[\n" + Object.entries(saida).sort().map(([k, v]) => `    '${k}' => '${v.replace(/'/g, "\\'")}',`).join("\n") + "\n];\n";
 writeFileSync("php/app/Lib/icones_dados.php", php);
+const js = "/* Gerado por php/scripts/gerar-icones.mjs (ícones lucide, licença ISC). */\nwindow.CTP_ICONES = " + JSON.stringify(saida) + ";\n";
+writeFileSync("php/public/assets/icones.js", js);
 console.log(Object.keys(saida).length, "ícones");

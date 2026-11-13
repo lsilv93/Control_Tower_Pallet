@@ -40,24 +40,27 @@
    * Abre um diálogo modal (mesmo visual do Modal do sistema). Devolve o elemento; `aoFechar`
    * é chamado ao fechar (Esc, clique fora ou botão). Conteúdo em HTML.
    */
-  CTP.modal = ({ titulo, html, aoFechar, largura = "max-w-md" }) => {
+  CTP.modal = ({ titulo, html, aoFechar, largura = "max-w-lg" }) => {
     const fundo = document.createElement("div");
     fundo.className = "fixed inset-0 z-50 flex items-center justify-center bg-[#000814]/70 p-[14px]";
-    fundo.innerHTML = `<div role="dialog" aria-modal="true" class="card entrada w-full ${largura} max-h-[90vh] overflow-y-auto p-6">` +
-      `<div class="mb-4 flex items-center justify-between gap-3"><h2 class="text-[15px] font-semibold text-t1">${esc(titulo)}</h2>` +
-      `<button type="button" class="btn-icone !h-8 !w-8" data-fechar aria-label="Fechar">${CTP.icones.x}</button></div><div data-corpo>${html}</div></div>`;
+    fundo.setAttribute("role", "dialog");
+    fundo.setAttribute("aria-modal", "true");
+    fundo.setAttribute("aria-label", titulo);
+    fundo.innerHTML =
+      `<div class="card entrada max-h-[92vh] w-full ${largura} overflow-y-auto p-6">` +
+      `<div class="mb-5 flex items-center justify-between gap-3"><h2 class="text-[15px] font-semibold text-t1">${esc(titulo)}</h2>` +
+      `<button type="button" class="btn-icone" data-fechar aria-label="Fechar">${CTP.icones.x.replace("h-4 w-4", "h-5 w-5")}</button></div><div data-corpo>${html}</div></div>`;
     const fechar = () => {
       fundo.remove();
-      document.removeEventListener("keydown", tecla);
+      window.removeEventListener("keydown", tecla);
       aoFechar && aoFechar();
     };
     const tecla = (e) => e.key === "Escape" && fechar();
-    fundo.addEventListener("mousedown", (e) => e.target === fundo && fechar());
     fundo.querySelector("[data-fechar]").addEventListener("click", fechar);
-    document.addEventListener("keydown", tecla);
+    window.addEventListener("keydown", tecla);
     document.body.appendChild(fundo);
     fundo.fechar = fechar;
-    const foco = fundo.querySelector("[autofocus], textarea, input:not([type=hidden]), button.btn-primary, button.btn-danger");
+    const foco = fundo.querySelector("[autofocus], textarea, input:not([type=hidden])");
     foco && setTimeout(() => foco.focus(), 30);
     return fundo;
   };
@@ -95,6 +98,19 @@
     alvo.hidden = !estado;
   };
 
+  /**
+   * Dados do formulário. Grupos de checkboxes com o mesmo nome (ex.: valeIds, cdIds) são
+   * enviados como lista (nome[]) para o PHP, mantendo os nomes originais no HTML.
+   */
+  CTP.dadosForm = (form) => {
+    const contagem = {};
+    for (const el of form.elements) if (el.name && el.type === "checkbox") contagem[el.name] = (contagem[el.name] || 0) + 1;
+    const lista = (k) => contagem[k] > 1 || form.querySelector(`[data-lista="${k}"]`);
+    const dados = new FormData();
+    for (const [k, v] of new FormData(form)) dados.append(lista(k) ? `${k}[]` : k, v);
+    return dados;
+  };
+
   /** Envia um formulário data-acao (usado também por telas com confirmação própria). */
   CTP.enviarForm = async (form, extra) => {
     const botao = form.querySelector("button[type=submit]");
@@ -103,7 +119,7 @@
       botao.disabled = true;
       if (botao.dataset.enviando) botao.textContent = botao.dataset.enviando;
     }
-    const dados = new FormData(form);
+    const dados = CTP.dadosForm(form);
     if (extra) for (const [k, v] of Object.entries(extra)) dados.set(k, v);
     let estado;
     try {
@@ -121,7 +137,13 @@
       form.reset();
       form.dispatchEvent(new Event("ctp:limpo"));
     }
-    if (estado.recarregar) window.location.reload();
+    // Dados da tela mudaram (saldos, listas): recarrega e reexibe a mensagem no mesmo formulário.
+    if (estado.recarregar) {
+      try {
+        sessionStorage.setItem("ctp_estado", JSON.stringify({ acao: form.dataset.acao, estado }));
+      } catch {}
+      return CTP.recarregar(), estado;
+    }
     form.dispatchEvent(new CustomEvent("ctp:resultado", { detail: estado }));
     return estado;
   };
@@ -218,8 +240,12 @@
   CTP.avisar = avisar;
   const validar = (el) => {
     const v = el.value;
-    if (el.dataset.mascara === "cnpj") avisar(el, v && v.replace(/[^0-9A-Z]/gi, "").length === 14 && !cnpjValido(v) ? "CNPJ inválido" : v && v.replace(/[^0-9A-Z]/gi, "").length > 0 && v.replace(/[^0-9A-Z]/gi, "").length < 14 && document.activeElement !== el ? "CNPJ incompleto" : "");
-    if (el.dataset.mascara === "placa") avisar(el, v && !placaValida(v) && document.activeElement !== el ? "Placa inválida (ABC1234 ou ABC1D23)" : "");
+    if (el.dataset.mascara === "cnpj") {
+      const c = v.toUpperCase().replace(/[^0-9A-Z]/g, "");
+      avisar(el, c.length === 14 && !cnpjValido(c) ? "CNPJ inválido — confira os dígitos." : "");
+      el.setCustomValidity("");
+      el.setAttribute("aria-invalid", c.length === 14 && !cnpjValido(c) ? "true" : "false");
+    }
   };
   document.addEventListener("input", (e) => {
     const el = e.target;
@@ -332,13 +358,65 @@
     }
   } catch {}
 
-  // Ícones usados pelo JavaScript (mesmo traçado lucide).
-  const svg = (d, c = "h-5 w-5") =>
-    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide ${c}" aria-hidden="true">${d}</svg>`;
+  /** Ícone SVG (lucide) com as classes do sistema (public/assets/icones.js). */
+  CTP.icone = (nome, classe = "h-4 w-4") =>
+    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-${nome} ${classe}" aria-hidden="true">${(window.CTP_ICONES || {})[nome] || ""}</svg>`;
   CTP.icones = {
-    x: svg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', "h-4 w-4"),
-    sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'),
-    moon: svg('<path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>'),
-    logout: svg('<path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>', "h-4 w-4"),
+    get x() { return CTP.icone("x", "h-4 w-4"); },
+    get sun() { return CTP.icone("sun", "h-5 w-5"); },
+    get moon() { return CTP.icone("moon", "h-5 w-5"); },
+    get logout() { return CTP.icone("log-out", "h-4 w-4"); },
   };
+  CTP.iconeAlerta = "";
+  document.addEventListener("DOMContentLoaded", () => (CTP.iconeAlerta = CTP.icone("triangle-alert", "mt-0.5 h-4 w-4 flex-none")));
+
+  // ---------------------------------------------------------------- perfil e permissões (usuários)
+  document.addEventListener("change", (e) => {
+    const sel = e.target.closest("[data-permissoes] select[name=perfil]");
+    if (!sel) return;
+    const caixa = sel.closest("[data-permissoes]");
+    const total = sel.value !== "OPERADOR";
+    caixa.querySelector("[data-acoes-permissao]").hidden = total;
+    const aviso = caixa.querySelector("[data-aviso-total]");
+    aviso.hidden = !total;
+    aviso.textContent =
+      sel.value === "MASTER"
+        ? "Master tem acesso a todas as telas, inclusive as configurações das unidades (Hub e módulo de fornecedores)."
+        : "Administrador tem acesso a todas as telas, inclusive inclusão e remoção manual de saldo.";
+    caixa.querySelectorAll("input[name=permissoes]").forEach((c) => {
+      if (total) {
+        c.dataset.marcada = c.checked ? "1" : "0";
+        c.checked = true;
+      } else c.checked = c.dataset.marcada === "1";
+      c.disabled = total;
+      c.closest("label").className = `flex items-center gap-3 text-[12px] ${total ? "text-t4" : "cursor-pointer text-t2"}`;
+    });
+  });
+  document.addEventListener("click", (e) => {
+    const todas = e.target.closest("[data-marcar-todas]");
+    const limpar = e.target.closest("[data-limpar-todas]");
+    if (!todas && !limpar) return;
+    e.target.closest("[data-permissoes]").querySelectorAll("input[name=permissoes]").forEach((c) => {
+      c.checked = !!todas;
+      c.dataset.marcada = todas ? "1" : "0";
+    });
+  });
+  document.addEventListener("change", (e) => {
+    const c = e.target;
+    if (c.name === "permissoes" && !c.disabled) c.dataset.marcada = c.checked ? "1" : "0";
+  });
+  // ---------------------------------------------------------------- impressão do vale
+  document.addEventListener("click", (e) => e.target.closest("[data-imprimir]") && window.print());
+  document.addEventListener("DOMContentLoaded", () => {
+    if (document.querySelector("[data-imprimir][data-auto]")) setTimeout(() => window.print(), 400);
+  });
+  // Mensagem de uma ação que recarregou a tela.
+  document.addEventListener("DOMContentLoaded", () => {
+    try {
+      const salvo = JSON.parse(sessionStorage.getItem("ctp_estado") || "null");
+      sessionStorage.removeItem("ctp_estado");
+      const form = salvo && document.querySelector(`form[data-acao="${salvo.acao}"]`);
+      if (form) CTP.mostrarMensagem(form, salvo.estado);
+    } catch {}
+  });
 })();

@@ -50,7 +50,7 @@ final class View
             . "<title>$titulo</title><meta name=\"description\" content=\"Sistema de Gestão de Pallets PBR\">"
             . '<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">'
             . "<link rel=\"stylesheet\" href=\"/assets/app.css?v=$v\">"
-            . "<script src=\"/assets/app.js?v=$v\" defer></script>$scripts</head><body>$corpo</body></html>";
+            . "<script src=\"/assets/icones.js?v=$v\" defer></script><script src=\"/assets/app.js?v=$v\" defer></script>$scripts</head><body>$corpo</body></html>";
     }
 }
 

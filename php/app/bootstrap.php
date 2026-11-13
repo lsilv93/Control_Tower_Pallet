@@ -26,4 +26,6 @@ foreach (['datas', 'formatos', 'permissoes', 'farol', 'periodo', 'nfe', 'sessao'
     require __DIR__ . "/Lib/$lib.php";
 }
 require __DIR__ . '/Views/ui.php';
+require __DIR__ . '/Views/componentes.php';
+require __DIR__ . '/Views/kanban.php';
 require __DIR__ . '/Actions/_estado.php';

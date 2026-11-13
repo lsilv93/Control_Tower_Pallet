@@ -39,7 +39,6 @@ return [
         '#^/api/vales/(?<id>[A-Za-z0-9_-]+)/pdf$#' => 'vale_pdf',
         '#^/api/exportar$#' => 'exportar',
         '#^/api/auditoria/exportar$#' => 'auditoria_exportar',
-        '#^/api/painel/versao$#' => 'painel_versao',
     ],
     // Ações (POST): grupo/nome → arquivo app/Actions/{grupo}.php, função acao_{grupo}_{nome}.
     'acoes' => [

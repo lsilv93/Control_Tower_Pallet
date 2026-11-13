@@ -502,3 +502,6 @@ html:fullscreen,
 html:fullscreen body {
   background: rgb(var(--c-fundo));
 }
+
+/* Elementos ocultos pelo atributo hidden (telas PHP) sempre somem, mesmo com classes de display. */
+[hidden] { display: none !important; }
